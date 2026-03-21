@@ -24,6 +24,28 @@ describe("ResumeSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts optional fields when provided", () => {
+    const result = ResumeSchema.safeParse({
+      ...validResume,
+      summary: "Experienced engineer with 5 years in web development.",
+      location: "San Francisco, CA",
+      totalYearsExperience: 4.5,
+      keywords: ["microservices", "agile", "REST APIs"],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts valid resume without optional fields", () => {
+    const result = ResumeSchema.safeParse(validResume);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.summary).toBeUndefined();
+      expect(result.data.location).toBeUndefined();
+      expect(result.data.totalYearsExperience).toBeUndefined();
+      expect(result.data.keywords).toBeUndefined();
+    }
+  });
+
   it("rejects an invalid email", () => {
     const result = ResumeSchema.safeParse({ ...validResume, email: "not-an-email" });
     expect(result.success).toBe(false);
@@ -57,6 +79,22 @@ describe("ResumeSchema", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it("rejects non-number totalYearsExperience", () => {
+    const result = ResumeSchema.safeParse({
+      ...validResume,
+      totalYearsExperience: "five",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects non-array keywords", () => {
+    const result = ResumeSchema.safeParse({
+      ...validResume,
+      keywords: "agile",
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 // --- Chain factory tests ---
@@ -67,12 +105,15 @@ describe("buildResumeChain", () => {
       name: "John Smith",
       email: "john@example.com",
       phone: "555-1234",
-      skills: ["Python"],
+      summary: "Seasoned backend engineer.",
+      location: "New York, NY",
+      skills: ["Python", "Django", "PostgreSQL"],
       experience: [{ company: "Big Co", role: "Dev", years: 2 }],
       education: [{ degree: "B.Sc.", institution: "MIT" }],
+      totalYearsExperience: 2,
+      keywords: ["REST APIs", "agile"],
     };
 
-    // Mock model: withStructuredOutput returns an object with invoke
     const mockInvoke = vi.fn().mockResolvedValue(expectedOutput);
     const mockModel = {
       withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
