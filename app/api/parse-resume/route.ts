@@ -43,8 +43,13 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer();
     await writeFile(tmpPath, Buffer.from(bytes));
 
-    const resumeText = await extractTextFromPdf(tmpPath);
+    const rawText = await extractTextFromPdf(tmpPath);
     await unlink(tmpPath).catch(() => {});
+
+    const resumeText = rawText
+      .replace(/([A-Z])\s(?=[A-Z]\s)/g, "$1")  // fix "S e n i o r" → "Senior"
+      .replace(/\b([A-Z])\s([a-z])/g, "$1$2")   // fix "T ech" → "Tech"
+      .replace(/\s([A-Z][a-z]{1,2})\b/g, " $1"); // fix "W altham" → "Waltham"
 
     const model = new ChatOllama({ model: "llama3.2" });
     const chain = buildResumeChain(model);
