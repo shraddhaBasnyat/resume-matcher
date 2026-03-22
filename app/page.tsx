@@ -63,7 +63,7 @@ export default function Home() {
         lines.push(`  - ${exp.role} at ${exp.company} (${exp.years} years)`);
       }
     }
-    if (data.totalYearsExperience) {
+    if (data.totalYearsExperience != null) {
       lines.push(`Total Experience: ${data.totalYearsExperience} years`);
     }
     if (data.keywords?.length) lines.push(`Keywords: ${data.keywords.join(", ")}`);
