@@ -2,20 +2,34 @@ import { NextRequest, NextResponse } from "next/server";
 import { ChatOllama } from "@langchain/ollama";
 import { Command } from "@langchain/langgraph";
 import { buildScoringGraph } from "@/lib/scoring-graph";
+import { z } from "zod";
 
 const model = new ChatOllama({ model: "llama3.2" });
 const graph = buildScoringGraph(model);
 
+const MatchRequestSchema = z.object({
+  resumeText: z.string().min(1).max(100_000).optional(),
+  jobText: z.string().min(1).max(100_000).optional(),
+  humanContext: z.string().max(100_000).optional(),
+  threadId: z.string().min(1).max(10_000).optional(),
+});
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { resumeText, jobText, humanContext, threadId } = body as {
-      resumeText?: string;
-      jobText?: string;
-      humanContext?: string;
-      threadId?: string;
-    };
+    const parseResult = MatchRequestSchema.safeParse(body);
 
+    if (!parseResult.success) {
+      return NextResponse.json(
+        {
+          error: "Invalid request body",
+          details: parseResult.error.flatten(),
+        },
+        { status: 400 }
+      );
+    }
+
+    const { resumeText, jobText, humanContext, threadId } = parseResult.data;
     const config = {
       configurable: { thread_id: threadId ?? crypto.randomUUID() },
     };
