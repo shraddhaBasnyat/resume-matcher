@@ -199,6 +199,8 @@ export function buildScoringGraph(model: any) {
     .addEdge("rescore", "gapAnalysis")
     .addEdge("gapAnalysis", "__end__");
 
+  // TODO: Replace MemorySaver with a durable checkpointer (e.g., Redis/DB-backed)
+  // to support HITL across server restarts, cold starts, and multi-instance deployments.
   const checkpointer = new MemorySaver();
   return workflow.compile({ checkpointer });
 }
