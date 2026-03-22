@@ -140,7 +140,7 @@ export function buildScoringGraph(model: any) {
     const matchResult = await scoringChain.invoke({
       resume_data: JSON.stringify(state.resumeData, null, 2),
       job_data: JSON.stringify(state.jobData, null, 2),
-      human_context: state.humanContext || "None provided.",
+      human_context: state.humanContext,
     });
     return { matchResult };
   }
