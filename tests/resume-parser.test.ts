@@ -17,6 +17,7 @@ describe("ResumeSchema", () => {
     education: [
       { degree: "B.Sc. Computer Science", institution: "State University" },
     ],
+    careerNarrative: {},
   };
 
   it("accepts a valid resume object", () => {
@@ -35,7 +36,7 @@ describe("ResumeSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("accepts valid resume without optional fields", () => {
+  it("accepts valid resume without other optional fields", () => {
     const result = ResumeSchema.safeParse(validResume);
     expect(result.success).toBe(true);
     if (result.success) {
@@ -95,6 +96,63 @@ describe("ResumeSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("accepts a valid careerNarrative when provided", () => {
+    const result = ResumeSchema.safeParse({
+      ...validResume,
+      careerNarrative: {
+        trajectory: "IC engineer to tech lead",
+        dominantTheme: "Systems reliability and scale",
+        inferredStrengths: ["debugging under pressure", "cross-team communication"],
+        careerMotivation: "Moving toward distributed systems architecture",
+        resumeStoryGaps: ["2-year gap between 2019 and 2021 unexplained"],
+      },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.careerNarrative.trajectory).toBe("IC engineer to tech lead");
+      expect(result.data.careerNarrative.inferredStrengths).toHaveLength(2);
+      expect(result.data.careerNarrative.resumeStoryGaps).toHaveLength(1);
+    }
+  });
+
+  it("accepts careerNarrative with empty object — subfield defaults applied", () => {
+    const result = ResumeSchema.safeParse({ ...validResume, careerNarrative: {} });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.careerNarrative.trajectory).toBe("");
+      expect(result.data.careerNarrative.dominantTheme).toBe("");
+      expect(result.data.careerNarrative.inferredStrengths).toEqual([]);
+      expect(result.data.careerNarrative.careerMotivation).toBe("");
+      expect(result.data.careerNarrative.resumeStoryGaps).toEqual([]);
+    }
+  });
+
+  it("accepts careerNarrative with only some sub-fields — missing ones use defaults", () => {
+    const result = ResumeSchema.safeParse({
+      ...validResume,
+      careerNarrative: { trajectory: "IC to lead" },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.careerNarrative.trajectory).toBe("IC to lead");
+      expect(result.data.careerNarrative.dominantTheme).toBe("");
+    }
+  });
+
+  it("rejects careerNarrative with non-array inferredStrengths", () => {
+    const result = ResumeSchema.safeParse({
+      ...validResume,
+      careerNarrative: {
+        trajectory: "IC to lead",
+        dominantTheme: "Scale",
+        inferredStrengths: "debugging",
+        careerMotivation: "Architecture",
+        resumeStoryGaps: [],
+      },
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 // --- Chain factory tests ---
@@ -112,6 +170,13 @@ describe("buildResumeChain", () => {
       education: [{ degree: "B.Sc.", institution: "MIT" }],
       totalYearsExperience: 2,
       keywords: ["REST APIs", "agile"],
+      careerNarrative: {
+        trajectory: "Junior to senior backend engineer",
+        dominantTheme: "Data-intensive systems",
+        inferredStrengths: ["API design", "database optimization"],
+        careerMotivation: "Building reliable backend infrastructure",
+        resumeStoryGaps: [],
+      },
     };
 
     const mockInvoke = vi.fn().mockResolvedValue(expectedOutput);

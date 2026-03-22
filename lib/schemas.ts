@@ -38,6 +38,15 @@ export const ResumeSchema = z.object({
     .describe(
       "Important technical and domain-specific terms from the resume useful for job matching (e.g. 'microservices', 'agile', 'NLP')"
     ),
+  careerNarrative: z
+    .object({
+      trajectory: z.string().default("").describe("The arc of the candidate's career progression"),
+      dominantTheme: z.string().default("").describe("The recurring theme or throughline across roles"),
+      inferredStrengths: z.array(z.string()).default([]).describe("Strengths inferred from the pattern of roles and accomplishments"),
+      careerMotivation: z.string().default("").describe("What the candidate appears to move toward based on their choices"),
+      resumeStoryGaps: z.array(z.string()).default([]).describe("Gaps, contradictions, or unexplained transitions in the career story"),
+    })
+    .describe("Inferred career narrative — read between the lines, do not summarize"),
 });
 
 export type Resume = z.infer<typeof ResumeSchema>;

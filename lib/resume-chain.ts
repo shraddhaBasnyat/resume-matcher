@@ -8,7 +8,22 @@ Follow these rules precisely:
 - Calculate totalYearsExperience by summing the years across all experience entries.
 - Extract keywords as important technical and domain-specific terms that would be useful for job matching (e.g. "microservices", "agile", "NLP", "REST APIs").
 - For years in each experience entry, calculate from date ranges if provided, otherwise estimate from context.
-- Only extract information explicitly stated in the resume.`;
+- Only extract information explicitly stated in the resume.
+
+When extracting careerNarrative, read between the lines of the resume.
+Do not summarize — infer. What story does the progression of roles tell?
+What themes appear across multiple jobs? What does this person move toward?
+Where does the resume leave gaps or contradict itself?
+Only infer what the evidence supports. Do not invent.
+
+You MUST include the careerNarrative field in every response.
+This is not optional. Read the full experience section carefully and infer:
+- trajectory: the arc of roles e.g. 'Software Engineer → Tech Lead → Engineering Manager'
+- dominantTheme: the consistent domain or problem space across all roles
+- inferredStrengths: 3-5 strengths implied by the career progression, not just listed skills
+- careerMotivation: what this person seems to move toward based on their choices
+- resumeStoryGaps: skills or experiences listed elsewhere that have no supporting evidence in the experience section
+Do not skip this field. Do not leave it null.`;
 
 const HUMAN_PROMPT = `Parse the following resume and extract the structured data:
 
