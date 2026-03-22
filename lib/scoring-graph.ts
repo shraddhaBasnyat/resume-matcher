@@ -137,6 +137,12 @@ export function buildScoringGraph(model: any) {
 
   // Node 3: score the match (also used as rescore)
   async function scoreMatch(state: GraphStateType) {
+    if (!state.resumeData) {
+      throw new Error("scoreMatch: resumeData is missing from graph state");
+    }
+    if (!state.jobData) {
+      throw new Error("scoreMatch: jobData is missing from graph state");
+    }
     const matchResult = await scoringChain.invoke({
       resume_data: JSON.stringify(state.resumeData, null, 2),
       job_data: JSON.stringify(state.jobData, null, 2),
