@@ -2,13 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { writeFile, unlink } from "fs/promises";
 import { join } from "path";
 import PDFParser from "pdf2json";
-import { ChatOllama } from "@langchain/ollama";
-import { buildResumeChain } from "@/lib/resume-chain";
 
 function extractTextFromPdf(filePath: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const parser = new PDFParser();
-    parser.on("pdfParser_dataError", (err) => reject(err.parserError));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    parser.on("pdfParser_dataError", (err: any) => reject(err.parserError ?? err));
     parser.on("pdfParser_dataReady", (data) => {
       const text = data.Pages.map((page) =>
         page.Texts.map((t) => {
@@ -46,36 +45,16 @@ export async function POST(request: NextRequest) {
     const rawText = await extractTextFromPdf(tmpPath);
     await unlink(tmpPath).catch(() => {});
 
+    // Light cleanup of common PDF text-extraction artifacts
     const resumeText = rawText
       .replace(/([A-Z])\s(?=[A-Z]\s)/g, "$1")  // fix "S e n i o r" → "Senior"
       .replace(/\b([A-Z])\s([a-z])/g, "$1$2")   // fix "T ech" → "Tech"
       .replace(/\s([A-Z][a-z]{1,2})\b/g, " $1"); // fix "W altham" → "Waltham"
 
-    const model = new ChatOllama({ model: "llama3.2" });
-    const chain = buildResumeChain(model);
-    const result = await chain.invoke({ resume_text: resumeText });
-
-    return NextResponse.json(result);
+    return NextResponse.json({ text: resumeText });
   } catch (error) {
     await unlink(tmpPath).catch(() => {});
-
     const message = error instanceof Error ? error.message : String(error);
-
-    if (
-      message.includes("ECONNREFUSED") ||
-      message.includes("fetch failed") ||
-      message.includes("connect ECONNREFUSED")
-    ) {
-      return NextResponse.json(
-        {
-          error: "Ollama is unreachable",
-          message:
-            "Could not connect to Ollama. Make sure Ollama is running locally (`ollama serve`) and the llama3.2 model is pulled (`ollama pull llama3.2`).",
-        },
-        { status: 503 }
-      );
-    }
-
-    return NextResponse.json({ error: "Failed to parse resume", message }, { status: 500 });
+    return NextResponse.json({ error: "Failed to extract resume text", message }, { status: 500 });
   }
 }

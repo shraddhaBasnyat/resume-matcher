@@ -88,8 +88,10 @@ Score this candidate's fit for the role.`,
 // ---------------------------------------------------------------------------
 
 const GAP_ANALYSIS_SYSTEM_PROMPT = `You are a senior career coach who specialises in resume tailoring.
-Given a match result between a resume and a job description, produce specific, actionable resume advice.
-Each item in resumeAdvice should name a concrete section or bullet point change, not general guidance.`;
+Given a resume, job description, and match result between them, produce specific, actionable resume advice.
+Each item in resumeAdvice must name a concrete resume section or bullet point to change,
+referencing actual content from the resume where possible.
+Return the full match result with resumeAdvice updated to contain these targeted, section-level suggestions.`;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function buildGapAnalysisChain(model: any) {
@@ -97,18 +99,23 @@ export function buildGapAnalysisChain(model: any) {
     ["system", GAP_ANALYSIS_SYSTEM_PROMPT],
     [
       "human",
-      `Match Result:
+      `Resume Data:
+{resume_data}
+
+Job Data:
+{job_data}
+
+Match Result:
 {match_result}
 
-Provide specific advice for how the candidate should rewrite sections of their resume to better match this job.
-Return the same match result with resumeAdvice updated to contain the new, more targeted suggestions.`,
+Rewrite the resumeAdvice in the match result with specific, section-level suggestions referencing actual resume content above.`,
     ],
   ]);
 
   const structuredModel = model.withStructuredOutput(MatchSchema);
 
   return {
-    invoke: async (input: { match_result: string }) => {
+    invoke: async (input: { resume_data: string; job_data: string; match_result: string }) => {
       const messages = await prompt.invoke(input);
       return structuredModel.invoke(messages, { runName: "gap-analysis" });
     },
@@ -126,19 +133,19 @@ export function buildScoringGraph(model: any) {
   const scoringChain = buildScoringChain(model);
   const gapChain = buildGapAnalysisChain(model);
 
-  // Node 1: parse resume
+  // Node 1: parse resume — reads resumeText, writes resumeData only
   async function parseResume(state: GraphStateType) {
     const resumeData = await resumeChain.invoke({ resume_text: state.resumeText });
     return { resumeData };
   }
 
-  // Node 2: parse job description
+  // Node 2: parse job description — reads jobText, writes jobData only
   async function parseJob(state: GraphStateType) {
     const jobData = await jobChain.invoke({ job_text: state.jobText });
     return { jobData };
   }
 
-  // Node 3: score the match (also used as rescore)
+  // Node 3: score the match — reads resumeData + jobData + humanContext, writes matchResult
   async function scoreMatch(state: GraphStateType) {
     if (!state.resumeData) {
       throw new Error("scoreMatch: resumeData is missing from graph state");
@@ -171,14 +178,25 @@ export function buildScoringGraph(model: any) {
     return state.humanContext && state.humanContext.trim().length > 0 ? "rescore" : "gapAnalysis";
   }
 
-  // Conditional edge after scoreMatch
+  // Conditional edge after scoreMatch: score >= 60 → gapAnalysis, else → awaitHuman (HITL)
   function routeAfterScore(state: GraphStateType): "gapAnalysis" | "awaitHuman" {
     return (state.matchResult?.score ?? 0) >= 60 ? "gapAnalysis" : "awaitHuman";
   }
 
-  // Node 4: gap analysis — enriches resumeAdvice in the existing matchResult
+  // Node 4: gap analysis — reads matchResult + resumeData + jobData, writes updated matchResult
   async function gapAnalysis(state: GraphStateType) {
+    if (!state.matchResult) {
+      throw new Error("gapAnalysis: matchResult is missing from graph state");
+    }
+    if (!state.resumeData) {
+      throw new Error("gapAnalysis: resumeData is missing from graph state");
+    }
+    if (!state.jobData) {
+      throw new Error("gapAnalysis: jobData is missing from graph state");
+    }
     const updated = await gapChain.invoke({
+      resume_data: JSON.stringify(state.resumeData, null, 2),
+      job_data: JSON.stringify(state.jobData, null, 2),
       match_result: JSON.stringify(state.matchResult, null, 2),
     });
     return { matchResult: updated };
