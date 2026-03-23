@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ChatOllama } from "@langchain/ollama";
 import { Command } from "@langchain/langgraph";
 import { buildScoringGraph } from "@/lib/scoring-graph";
+import { isTracingEnabled, getTraceUrl, RootRunCapture } from "@/lib/langsmith";
 import { z } from "zod";
 
 const model = new ChatOllama({ model: "llama3.2" });
@@ -15,6 +16,8 @@ const MatchRequestSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const requestStart = Date.now();
+
   try {
     const body = await request.json();
     const parseResult = MatchRequestSchema.safeParse(body);
@@ -34,11 +37,22 @@ export async function POST(request: NextRequest) {
       configurable: { thread_id: threadId ?? crypto.randomUUID() },
     };
 
+    const capture = isTracingEnabled() ? new RootRunCapture() : null;
+    const invokeConfig = {
+      ...config,
+      runName: "resume-match-graph",
+      metadata: {
+        hasHumanContext: !!humanContext,
+        isResume: true,
+      },
+      ...(capture ? { callbacks: [capture] } : {}),
+    };
+
     let state;
 
     if (threadId && humanContext !== undefined) {
       // Resume from interrupt — human provided context (or accepted by passing empty string)
-      state = await graph.invoke(new Command({ resume: humanContext }), config);
+      state = await graph.invoke(new Command({ resume: humanContext }), invokeConfig);
     } else {
       if (!resumeText || !jobText) {
         return NextResponse.json(
@@ -48,9 +62,12 @@ export async function POST(request: NextRequest) {
       }
       state = await graph.invoke(
         { resumeText, jobText, humanContext: "" },
-        config
+        invokeConfig
       );
     }
+
+    const traceUrl =
+      isTracingEnabled() && capture?.rootRunId ? getTraceUrl(capture.rootRunId) : null;
 
     // Check if the graph is paused at an interrupt
     const snapshot = await graph.getState(config);
@@ -64,6 +81,7 @@ export async function POST(request: NextRequest) {
           partialResult: state.matchResult ?? null,
           message:
             "Score is below 60. Provide additional context about your experience to re-score.",
+          _meta: { traceUrl, durationMs: Date.now() - requestStart },
         },
         { status: 202 }
       );
@@ -73,6 +91,7 @@ export async function POST(request: NextRequest) {
       status: "complete",
       threadId: config.configurable.thread_id,
       matchResult: state.matchResult,
+      _meta: { traceUrl, durationMs: Date.now() - requestStart },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

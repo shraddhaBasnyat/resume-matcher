@@ -30,7 +30,7 @@ export function buildJobChain(model: any) {
   return {
     invoke: async (input: { job_text: string }) => {
       const messages = await prompt.invoke(input);
-      return structuredModel.invoke(messages);
+      return structuredModel.invoke(messages, { runName: "parse-job" });
     },
   };
 }
@@ -73,9 +73,12 @@ Score this candidate's fit for the role.`,
   const structuredModel = model.withStructuredOutput(MatchSchema);
 
   return {
-    invoke: async (input: { resume_data: string; job_data: string; human_context: string }) => {
+    invoke: async (
+      input: { resume_data: string; job_data: string; human_context: string },
+      config?: { runName?: string }
+    ) => {
       const messages = await prompt.invoke(input);
-      return structuredModel.invoke(messages);
+      return structuredModel.invoke(messages, config ?? {});
     },
   };
 }
@@ -107,7 +110,7 @@ Return the same match result with resumeAdvice updated to contain the new, more 
   return {
     invoke: async (input: { match_result: string }) => {
       const messages = await prompt.invoke(input);
-      return structuredModel.invoke(messages);
+      return structuredModel.invoke(messages, { runName: "gap-analysis" });
     },
   };
 }
@@ -143,11 +146,15 @@ export function buildScoringGraph(model: any) {
     if (!state.jobData) {
       throw new Error("scoreMatch: jobData is missing from graph state");
     }
-    const matchResult = await scoringChain.invoke({
-      resume_data: JSON.stringify(state.resumeData, null, 2),
-      job_data: JSON.stringify(state.jobData, null, 2),
-      human_context: state.humanContext,
-    });
+    const runName = state.humanContext?.trim() ? "rescore-with-context" : "score-match";
+    const matchResult = await scoringChain.invoke(
+      {
+        resume_data: JSON.stringify(state.resumeData, null, 2),
+        job_data: JSON.stringify(state.jobData, null, 2),
+        human_context: state.humanContext,
+      },
+      { runName }
+    );
     return { matchResult };
   }
 
