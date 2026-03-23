@@ -17,6 +17,7 @@ export default function Home() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [interrupted, setInterrupted] = useState(false);
   const [humanContext, setHumanContext] = useState("");
+  const [traceUrl, setTraceUrl] = useState<string | null>(null);
 
   // --- Parse resume ---
   async function handleParseSubmit(e: React.FormEvent) {
@@ -79,6 +80,7 @@ export default function Home() {
     setMatchResult(null);
     setInterrupted(false);
     setThreadId(null);
+    setTraceUrl(null);
 
     await runMatch({ resumeText: parsedResumeText, jobText: jobDescription });
   }
@@ -114,6 +116,7 @@ export default function Home() {
       }
 
       setThreadId(data.threadId ?? null);
+      setTraceUrl(data._meta?.traceUrl ?? null);
 
       if (data.status === "interrupted") {
         setInterrupted(true);
@@ -303,6 +306,18 @@ export default function Home() {
                   ))}
                 </ul>
               </div>
+            )}
+
+            {/* LangSmith trace link */}
+            {traceUrl && (
+              <a
+                href={traceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block text-xs text-gray-400 hover:text-gray-600 underline underline-offset-2"
+              >
+                View trace in LangSmith
+              </a>
             )}
           </div>
         )}

@@ -41,7 +41,7 @@ export function buildResumeChain(model: any) {
   return {
     invoke: async (input: { resume_text: string }) => {
       const messages = await prompt.invoke(input);
-      return structuredModel.invoke(messages);
+      return structuredModel.invoke(messages, { runName: "parse-resume" });
     },
   };
 }
