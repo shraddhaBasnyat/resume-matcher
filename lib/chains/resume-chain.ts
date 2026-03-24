@@ -1,4 +1,5 @@
 import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ResumeSchema } from "../schemas/resume-schema";
 import { RootRunCapture, logValidationFailure } from "../langsmith";
 
@@ -30,8 +31,7 @@ const HUMAN_PROMPT = `Parse the following resume and extract the structured data
 
 {resume_text}`;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function buildResumeChain(model: any) {
+export function buildResumeChain(model: BaseChatModel) {
   const prompt = ChatPromptTemplate.fromMessages([
     ["system", SYSTEM_PROMPT],
     ["human", HUMAN_PROMPT],

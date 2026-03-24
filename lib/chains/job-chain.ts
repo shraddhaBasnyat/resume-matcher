@@ -1,4 +1,5 @@
 import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { JobSchema } from "../schemas/job-schema";
 import { RootRunCapture, logValidationFailure } from "../langsmith";
 
@@ -13,8 +14,7 @@ Follow these rules:
 
 const HUMAN_PROMPT = "Parse the following job description and extract the structured data:\n\n{job_text}";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function buildJobChain(model: any) {
+export function buildJobChain(model: BaseChatModel) {
   const prompt = ChatPromptTemplate.fromMessages([
     ["system", SYSTEM_PROMPT],
     ["human", HUMAN_PROMPT],

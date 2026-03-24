@@ -1,8 +1,8 @@
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { buildGapAnalysisChain } from "../../chains/gap-analysis-chain";
 import type { GraphStateType } from "../state";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function makeGapAnalysisNode(model: any) {
+export function makeGapAnalysisNode(model: BaseChatModel) {
   const chain = buildGapAnalysisChain(model);
   return async function gapAnalysis(state: GraphStateType) {
     if (!state.matchResult) {
