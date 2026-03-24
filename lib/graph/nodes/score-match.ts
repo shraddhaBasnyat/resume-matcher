@@ -1,8 +1,8 @@
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { buildScoringChain } from "../../chains/scoring-chain";
 import type { GraphStateType } from "../state";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function makeScoreMatchNode(model: any) {
+export function makeScoreMatchNode(model: BaseChatModel) {
   const chain = buildScoringChain(model);
   return async function scoreMatch(state: GraphStateType) {
     if (!state.resumeData) {

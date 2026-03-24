@@ -1,4 +1,5 @@
 import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { MatchSchema } from "../schemas/match-schema";
 
 const SYSTEM_PROMPT = `You are a senior career coach who specialises in resume tailoring.
@@ -18,8 +19,7 @@ Match Result:
 
 Rewrite the resumeAdvice in the match result with specific, section-level suggestions referencing actual resume content above.`;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function buildGapAnalysisChain(model: any) {
+export function buildGapAnalysisChain(model: BaseChatModel) {
   const prompt = ChatPromptTemplate.fromMessages([
     ["system", SYSTEM_PROMPT],
     ["human", HUMAN_PROMPT],

@@ -1,4 +1,5 @@
 import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { MatchSchema } from "../schemas/match-schema";
 import { RootRunCapture, logValidationFailure } from "../langsmith";
 
@@ -25,8 +26,7 @@ Additional Context from Candidate:
 
 Score this candidate's fit for the role.`;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function buildScoringChain(model: any) {
+export function buildScoringChain(model: BaseChatModel) {
   const prompt = ChatPromptTemplate.fromMessages([
     ["system", SYSTEM_PROMPT],
     ["human", HUMAN_PROMPT],
