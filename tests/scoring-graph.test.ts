@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { MatchSchema } from "../lib/match-schema";
-import { JobSchema } from "../lib/job-schema";
-import { ResumeSchema } from "../lib/schemas";
+import { MatchSchema } from "../lib/schemas/match-schema";
+import { JobSchema } from "../lib/schemas/job-schema";
+import { ResumeSchema } from "../lib/schemas/resume-schema";
 import { buildJobChain, buildScoringChain, buildGapAnalysisChain, buildScoringGraph } from "../lib/scoring-graph";
 
 // ---------------------------------------------------------------------------

@@ -2,8 +2,9 @@ import { StateGraph, interrupt, MemorySaver } from "@langchain/langgraph";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { GraphState, type GraphStateType } from "./graph-state";
 import { buildResumeChain } from "./resume-chain";
-import { JobSchema } from "./job-schema";
-import { MatchSchema } from "./match-schema";
+import { JobSchema } from "./schemas/job-schema";
+import { MatchSchema } from "./schemas/match-schema";
+import { RootRunCapture, logValidationFailure } from "./langsmith";
 
 // ---------------------------------------------------------------------------
 // Job chain (same pattern as buildResumeChain)
@@ -30,7 +31,29 @@ export function buildJobChain(model: any) {
   return {
     invoke: async (input: { job_text: string }) => {
       const messages = await prompt.invoke(input);
-      return structuredModel.invoke(messages, { runName: "parse-job" });
+
+      let capturedRunId: string | undefined;
+      const capture = new RootRunCapture((id) => {
+        capturedRunId = id;
+      });
+
+      const result = await structuredModel.invoke(messages, {
+        runName: "parse-job",
+        callbacks: [capture],
+      });
+
+      const validated = JobSchema.safeParse(result);
+      if (!validated.success) {
+        await logValidationFailure({
+          runId: capturedRunId,
+          nodeName: "parse-job",
+          errors: validated.error,
+          rawOutput: result,
+        });
+        return JobSchema.parse({ ...result });
+      }
+
+      return validated.data;
     },
   };
 }
@@ -78,7 +101,29 @@ Score this candidate's fit for the role.`,
       config?: { runName?: string }
     ) => {
       const messages = await prompt.invoke(input);
-      return structuredModel.invoke(messages, config ?? {});
+
+      let capturedRunId: string | undefined;
+      const capture = new RootRunCapture((id) => {
+        capturedRunId = id;
+      });
+
+      const result = await structuredModel.invoke(messages, {
+        ...(config ?? {}),
+        callbacks: [capture],
+      });
+
+      const validated = MatchSchema.safeParse(result);
+      if (!validated.success) {
+        await logValidationFailure({
+          runId: capturedRunId,
+          nodeName: config?.runName ?? "score-match",
+          errors: validated.error,
+          rawOutput: result,
+        });
+        return MatchSchema.parse({ ...result });
+      }
+
+      return validated.data;
     },
   };
 }

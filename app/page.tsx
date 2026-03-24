@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import type { Resume } from "@/lib/schemas";
-import type { JobDescription } from "@/lib/job-schema";
-import type { MatchResult } from "@/lib/match-schema";
+import type { Resume } from "@/lib/schemas/resume-schema";
+import type { JobDescription } from "@/lib/schemas/job-schema";
+import type { MatchResult } from "@/lib/schemas/match-schema";
 
 // ---------------------------------------------------------------------------
 // Types
