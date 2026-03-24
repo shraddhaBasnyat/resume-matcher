@@ -13,6 +13,9 @@ production readiness.
 - Overwrite reducers used throughout — merge reducers would be better 
   for granular nodes
 - MemorySaver is ephemeral — paused HITL graphs lost on server restart
+- Moving off localhost requires a persistent checkpointer (PostgresSaver, 
+  RedisSaver) — without it, any server restart or redeploy drops all 
+  in-flight HITL sessions silently.
 
 ## Node data flow
 | Node        | Reads                             | Writes      |
@@ -29,6 +32,8 @@ production readiness.
   but does NOT run Zod validation or apply .default() values
 - Manual ResumeSchema.safeParse(result) added after every 
   withStructuredOutput() call to apply defaults and catch invalid shapes
+- Current gap: critical field failures (name, email) not yet routed 
+  differently from non-critical — lands with the planned retry work
 
 ### Future: granular schemas per node
 Breaking ResumeSchema into smaller schemas per parsing strategy:
@@ -60,3 +65,28 @@ _to document after reading app/api/match/route.ts_
 
 ### /api/parse-resume — standalone debug utility
 _to document after reading app/api/parse-resume/route.ts_
+
+## Resilience strategies
+
+### Implemented
+- safeParse + logValidationFailure on every chain output
+- HITL interrupt for low confidence scores
+- AbortController for user-initiated cancellation
+- LangSmith tagging for failure classification
+
+### Planned (implement together — schema and graph retry are coupled)
+- Critical vs non-critical field distinction in schemas
+  (name, email: no default → fail fast)
+- retryCount in GraphState + max retry conditional edge
+- On retry exhausted → route to HITL, not silent error
+- Input validation before graph starts (fail fast, save tokens)
+- maxRetries + timeout on model constructor (transient failures only)
+
+### Cloud/hosted model migration
+- Add persistent checkpointer for HITL
+- Layered timeouts per node and per graph
+- Circuit breaker for LLM provider
+- Graceful degradation flags in GraphState
+- Dead letter logging for exhausted retries
+- Exponential backoff on retry
+- p95 latency alerting per node
