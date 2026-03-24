@@ -1,5 +1,7 @@
 import { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 import type { Serialized } from "@langchain/core/load/serializable";
+import { z } from "zod";
+import { Client } from "langsmith";
 
 export function isTracingEnabled(): boolean {
   return process.env.LANGCHAIN_TRACING_V2 === "true";
@@ -16,6 +18,35 @@ export const RUN_NAMES = {
   HITL_RESUMED: "resume-match-graph: hitl-resumed",
   FAILED: "resume-match-graph: failed",
 } as const;
+
+/**
+ * Logs a Zod validation failure to LangSmith by updating the run with error details.
+ * No-ops when tracing is disabled or runId is unavailable.
+ */
+export async function logValidationFailure({
+  runId,
+  nodeName,
+  errors,
+  rawOutput,
+}: {
+  runId?: string;
+  nodeName: string;
+  errors: z.ZodError;
+  rawOutput: unknown;
+}): Promise<void> {
+  if (!isTracingEnabled() || !runId) return;
+
+  const client = new Client();
+  await client.updateRun(runId, {
+    extra: {
+      validationFailed: true,
+      nodeName,
+      validationErrors: errors.flatten(),
+      rawOutput,
+    },
+    tags: ["validation-failed", nodeName],
+  });
+}
 
 /**
  * Callback handler that captures the root run ID from a LangChain invocation.

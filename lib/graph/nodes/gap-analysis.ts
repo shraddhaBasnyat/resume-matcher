@@ -1,0 +1,24 @@
+import { buildGapAnalysisChain } from "../../chains/gap-analysis-chain";
+import type { GraphStateType } from "../state";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function makeGapAnalysisNode(model: any) {
+  const chain = buildGapAnalysisChain(model);
+  return async function gapAnalysis(state: GraphStateType) {
+    if (!state.matchResult) {
+      throw new Error("gapAnalysis: matchResult is missing from graph state");
+    }
+    if (!state.resumeData) {
+      throw new Error("gapAnalysis: resumeData is missing from graph state");
+    }
+    if (!state.jobData) {
+      throw new Error("gapAnalysis: jobData is missing from graph state");
+    }
+    const updated = await chain.invoke({
+      resume_data: JSON.stringify(state.resumeData, null, 2),
+      job_data: JSON.stringify(state.jobData, null, 2),
+      match_result: JSON.stringify(state.matchResult, null, 2),
+    });
+    return { matchResult: updated };
+  };
+}

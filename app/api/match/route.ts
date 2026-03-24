@@ -3,7 +3,7 @@ import { ChatOllama } from "@langchain/ollama";
 import { Command } from "@langchain/langgraph";
 import { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 import type { Serialized } from "@langchain/core/load/serializable";
-import { buildScoringGraph } from "@/lib/scoring-graph";
+import { buildScoringGraph } from "@/lib/graph/scoring-graph";
 import { isTracingEnabled, getTraceUrl, RootRunCapture, RUN_NAMES } from "@/lib/langsmith";
 import { activeRuns } from "@/lib/active-runs";
 import { z } from "zod";

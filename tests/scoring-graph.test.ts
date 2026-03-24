@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { MatchSchema } from "../lib/match-schema";
-import { JobSchema } from "../lib/job-schema";
-import { ResumeSchema } from "../lib/schemas";
-import { buildJobChain, buildScoringChain, buildGapAnalysisChain, buildScoringGraph } from "../lib/scoring-graph";
+import { MatchSchema } from "../lib/schemas/match-schema";
+import { JobSchema } from "../lib/schemas/job-schema";
+import { ResumeSchema } from "../lib/schemas/resume-schema";
+import { buildJobChain } from "../lib/chains/job-chain";
+import { buildScoringChain } from "../lib/chains/scoring-chain";
+import { buildGapAnalysisChain } from "../lib/chains/gap-analysis-chain";
+import { buildScoringGraph } from "../lib/graph/scoring-graph";
 
 // ---------------------------------------------------------------------------
 // Shared fixtures

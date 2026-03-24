@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
-import { ResumeSchema } from "../lib/schemas";
-import { buildResumeChain } from "../lib/resume-chain";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { ResumeSchema } from "../lib/schemas/resume-schema";
+import { buildResumeChain } from "../lib/chains/resume-chain";
 
 // --- Schema validation tests ---
 
@@ -152,6 +152,120 @@ describe("ResumeSchema", () => {
       },
     });
     expect(result.success).toBe(false);
+  });
+});
+
+// --- Validation failure handling tests ---
+
+describe("buildResumeChain — validation failure handling", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.restoreAllMocks();
+  });
+
+  it("calls logValidationFailure with nodeName 'parse-resume' when model returns invalid shape", async () => {
+    // Model returns data missing a required field (careerNarrative)
+    const invalidOutput = {
+      name: "Jane Doe",
+      email: "jane@example.com",
+      phone: "555-1234",
+      skills: ["TypeScript"],
+      experience: [],
+      education: [],
+      // careerNarrative is missing — required field
+    };
+
+    const mockInvoke = vi.fn().mockResolvedValue(invalidOutput);
+    const mockModel = {
+      withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
+    };
+
+    const logValidationFailureMock = vi.fn().mockResolvedValue(undefined);
+    vi.doMock("../lib/langsmith", () => ({
+      isTracingEnabled: vi.fn().mockReturnValue(false),
+      RootRunCapture: class {
+        name = "root_run_capture";
+        constructor() {}
+        handleChainStart() {}
+      },
+      logValidationFailure: logValidationFailureMock,
+    }));
+
+    const { buildResumeChain: buildResumeChainMocked } = await import("../lib/chains/resume-chain");
+    const chain = buildResumeChainMocked(mockModel);
+
+    // parse() will throw because careerNarrative is required with no default
+    await expect(chain.invoke({ resume_text: "Jane resume..." })).rejects.toThrow();
+
+    expect(logValidationFailureMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nodeName: "parse-resume",
+        rawOutput: invalidOutput,
+      })
+    );
+  });
+
+  it("returns validated data with careerNarrative defaults when model omits subfields", async () => {
+    // Model returns careerNarrative with only some subfields — missing ones get defaults
+    const partialOutput = {
+      name: "Jane Doe",
+      email: "jane@example.com",
+      phone: "555-1234",
+      skills: ["TypeScript"],
+      experience: [],
+      education: [],
+      careerNarrative: { trajectory: "IC to lead" },
+      // dominantTheme, inferredStrengths, careerMotivation, resumeStoryGaps omitted
+    };
+
+    const mockInvoke = vi.fn().mockResolvedValue(partialOutput);
+    const mockModel = {
+      withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
+    };
+
+    const chain = buildResumeChain(mockModel);
+    const result = await chain.invoke({ resume_text: "Jane resume..." });
+
+    // safeParse succeeds — subfield defaults are applied
+    expect(result.careerNarrative.trajectory).toBe("IC to lead");
+    expect(result.careerNarrative.dominantTheme).toBe("");
+    expect(result.careerNarrative.inferredStrengths).toEqual([]);
+    expect(result.careerNarrative.careerMotivation).toBe("");
+    expect(result.careerNarrative.resumeStoryGaps).toEqual([]);
+  });
+
+  it("does not call logValidationFailure when model returns a valid shape", async () => {
+    const validOutput = {
+      name: "Jane Doe",
+      email: "jane@example.com",
+      phone: "555-1234",
+      skills: ["TypeScript"],
+      experience: [],
+      education: [],
+      careerNarrative: {},
+    };
+
+    const mockInvoke = vi.fn().mockResolvedValue(validOutput);
+    const mockModel = {
+      withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
+    };
+
+    const logValidationFailureMock = vi.fn().mockResolvedValue(undefined);
+    vi.doMock("../lib/langsmith", () => ({
+      isTracingEnabled: vi.fn().mockReturnValue(false),
+      RootRunCapture: class {
+        name = "root_run_capture";
+        constructor() {}
+        handleChainStart() {}
+      },
+      logValidationFailure: logValidationFailureMock,
+    }));
+
+    const { buildResumeChain: buildResumeChainMocked } = await import("../lib/chains/resume-chain");
+    const chain = buildResumeChainMocked(mockModel);
+    await chain.invoke({ resume_text: "Jane resume..." });
+
+    expect(logValidationFailureMock).not.toHaveBeenCalled();
   });
 });
 

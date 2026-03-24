@@ -1,5 +1,6 @@
 import { ChatPromptTemplate } from "@langchain/core/prompts";
-import { ResumeSchema } from "./schemas";
+import { ResumeSchema } from "../schemas/resume-schema";
+import { RootRunCapture, logValidationFailure } from "../langsmith";
 
 const SYSTEM_PROMPT = `You are an expert resume parser. Extract structured information from the resume text provided by the user.
 
@@ -41,7 +42,29 @@ export function buildResumeChain(model: any) {
   return {
     invoke: async (input: { resume_text: string }) => {
       const messages = await prompt.invoke(input);
-      return structuredModel.invoke(messages, { runName: "parse-resume" });
+
+      let capturedRunId: string | undefined;
+      const capture = new RootRunCapture((id) => {
+        capturedRunId = id;
+      });
+
+      const result = await structuredModel.invoke(messages, {
+        runName: "parse-resume",
+        callbacks: [capture],
+      });
+
+      const validated = ResumeSchema.safeParse(result);
+      if (!validated.success) {
+        await logValidationFailure({
+          runId: capturedRunId,
+          nodeName: "parse-resume",
+          errors: validated.error,
+          rawOutput: result,
+        });
+        return ResumeSchema.parse({ ...result });
+      }
+
+      return validated.data;
     },
   };
 }
