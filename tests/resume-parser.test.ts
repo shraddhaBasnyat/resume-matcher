@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ResumeSchema } from "../lib/schemas/resume-schema";
-import { buildResumeChain } from "../lib/resume-chain";
+import { buildResumeChain } from "../lib/chains/resume-chain";
 
 // --- Schema validation tests ---
 
@@ -191,7 +191,7 @@ describe("buildResumeChain — validation failure handling", () => {
       logValidationFailure: logValidationFailureMock,
     }));
 
-    const { buildResumeChain: buildResumeChainMocked } = await import("../lib/resume-chain");
+    const { buildResumeChain: buildResumeChainMocked } = await import("../lib/chains/resume-chain");
     const chain = buildResumeChainMocked(mockModel);
 
     // parse() will throw because careerNarrative is required with no default
@@ -261,7 +261,7 @@ describe("buildResumeChain — validation failure handling", () => {
       logValidationFailure: logValidationFailureMock,
     }));
 
-    const { buildResumeChain: buildResumeChainMocked } = await import("../lib/resume-chain");
+    const { buildResumeChain: buildResumeChainMocked } = await import("../lib/chains/resume-chain");
     const chain = buildResumeChainMocked(mockModel);
     await chain.invoke({ resume_text: "Jane resume..." });
 

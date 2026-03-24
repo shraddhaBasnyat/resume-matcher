@@ -1,6 +1,6 @@
 import { ChatPromptTemplate } from "@langchain/core/prompts";
-import { JobSchema } from "./schemas/job-schema";
-import { RootRunCapture, logValidationFailure } from "./langsmith";
+import { JobSchema } from "../schemas/job-schema";
+import { RootRunCapture, logValidationFailure } from "../langsmith";
 
 const SYSTEM_PROMPT = `You are an expert job description parser. Extract structured information from the job description text.
 

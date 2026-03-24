@@ -1,6 +1,6 @@
 import { ChatPromptTemplate } from "@langchain/core/prompts";
-import { MatchSchema } from "./schemas/match-schema";
-import { RootRunCapture, logValidationFailure } from "./langsmith";
+import { MatchSchema } from "../schemas/match-schema";
+import { RootRunCapture, logValidationFailure } from "../langsmith";
 
 const SYSTEM_PROMPT = `You are a resume-to-job-description matcher. Score the candidate's fit for the role from 0 to 100.
 

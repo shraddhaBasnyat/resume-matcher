@@ -1,6 +1,6 @@
 import { ChatPromptTemplate } from "@langchain/core/prompts";
-import { ResumeSchema } from "./schemas/resume-schema";
-import { RootRunCapture, logValidationFailure } from "./langsmith";
+import { ResumeSchema } from "../schemas/resume-schema";
+import { RootRunCapture, logValidationFailure } from "../langsmith";
 
 const SYSTEM_PROMPT = `You are an expert resume parser. Extract structured information from the resume text provided by the user.
 

@@ -1,5 +1,5 @@
 import { ChatPromptTemplate } from "@langchain/core/prompts";
-import { MatchSchema } from "./schemas/match-schema";
+import { MatchSchema } from "../schemas/match-schema";
 
 const SYSTEM_PROMPT = `You are a senior career coach who specialises in resume tailoring.
 Given a resume, job description, and match result between them, produce specific, actionable resume advice.

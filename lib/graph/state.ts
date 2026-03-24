@@ -1,31 +1,31 @@
 import { Annotation } from "@langchain/langgraph";
-import type { Resume } from "./schemas/resume-schema";
-import type { JobDescription } from "./schemas/job-schema";
-import type { MatchResult } from "./schemas/match-schema";
+import type { Resume } from "../schemas/resume-schema";
+import type { JobDescription } from "../schemas/job-schema";
+import type { MatchResult } from "../schemas/match-schema";
 
 /**
  * GRAPH STATE
- * 
+ *
  * Single source of truth for the LangGraph pipeline.
  * All nodes read from and write to this state object.
- * 
+ *
  * REDUCERS
  * Currently all keys use overwrite reducers (last write wins).
- * If nodes were broken into smaller units (e.g. extractSkills, 
+ * If nodes were broken into smaller units (e.g. extractSkills,
  * extractExperience as separate nodes), consider merge reducers:
  *   value: (old, next) => ({ ...old, ...next })
  * This would make partial failures more resilient — if one node
  * fails, previously written keys are preserved.
- * 
+ *
  * KNOWN LIMITATIONS (as of LangGraph 0.x)
  * 1. No access control — any node can read/write any key.
  *    Convention: type each node with Pick<GraphState, "keyName">
  *    to let TypeScript enforce boundaries at dev time.
- * 
+ *
  * 2. No visible subscriptions — unlike Redux selectors, there is
  *    no built-in way to see which nodes "own" which keys.
- *    See NODE DATA FLOW comment in lib/scoring-graph.ts.
- * 
+ *    See NODE DATA FLOW comment in lib/graph/scoring-graph.ts.
+ *
  * 3. MemorySaver is ephemeral — paused graphs (HITL interrupt)
  *    are lost on server restart. For production, swap with
  *    a persistent checkpointer (PostgresSaver, RedisSaver).
