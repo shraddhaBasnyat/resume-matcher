@@ -20,6 +20,8 @@ type FreshRunOptions = SharedOptions & {
 
 type ResumeRunOptions = SharedOptions & {
   kind: "resume";
+  humanContext: string;
+  threadId: string;
 };
 
 export type RunMatchGraphOptions = FreshRunOptions | ResumeRunOptions;
