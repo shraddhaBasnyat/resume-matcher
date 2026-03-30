@@ -272,17 +272,15 @@ export function useMatchRunner(): UseMatchRunnerReturn {
     }
 
     // Notify server to abort and update LangSmith trace
-    if (threadId) {
-      fetch("/api/match/cancel", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          threadId,
-          rootRunId: rootRunId ?? undefined,
-          runStartTime: runStartTime ?? undefined,
-        }),
-      }).catch(() => {});
-    }
+    fetch("/api/match/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        threadId: threadId ?? undefined,
+        rootRunId: rootRunId ?? undefined,
+        runStartTime: runStartTime ?? undefined,
+      }),
+    }).catch(() => {});
 
     setAppState("idle");
     setThreadId(null);
