@@ -68,6 +68,10 @@ async function emitResult(
     });
   } else {
     const { matchResult, resumeData, jobData } = state;
+    if (!matchResult) {
+      emit("error", { error: "Incomplete graph result", message: "Graph completed but matchResult was not populated." });
+      return;
+    }
     emit("completed", {
       result: {
         ...matchResult,

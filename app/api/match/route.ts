@@ -25,6 +25,12 @@ export async function POST(request: NextRequest) {
   const { resumeText, jobText, humanContext, threadId } = parseResult.data;
 
   const resumeRun = isResumeRun(parseResult.data);
+  if (resumeRun && (!threadId || humanContext === undefined)) {
+    return new Response(
+      JSON.stringify({ error: "humanContext and threadId are required for resume runs" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
   if (!resumeRun && (!resumeText || !jobText)) {
     return new Response(
       JSON.stringify({ error: "resumeText and jobText are required for new runs" }),
@@ -36,7 +42,7 @@ export async function POST(request: NextRequest) {
   const abort = new AbortController();
 
   const graphOptions = resumeRun
-    ? { kind: "resume" as const, humanContext, threadId, emit, close, abort }
+    ? { kind: "resume" as const, humanContext: humanContext!, threadId: threadId!, emit, close, abort }
     : { kind: "fresh" as const, resumeText: resumeText!, jobText: jobText!, humanContext, threadId, emit, close, abort };
 
   runMatchGraph(graphOptions);
