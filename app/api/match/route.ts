@@ -24,6 +24,16 @@ export async function POST(request: NextRequest) {
 
   const { resumeText, jobText, humanContext, threadId } = parseResult.data;
 
+  // Validate that threadId and humanContext are either both provided or both omitted.
+  const hasThreadId = !!threadId;
+  const hasHumanContext = humanContext !== undefined;
+  if (hasThreadId !== hasHumanContext) {
+    return new Response(
+      JSON.stringify({ error: "humanContext and threadId must be provided together for resume runs" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
   const resumeRun = isResumeRun(parseResult.data);
   if (!resumeRun && (!resumeText || !jobText)) {
     return new Response(
@@ -35,7 +45,11 @@ export async function POST(request: NextRequest) {
   const { stream, emit, close } = createSSEStream();
   const abort = new AbortController();
 
-  runMatchGraph({ isResumeRun: resumeRun, resumeText, jobText, humanContext, threadId, emit, close, abort });
+  const graphOptions = resumeRun
+    ? { kind: "resume" as const, humanContext: humanContext!, threadId: threadId!, emit, close, abort }
+    : { kind: "fresh" as const, resumeText: resumeText!, jobText: jobText!, humanContext, threadId, emit, close, abort };
+
+  runMatchGraph(graphOptions);
 
   return new Response(stream, {
     headers: {
