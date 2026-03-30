@@ -69,6 +69,8 @@ export function useMatchRunner(): UseMatchRunnerReturn {
 
   // Abort reader ref — used to abandon an in-flight stream
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
+  // Set to true by handleCancel so processStream's catch/finally blocks stay silent
+  const cancelledRef = useRef(false);
 
   // ---------------------------------------------------------------------------
   // PDF upload — text extraction only
@@ -109,6 +111,7 @@ export function useMatchRunner(): UseMatchRunnerReturn {
     readerRef.current = reader;
     const decoder = new TextDecoder();
     let buffer = "";
+    let receivedTerminalEvent = false;
 
     function handleSSEEvent(event: string, payload: Record<string, unknown>) {
       switch (event) {
@@ -136,17 +139,20 @@ export function useMatchRunner(): UseMatchRunnerReturn {
           break;
 
         case "completed":
+          receivedTerminalEvent = true;
           setResult(payload.result as MatchResponse);
           setAppState("completed");
           break;
 
         case "interrupted":
+          receivedTerminalEvent = true;
           setInterruptedScore(payload.score as number | null);
           if (payload.threadId) setThreadId(payload.threadId as string);
           setAppState("interrupted");
           break;
 
         case "error":
+          receivedTerminalEvent = true;
           setMatchError((payload.message as string) ?? (payload.error as string) ?? "Unknown error");
           setAppState("idle");
           break;
@@ -179,8 +185,16 @@ export function useMatchRunner(): UseMatchRunnerReturn {
           }
         }
       }
+
+      if (!receivedTerminalEvent && !cancelledRef.current) {
+        setMatchError("Connection closed unexpectedly. Please try again.");
+        setAppState("idle");
+      }
     } catch {
-      // Reader cancelled or connection dropped — ignore if we initiated the cancel
+      if (!cancelledRef.current) {
+        setMatchError("Connection lost. Please try again.");
+        setAppState("idle");
+      }
     } finally {
       readerRef.current = null;
     }
@@ -264,11 +278,14 @@ export function useMatchRunner(): UseMatchRunnerReturn {
   // ---------------------------------------------------------------------------
 
   async function handleCancel() {
-    // Stop reading the SSE stream
+    // Mark as user-initiated so processStream's error/finally paths stay silent
+    cancelledRef.current = true;
     try {
       await readerRef.current?.cancel();
     } catch {
       // ignore
+    } finally {
+      cancelledRef.current = false;
     }
 
     // Notify server to abort and update LangSmith trace
