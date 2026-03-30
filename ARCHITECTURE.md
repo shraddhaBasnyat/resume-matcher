@@ -27,12 +27,22 @@ production readiness.
 ## Schema design
 
 ### withStructuredOutput() vs Zod validation
-- withStructuredOutput(Schema) shapes LLM output into an object 
+- withStructuredOutput(Schema) shapes LLM output into an object
   but does NOT run Zod validation or apply .default() values
-- Manual ResumeSchema.safeParse(result) added after every 
-  withStructuredOutput() call to apply defaults and catch invalid shapes
-- Current gap: critical field failures (name, email) not yet routed 
+- Manual Schema.safeParse(result) added after withStructuredOutput() in
+  resume-chain, job-chain, and scoring-chain to apply defaults and catch
+  invalid shapes
+- Known gap: gap-analysis-chain is missing the safeParse call — it returns
+  the raw structuredModel result. Fix is coupled to the planned retry work
+  (critical vs non-critical field distinction) so it will land there.
+- Current gap: critical field failures (name, email) not yet routed
   differently from non-critical — lands with the planned retry work
+
+### resumeAdvice type
+- Defined in lib/schemas/match-schema.ts as z.array(z.string()) — string[],
+  not a single string. Each element is one actionable resume suggestion.
+  gapAnalysis rewrites this array with section-level advice referencing
+  actual resume content.
 
 ### Future: granular schemas per node
 Breaking ResumeSchema into smaller schemas per parsing strategy:
@@ -59,8 +69,20 @@ Self-healing: if primary strategy fails, fall back to next tier.
 
 ## API design
 
-### /api/match — SSE streaming
-_to document after reading app/api/match/route.ts_
+### Match API — three routes, all SSE streaming
+
+| Route | Request body | Response |
+|---|---|---|
+| `POST /api/match/run` | `{ resumeText: string, jobText: string, humanContext?: string }` | SSE stream |
+| `POST /api/match/resume` | `{ threadId: string, humanContext: string }` | SSE stream |
+| `POST /api/match/cancel` | `{ threadId: string, rootRunId?: string, runStartTime?: number }` | `{ cancelled: true }` JSON |
+
+`/run` starts a fresh graph run. `/resume` resumes a HITL-interrupted run via
+LangGraph `Command({ resume })`. `/cancel` aborts the in-flight run via
+`activeRuns` and optionally tags the LangSmith trace as user-cancelled.
+
+All three routes validate their request bodies with Zod schemas before
+touching the graph.
 
 ### /api/parse-resume — standalone debug utility
 _to document after reading app/api/parse-resume/route.ts_
@@ -68,9 +90,11 @@ _to document after reading app/api/parse-resume/route.ts_
 ## Resilience strategies
 
 ### Implemented
-- safeParse + logValidationFailure on every chain output
+- safeParse + logValidationFailure on every chain output (except gap-analysis-chain — see schema section)
 - HITL interrupt for low confidence scores
 - AbortController for user-initiated cancellation
+- activeRuns Map (lib/active-runs.ts) — in-process memory only; maps threadId
+  to abort fn + runStartTime; used by /api/match/cancel to abort in-flight runs
 - LangSmith tagging for failure classification
 
 ### Planned (schema and graph retry are coupled — implement together)
@@ -97,7 +121,7 @@ _to document after reading app/api/parse-resume/route.ts_
 
 ## Dual HITL pattern
 
-Same /api/match endpoint supports two interaction patterns:
+The same API supports two interaction patterns (split across `/run` and `/resume`):
 
 Stateful (web app, localhost):
   → graph runs → interrupt fires → threadId returned
