@@ -48,9 +48,16 @@ async function invokeGraph(options: RunMatchGraphOptions, invokeConfig: object) 
   );
 }
 
+function hasInterrupt(state: object): boolean {
+  return (
+    "__interrupt__" in state &&
+    Array.isArray((state as Record<string, unknown>)["__interrupt__"]) &&
+    ((state as Record<string, unknown>)["__interrupt__"] as unknown[]).length > 0
+  );
+}
+
 async function emitResult(
   state: Awaited<ReturnType<typeof graph.invoke>>,
-  config: object,
   emit: (eventName: string, data: object) => void,
   threadId: string,
   runStartTime: number,
@@ -59,10 +66,7 @@ async function emitResult(
   const traceUrl =
     isTracingEnabled() && capture?.rootRunId ? getTraceUrl(capture.rootRunId) : null;
 
-  const snapshot = await graph.getState(config);
-  const isInterrupted = snapshot.next.length > 0;
-
-  if (isInterrupted) {
+  if (hasInterrupt(state)) {
     emit("interrupted", {
       score: state.matchResult?.score ?? null,
       threadId,
@@ -119,7 +123,7 @@ export async function runMatchGraph(options: RunMatchGraphOptions): Promise<void
     const invokeConfig = { ...config, runName, signal: abort.signal, callbacks };
 
     const state = await invokeGraph(options, invokeConfig);
-    await emitResult(state, config, emit, newThreadId, runStartTime, capture);
+    await emitResult(state, emit, newThreadId, runStartTime, capture);
   } catch (error) {
     if (abort.signal.aborted) {
       // Intentionally cancelled — don't emit an error event
