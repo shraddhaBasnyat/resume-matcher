@@ -37,7 +37,7 @@ export const GraphState = Annotation.Root({
   jobText: Annotation<string>(),
   humanContext: Annotation<string>({
     default: () => "",
-    reducer: (_prev, next) => next,
+    reducer: (prev, next) => prev ? `${prev}\n${next}` : next,
   }),
   // Structured outputs written by each parse node
   resumeData: Annotation<Resume | undefined>({
