@@ -219,7 +219,7 @@ export default function Home() {
     setHumanContext("");
 
     try {
-      const res = await fetch("/api/match", {
+      const res = await fetch("/api/match/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resumeText, jobText: jobDescription }),
@@ -254,7 +254,7 @@ export default function Home() {
     setProgress(INITIAL_PROGRESS);
 
     try {
-      const res = await fetch("/api/match", {
+      const res = await fetch("/api/match/resume", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ humanContext, threadId }),
