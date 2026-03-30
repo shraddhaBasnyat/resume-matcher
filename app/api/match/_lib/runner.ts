@@ -40,7 +40,7 @@ function buildCallbacks(
   return { callbacks: [...(capture ? [capture] : []), progressEmitter], capture };
 }
 
-async function invokeGraph(options: RunMatchGraphOptions, invokeConfig: object) {
+async function invokeGraph(options: RunMatchGraphOptions, invokeConfig: Parameters<typeof graph.invoke>[1]) {
   if (options.kind === "resume") {
     return graph.invoke(new Command({ resume: options.humanContext }), invokeConfig);
   }
