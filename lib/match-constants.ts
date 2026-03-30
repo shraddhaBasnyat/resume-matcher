@@ -1,7 +1,7 @@
 import type { Resume } from "./schemas/resume-schema";
 import type { JobDescription } from "./schemas/job-schema";
 
-export type AppState = "idle" | "running" | "interrupted" | "completed" | "cancelled";
+export type AppState = "idle" | "running" | "interrupted" | "completed";
 export type StepStatus = "waiting" | "running" | "done";
 
 export interface NodeProgress {
