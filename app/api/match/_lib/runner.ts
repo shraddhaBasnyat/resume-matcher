@@ -42,7 +42,7 @@ function buildCallbacks(
 
 async function invokeGraph(options: RunMatchGraphOptions, invokeConfig: object) {
   if (options.kind === "resume") {
-    return graph.invoke(new Command({ resume: options.humanContext ?? "" }), invokeConfig);
+    return graph.invoke(new Command({ resume: options.humanContext }), invokeConfig);
   }
   return graph.invoke(
     { resumeText: options.resumeText, jobText: options.jobText, humanContext: options.humanContext ?? "" },
