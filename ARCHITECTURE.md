@@ -17,12 +17,17 @@ production readiness.
   RedisSaver) — without it, HITL sessions are dropped silently on restart.
 
 ## Node data flow
-| Node        | Reads                             | Writes      |
-|-------------|-----------------------------------|-------------|
-| parseResume | resumeText                        | resumeData  |
-| parseJob    | jobText                           | jobData     |
-| scoreMatch  | resumeData, jobData, humanContext | matchResult |
-| gapAnalysis | matchResult, resumeData, jobData  | matchResult |
+`parseResume` and `parseJob` run **in parallel** from `__start__` — both edges are added
+directly to `__start__` in the StateGraph, so they execute concurrently before `scoreMatch`.
+
+| Node        | Reads                             | Writes        | Notes |
+|-------------|-----------------------------------|---------------|-------|
+| parseResume | resumeText                        | resumeData    | parallel with parseJob |
+| parseJob    | jobText                           | jobData       | parallel with parseResume |
+| scoreMatch  | resumeData, jobData, humanContext | matchResult   | |
+| awaitHuman  | —                                 | humanContext  | LangGraph `interrupt()` node; only reached when score < 60; pauses the graph until `/api/match/resume` is called |
+| rescore     | resumeData, jobData, humanContext | matchResult   | same function as scoreMatch, re-bound as a separate node so humanContext is in state |
+| gapAnalysis | matchResult, resumeData, jobData  | matchResult   | |
 
 ## Schema design
 
@@ -81,11 +86,21 @@ Self-healing: if primary strategy fails, fall back to next tier.
 LangGraph `Command({ resume })`. `/cancel` aborts the in-flight run via
 `activeRuns` and optionally tags the LangSmith trace as user-cancelled.
 
-All three routes validate their request bodies with Zod schemas before
-touching the graph.
+All three routes validate their request bodies with Zod schemas before touching the graph.
+Note: `/run` and `/resume` use dedicated schema files (`run-schema.ts`, `resume-schema.ts`);
+`/cancel`'s schema is defined inline in its route file.
 
-### /api/parse-resume — standalone debug utility
-_to document after reading app/api/parse-resume/route.ts_
+#### Dead code: `app/api/match/_lib/request-schema.ts`
+`MatchRequestSchema` + `isResumeRun()` helper — leftover from a prior single-route design
+before `/run` and `/resume` were split. Not imported by any current file; safe to delete.
+
+### /api/parse-resume — standalone PDF extraction utility
+Accepts `multipart/form-data` with a single `resume` field (PDF only).
+Uses `pdf2json` to extract raw text, then applies light regex cleanup to fix common
+PDF text-extraction artifacts (e.g. spaced-out characters like `S e n i o r → Senior`).
+Returns `{ text: string }` on success or `{ error, message }` on failure.
+Not connected to the LangGraph pipeline — useful for inspecting raw extracted text
+before passing it to `/api/match/run`.
 
 ## Resilience strategies
 
