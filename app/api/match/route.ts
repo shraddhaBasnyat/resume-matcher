@@ -35,7 +35,11 @@ export async function POST(request: NextRequest) {
   const { stream, emit, close } = createSSEStream();
   const abort = new AbortController();
 
-  runMatchGraph({ isResumeRun: resumeRun, resumeText, jobText, humanContext, threadId, emit, close, abort });
+  const graphOptions = resumeRun
+    ? { kind: "resume" as const, humanContext, threadId, emit, close, abort }
+    : { kind: "fresh" as const, resumeText: resumeText!, jobText: jobText!, humanContext, threadId, emit, close, abort };
+
+  runMatchGraph(graphOptions);
 
   return new Response(stream, {
     headers: {
