@@ -190,8 +190,10 @@ export function useMatchRunner(): UseMatchRunnerReturn {
         setMatchError("Connection closed unexpectedly. Please try again.");
         setAppState("idle");
       }
-    } catch {
-      if (!cancelledRef.current) {
+    } catch (error) {
+      const isAbortError =
+        error instanceof DOMException && error.name === "AbortError";
+      if (!cancelledRef.current && !isAbortError) {
         setMatchError("Connection lost. Please try again.");
         setAppState("idle");
       }
