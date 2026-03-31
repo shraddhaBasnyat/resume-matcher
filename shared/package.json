@@ -1,0 +1,9 @@
+{
+  "name": "@resume-matcher/shared",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    "./types/*": "./types/*.ts",
+    "./constants/*": "./constants/*.ts"
+  }
+}
