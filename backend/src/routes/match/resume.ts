@@ -21,7 +21,7 @@ router.post("/", (req, res) => {
   const { emit, close } = createSSEStream(res);
   const abort = new AbortController();
 
-  handleClientDisconnect(req, abort);
+  handleClientDisconnect(req, res, abort);
   runMatchGraph({ kind: "resume", threadId, humanContext, emit, close, abort });
 });
 
