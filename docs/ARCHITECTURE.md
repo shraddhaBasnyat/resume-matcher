@@ -29,6 +29,24 @@ directly to `__start__` in the StateGraph, so they execute concurrently before `
 | rescore     | resumeData, jobData, humanContext | matchResult   | same function as scoreMatch, re-bound as a separate node so humanContext is in state |
 | gapAnalysis | matchResult, resumeData, jobData  | matchResult   | |
 
+### Cancellation
+
+#### activeRuns Map (current)
+In-memory Map keyed by threadId.
+Stores AbortController reference per active graph run.
+Works on single Render instance — both /run and /cancel 
+hit the same process, same Map.
+
+AbortController is a Web standard — not LangGraph specific.
+LangGraph respects the signal option in invoke config,
+checking it between nodes.
+
+#### Conventional alternatives at scale
+Single instance: activeRuns Map (current approach) — sufficient
+Multi-instance: Redis pub/sub for cross-instance abort signalling
+Production traffic: Job queue (BullMQ, Inngest) — cancellation,
+  retries, dead letter queues built in, workers scale independently
+
 ## Schema design
 
 ### withStructuredOutput() vs Zod validation
@@ -90,9 +108,6 @@ All three routes validate their request bodies with Zod schemas before touching 
 Note: `/run` and `/resume` use dedicated schema files (`run-schema.ts`, `resume-schema.ts`);
 `/cancel`'s schema is defined inline in its route file.
 
-#### Dead code: `app/api/match/_lib/request-schema.ts`
-`MatchRequestSchema` + `isResumeRun()` helper — leftover from a prior single-route design
-before `/run` and `/resume` were split. Not imported by any current file; safe to delete.
 
 ### /api/parse-resume — standalone PDF extraction utility
 Accepts `multipart/form-data` with a single `resume` field (PDF only).
@@ -120,46 +135,107 @@ before passing it to `/api/match/run`.
 - Input validation before graph starts (fail fast, save tokens)
 - maxRetries + timeout on model constructor (transient failures only)
 
-## Production migration
+## Deployment architecture
 
-### Model swap (simple — one line change)
-- Swap ChatOllama for ChatAnthropic or ChatGoogleGenerativeAI
-- buildScoringGraph(model) factory pattern makes this isolated
+### Frontend: Vercel (free)
+- Serves Next.js UI only
+- /api/* requests proxied to Render via next.config.js rewrites
+- No API routes run on Vercel — avoids serverless limitations
 
-### Persistent server requirements (needed for HITL + cancel)
-- Persistent checkpointer (PostgresSaver, RedisSaver) for HITL
-- activeRuns Map → Redis for cross-instance cancel support
-- SIGTERM handler to abort in-flight runs cleanly
-- Layered timeouts per node and per graph
-- Circuit breaker for LLM provider
-- Dead letter logging for exhausted retries
+### Backend: Render (free tier, persistent server)
+- Persistent Node.js process — MemorySaver and activeRuns work correctly
+- Kept alive via UptimeRobot pinger every 10 minutes
+- 512MB RAM limit — rules out local Ollama
+- Requires cloud LLM: ChatOllama → ChatAnthropic (Claude Haiku)
+- buildScoringGraph(model) factory pattern makes model swap one line
+
+### State: Supabase (free tier)
+- PostgresSaver replaces MemorySaver for persistent HITL checkpointing
+- Survives Render restarts and deploys
+- waitlist table for beta user management
+- subscriptions table for usage tracking
+- Self-cleaning cron for expired checkpointer rows:
+  DELETE FROM checkpoints WHERE created_at < NOW() - INTERVAL '24 hours'
+- One-time setup: checkpointer.setup() on first deploy
+
+### What persistent server solves
+Render gives us a persistent process — these work without Redis:
+- activeRuns Map survives within a session
+- MemorySaver → replaced by PostgresSaver (more robust anyway)
+- HITL threadId survives between /run and /resume calls
+- Cancel works — AbortController is in the same process
+
+### Still needed at scale (not now)
+- Redis: only if multiple Render instances needed (free tier = one instance)
+- Circuit breaker: if Anthropic has outages at scale
+- SIGTERM handler: worth adding for clean deploys on Render
 
 ## Dual HITL pattern
 
-The same API supports two interaction patterns (split across `/run` and `/resume`):
+The same API supports two interaction patterns:
 
-Stateful (web app, localhost):
+Stateful (web app, localhost + Render):
   → graph runs → interrupt fires → threadId returned
-  → user adds context → POST with threadId → graph resumes
-  → requires persistent server + MemorySaver
+  → user adds context → POST /resume with threadId → graph resumes
+  → works on Render because process is persistent
+  → checkpointer: MemorySaver locally, PostgresSaver on Render
 
-Stateless (Chrome extension, serverless):
+Stateless (Chrome extension):
   → graph runs → low score returned to client
-  → user adds context → POST with humanContext, no threadId
+  → user adds context → POST /run again with humanContext
   → fresh graph run with humanContext in initial state
-  → works anywhere, no server-side state required
+  → chosen because extension popup closes on outside click
+     — threadId would be lost, paused graph orphaned
 
 Caller chooses the pattern. API supports both.
 
-### Why two patterns
-Chrome Extension popup closes on outside click — threadId lost,
-paused graph orphaned in memory. Stateless pattern avoids this.
-Stateless also works on Vercel serverless where process memory
-resets between requests.
-Tradeoff: stateless re-runs parseResume + parseJob (~2-3s on cloud
-models, ~90s on local Ollama — only acceptable with cloud models).
+Tradeoff: stateless re-runs parseResume + parseJob.
+Acceptable with Claude Haiku (~2-3s total).
+Not acceptable with local Ollama (~90s).
 
-## Product model - Chrome Extension
-API key bring-your-own — user provides their own OpenAI/Anthropic key.
-Zero inference costs. License validation via Gumroad.
-See Chrome Extension HITL concern for stateless HITL pattern.
+### Product model - Chrome Extension
+
+### Pricing
+One-time purchase via Gumroad → license key.
+No user API key required — backend uses developer's API key.
+Users get N matches per month (specific limit TBD).
+
+### Cost control (two layers)
+Layer 1: per-license usage limit enforced in backend
+  → tracked in Supabase usage table
+  → resets monthly via Supabase cron
+  → prevents one user burning others' quota
+
+Layer 2: global Anthropic/OpenAI spending limit
+  → safety net only, not primary control
+  → set high enough to not interfere with normal usage
+
+### Auth flow per request
+1. Validate license key (Gumroad API, cached 1hr in Supabase)
+2. Check monthly usage for that license key
+3. If under limit: run match, increment usage
+4. If over limit: return 429 with reset date
+
+### Inference
+Backend calls Anthropic/OpenAI with developer's API key.
+Model: Claude Haiku or GPT-4o-mini (~$0.01 per match).
+Predictable cost: users × monthly_limit × cost_per_match.
+
+## Go-to-market
+
+### Waitlist flow
+Chrome Web Store listing → "Get early access" in extension popup
+  → user enters email → stored in Supabase waitlist table
+  → manual outreach with beta code
+  → later: automated email via Supabase edge function
+
+### Supabase waitlist table
+  email, signed_up_at, invited, invited_at, beta_code
+
+### Rollout sequence
+1. Build + test locally
+2. Publish to Chrome Web Store (unpublished/unlisted first)
+3. Share with 5-10 people via direct link
+4. Collect feedback, fix issues
+5. Publish publicly, enable waitlist
+6. Add subscription billing when ready to charge
