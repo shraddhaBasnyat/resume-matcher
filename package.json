@@ -1,43 +1,16 @@
 {
   "name": "resume-matcher",
-  "version": "0.1.0",
   "private": true,
+  "workspaces": ["shared", "frontend", "backend"],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
+    "dev:frontend": "npm run dev --workspace=@resume-matcher/frontend",
+    "dev:backend": "npm run dev --workspace=@resume-matcher/backend",
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
+    "build:frontend": "npm run build --workspace=@resume-matcher/frontend",
+    "build:backend": "npm run build --workspace=@resume-matcher/backend",
+    "test": "npm run test --workspace=@resume-matcher/backend"
   },
-  "dependencies": {
-    "@base-ui/react": "^1.3.0",
-    "@langchain/community": "^1.1.24",
-    "@langchain/core": "^1.1.34",
-    "@langchain/langgraph": "^1.2.5",
-    "@langchain/ollama": "^1.2.6",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "langsmith": "^0.5.12",
-    "lucide-react": "^0.577.0",
-    "next": "14.2.35",
-    "pdf-parse": "^2.4.5",
-    "pdf2json": "^4.0.2",
-    "react": "^18",
-    "react-dom": "^18",
-    "shadcn": "^4.1.0",
-    "tailwind-merge": "^3.5.0",
-    "tw-animate-css": "^1.4.0"
-  },
-  "//": "TODO: Add engines.node constraint (e.g. '>=20') to match transitive deps like @langchain/langgraph that require Node >=20",
   "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "@vitest/ui": "^4.1.0",
-    "eslint": "^8",
-    "eslint-config-next": "14.2.35",
-    "postcss": "^8",
-    "tailwindcss": "^3.4.1",
-    "typescript": "^5",
-    "vitest": "^4.1.0"
+    "concurrently": "^8.0.0"
   }
 }
