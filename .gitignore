@@ -37,6 +37,7 @@ backend/.env
 # build outputs
 backend/dist
 frontend/.next/
+shared/**/*.js
 
 # vercel
 .vercel
