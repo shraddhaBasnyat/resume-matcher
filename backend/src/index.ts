@@ -29,6 +29,14 @@ setupCheckpointer()
   .then(() => {
     app.listen(port);
   })
-  .catch(() => {
+  .catch((error) => {
+    console.error("Failed to start server: setupCheckpointer() rejected.", {
+      error,
+      env: {
+        PORT: process.env.PORT,
+        FRONTEND_URL: process.env.FRONTEND_URL,
+        SUPABASE_DB_URL_SET: Boolean(process.env.SUPABASE_DB_URL),
+      },
+    });
     process.exit(1);
   });
