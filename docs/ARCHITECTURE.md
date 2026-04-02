@@ -195,47 +195,50 @@ Not acceptable with local Ollama (~90s).
 
 ### Product model - Chrome Extension
 
-### Pricing
-One-time purchase via Gumroad → license key.
-No user API key required — backend uses developer's API key.
-Users get N matches per month (specific limit TBD).
+### Beta (current)
+- Free for invited beta users
+- You manually create Supabase accounts for waitlist signups
+- Usage tracked per user_id in Supabase usage table
+- Monthly limit enforced in backend (limit TBD)
+- Resets monthly via Supabase cron
 
-### Cost control (two layers)
-Layer 1: per-license usage limit enforced in backend
-  → tracked in Supabase usage table
-  → resets monthly via Supabase cron
-  → prevents one user burning others' quota
-
-Layer 2: global Anthropic/OpenAI spending limit
-  → safety net only, not primary control
-  → set high enough to not interfere with normal usage
+### Cost control
+Layer 1: per-user monthly usage limit tracked in Supabase
+Layer 2: global Anthropic spending limit as safety net
 
 ### Auth flow per request
-1. Validate license key (Gumroad API, cached 1hr in Supabase)
-2. Check monthly usage for that license key
-3. If under limit: run match, increment usage
-4. If over limit: return 429 with reset date
+1. User logs in via Chrome extension → Supabase returns JWT
+2. JWT sent as Bearer token to Render backend
+3. Backend verifies JWT via Supabase service role key
+4. Check monthly usage for that user_id
+5. If under limit: run agent, increment usage
+6. If over limit: return 429 with reset date
 
-### Inference
-Backend calls Anthropic/OpenAI with developer's API key.
-Model: Claude Haiku or GPT-4o-mini (~$0.01 per match).
-Predictable cost: users × monthly_limit × cost_per_match.
+### Monetization (post PMF)
+TBD based on beta feedback — options include
+subscription billing via Stripe, one-time purchase,
+or usage-based pricing.
 
 ## Go-to-market
 
-### Waitlist flow
-Chrome Web Store listing → "Get early access" in extension popup
-  → user enters email → stored in Supabase waitlist table
-  → manual outreach with beta code
-  → later: automated email via Supabase edge function
-
-### Supabase waitlist table
-  email, signed_up_at, invited, invited_at, beta_code
-
 ### Rollout sequence
 1. Build + test locally
-2. Publish to Chrome Web Store (unpublished/unlisted first)
+2. Publish to Chrome Web Store (unlisted first)
 3. Share with 5-10 people via direct link
 4. Collect feedback, fix issues
 5. Publish publicly, enable waitlist
 6. Add subscription billing when ready to charge
+
+### Waitlist flow
+Chrome Web Store listing → "Get early access" in extension popup
+  → user enters email → stored in Supabase waitlist table
+  → you create account in Supabase dashboard 
+  → trigger invite email (magic link)
+  → user clicks link, sets their own password
+  → logs into Chrome extension with email/password
+
+### Supabase waitlist table
+  email, signed_up_at, invited, invited_at
+
+### Supabase usage table
+  user_id (references auth.users), matches_this_month, reset_at

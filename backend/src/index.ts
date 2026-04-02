@@ -1,12 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import matchRunRouter from "./routes/match/run.js";
-import matchResumeRouter from "./routes/match/resume.js";
-import matchAcceptRouter from "./routes/match/accept.js";
-import matchCancelRouter from "./routes/match/cancel.js";
-import parseResumeRouter from "./routes/parse-resume.js";
-import healthRouter from "./routes/health.js";
+import { setupCheckpointer } from "../lib/graph/scoring-graph.js";
 
 const app = express();
 
@@ -15,14 +10,34 @@ app.use(cors({
 }));
 app.use(express.json());
 
-app.use("/api/match/run", matchRunRouter);
-app.use("/api/match/resume", matchResumeRouter);
-app.use("/api/match/accept", matchAcceptRouter);
-app.use("/api/match/cancel", matchCancelRouter);
-app.use("/api/parse-resume", parseResumeRouter);
-app.use("/api/health", healthRouter);
-
 const port = process.env.PORT ?? 3001;
-app.listen(port, () => {
-  console.log(`Backend listening on http://localhost:${port}`);
-});
+
+setupCheckpointer()
+  .then(async () => {
+    const { default: matchRunRouter } = await import("./routes/match/run.js");
+    const { default: matchResumeRouter } = await import("./routes/match/resume.js");
+    const { default: matchAcceptRouter } = await import("./routes/match/accept.js");
+    const { default: matchCancelRouter } = await import("./routes/match/cancel.js");
+    const { default: parseResumeRouter } = await import("./routes/parse-resume.js");
+    const { default: healthRouter } = await import("./routes/health.js");
+
+    app.use("/api/match/run", matchRunRouter);
+    app.use("/api/match/resume", matchResumeRouter);
+    app.use("/api/match/accept", matchAcceptRouter);
+    app.use("/api/match/cancel", matchCancelRouter);
+    app.use("/api/parse-resume", parseResumeRouter);
+    app.use("/api/health", healthRouter);
+
+    app.listen(port);
+  })
+  .catch((error) => {
+    console.error("Failed to start server: setupCheckpointer() rejected.", {
+      error,
+      env: {
+        PORT: process.env.PORT,
+        FRONTEND_URL: process.env.FRONTEND_URL,
+        SUPABASE_DB_URL_SET: Boolean(process.env.SUPABASE_DB_URL),
+      },
+    });
+    process.exit(1);
+  });

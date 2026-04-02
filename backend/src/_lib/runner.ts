@@ -3,6 +3,7 @@ import { isTracingEnabled, getTraceUrl, RootRunCapture, RUN_NAMES } from "../../
 import { activeRuns } from "../../lib/active-runs.js";
 import { NodeProgressEmitter } from "./emitter.js";
 import { graph } from "./graph-instance.js";
+import { getCheckpointer } from "../../lib/graph/scoring-graph.js";
 
 type SharedOptions = {
   humanContext?: string;
@@ -130,6 +131,7 @@ export async function runMatchGraph(options: RunMatchGraphOptions): Promise<void
         null,
         false
       );
+      await getCheckpointer().deleteThread(options.threadId);
     } catch (error) {
       emitError(error, emit);
     } finally {
@@ -153,9 +155,13 @@ export async function runMatchGraph(options: RunMatchGraphOptions): Promise<void
     const snapshot = await graph.getState(config);
     const isInterrupted = snapshot.next.length > 0;
     await emitResult(state, emit, newThreadId, runStartTime, capture, isInterrupted);
+    if (!isInterrupted) {
+      await getCheckpointer().deleteThread(newThreadId);
+    }
   } catch (error) {
     if (abort.signal.aborted) {
       // Intentionally cancelled — don't emit an error event
+      await getCheckpointer().deleteThread(newThreadId);
       return;
     }
     emitError(error, emit);

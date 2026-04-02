@@ -1,4 +1,5 @@
 import { StateGraph, interrupt, MemorySaver } from "@langchain/langgraph";
+import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { GraphState, type GraphStateType } from "./state.js";
 import { makeParseResumeNode } from "./nodes/parse-resume.js";
@@ -16,6 +17,39 @@ const NODES = {
 } as const;
 
 type NodeName = typeof NODES[keyof typeof NODES];
+
+let sharedCheckpointer: PostgresSaver | MemorySaver | null = null;
+
+export async function setupCheckpointer(): Promise<void> {
+  if (!process.env.SUPABASE_DB_URL) {
+    sharedCheckpointer = new MemorySaver();
+    return;
+  }
+  if (sharedCheckpointer instanceof PostgresSaver) {
+    return;
+  }
+  const checkpointer = PostgresSaver.fromConnString(process.env.SUPABASE_DB_URL);
+  await checkpointer.setup();
+  sharedCheckpointer = checkpointer;
+}
+
+function makeCheckpointer() {
+  if (sharedCheckpointer) {
+    return sharedCheckpointer;
+  }
+
+  if (process.env.SUPABASE_DB_URL) {
+    sharedCheckpointer = PostgresSaver.fromConnString(process.env.SUPABASE_DB_URL);
+    return sharedCheckpointer;
+  }
+
+  sharedCheckpointer = new MemorySaver();
+  return sharedCheckpointer;
+}
+
+export function getCheckpointer(): PostgresSaver | MemorySaver {
+  return sharedCheckpointer ?? makeCheckpointer();
+}
 
 export function buildScoringGraph(model: BaseChatModel) {
   const parseResume = makeParseResumeNode(model);
@@ -62,8 +96,6 @@ export function buildScoringGraph(model: BaseChatModel) {
     .addEdge(NODES.RESCORE, NODES.GAP_ANALYSIS)
     .addEdge(NODES.GAP_ANALYSIS, "__end__");
 
-  // TODO: Replace MemorySaver with a durable checkpointer (e.g., Redis/DB-backed)
-  // to support HITL across server restarts, cold starts, and multi-instance deployments.
-  const checkpointer = new MemorySaver();
+  const checkpointer = makeCheckpointer();
   return workflow.compile({ checkpointer });
 }
