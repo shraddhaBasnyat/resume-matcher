@@ -18,18 +18,35 @@ const NODES = {
 
 type NodeName = typeof NODES[keyof typeof NODES];
 
+let sharedCheckpointer: PostgresSaver | MemorySaver | null = null;
+
 export async function setupCheckpointer(): Promise<void> {
-  if (process.env.SUPABASE_DB_URL) {
-    const checkpointer = PostgresSaver.fromConnString(process.env.SUPABASE_DB_URL);
-    await checkpointer.setup();
+  if (!process.env.SUPABASE_DB_URL) {
+    return;
   }
+
+  if (sharedCheckpointer instanceof PostgresSaver) {
+    await sharedCheckpointer.setup();
+    return;
+  }
+
+  const checkpointer = PostgresSaver.fromConnString(process.env.SUPABASE_DB_URL);
+  sharedCheckpointer = checkpointer;
+  await checkpointer.setup();
 }
 
 function makeCheckpointer() {
-  if (process.env.SUPABASE_DB_URL) {
-    return PostgresSaver.fromConnString(process.env.SUPABASE_DB_URL);
+  if (sharedCheckpointer) {
+    return sharedCheckpointer;
   }
-  return new MemorySaver();
+
+  if (process.env.SUPABASE_DB_URL) {
+    sharedCheckpointer = PostgresSaver.fromConnString(process.env.SUPABASE_DB_URL);
+    return sharedCheckpointer;
+  }
+
+  sharedCheckpointer = new MemorySaver();
+  return sharedCheckpointer;
 }
 
 export function buildScoringGraph(model: BaseChatModel) {
