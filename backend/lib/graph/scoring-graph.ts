@@ -22,16 +22,15 @@ let sharedCheckpointer: PostgresSaver | MemorySaver | null = null;
 
 export async function setupCheckpointer(): Promise<void> {
   if (!process.env.SUPABASE_DB_URL) {
+    sharedCheckpointer = new MemorySaver();
     return;
   }
-
   if (sharedCheckpointer instanceof PostgresSaver) {
     return;
   }
-
   const checkpointer = PostgresSaver.fromConnString(process.env.SUPABASE_DB_URL);
-  sharedCheckpointer = checkpointer;
   await checkpointer.setup();
+  sharedCheckpointer = checkpointer;
 }
 
 function makeCheckpointer() {
@@ -46,6 +45,10 @@ function makeCheckpointer() {
 
   sharedCheckpointer = new MemorySaver();
   return sharedCheckpointer;
+}
+
+export function getCheckpointer(): PostgresSaver | MemorySaver {
+  return sharedCheckpointer ?? makeCheckpointer();
 }
 
 export function buildScoringGraph(model: BaseChatModel) {
