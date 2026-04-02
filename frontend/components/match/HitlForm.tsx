@@ -3,6 +3,7 @@ interface HitlFormProps {
   humanContext: string;
   onHumanContextChange: (v: string) => void;
   onRescore: (e: React.FormEvent) => void;
+  onAccept: () => void;
 }
 
 export function HitlForm({
@@ -10,6 +11,7 @@ export function HitlForm({
   humanContext,
   onHumanContextChange,
   onRescore,
+  onAccept,
 }: HitlFormProps) {
   return (
     <div className="p-4 border border-yellow-400 bg-yellow-50 rounded space-y-3">
@@ -25,13 +27,22 @@ export function HitlForm({
           className="block w-full border border-yellow-300 rounded p-2 text-sm"
           placeholder="e.g. I led a team of 5 engineers for 2 years but it was off the books…"
         />
-        <button
-          type="submit"
-          disabled={!humanContext.trim()}
-          className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-40 text-sm font-medium"
-        >
-          Re-score
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={!humanContext.trim()}
+            className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-40 text-sm font-medium"
+          >
+            Re-score
+          </button>
+          <button
+            type="button"
+            onClick={onAccept}
+            className="px-4 py-2 bg-white border border-yellow-400 text-yellow-800 rounded hover:bg-yellow-100 text-sm font-medium"
+          >
+            Accept score
+          </button>
+        </div>
       </form>
     </div>
   );

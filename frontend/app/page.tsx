@@ -31,6 +31,7 @@ export default function Home() {
     handleFileUpload,
     handleMatch,
     handleRescore,
+    handleAccept,
     handleCancel,
     scoreColor,
   } = useMatchRunner();
@@ -109,6 +110,7 @@ export default function Home() {
           humanContext={humanContext}
           onHumanContextChange={setHumanContext}
           onRescore={handleRescore}
+          onAccept={handleAccept}
         />
       )}
 

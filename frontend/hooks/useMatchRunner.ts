@@ -34,6 +34,7 @@ export interface UseMatchRunnerReturn {
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => Promise<void>;
   handleMatch: (e: React.FormEvent) => Promise<void>;
   handleRescore: (e: React.FormEvent) => Promise<void>;
+  handleAccept: () => Promise<void>;
   handleCancel: () => Promise<void>;
   scoreColor: (score: number) => string;
 }
@@ -278,6 +279,40 @@ export function useMatchRunner(): UseMatchRunnerReturn {
   }
 
   // ---------------------------------------------------------------------------
+  // Accept low score (HITL — read state from checkpointer, skip gap analysis)
+  // ---------------------------------------------------------------------------
+
+  async function handleAccept() {
+    if (!threadId) return;
+
+    setAppState("running");
+    setMatchError(null);
+    setRootRunId(null);
+    setRunStartTime(Date.now());
+    setProgress(INITIAL_PROGRESS);
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/match/accept`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ threadId }),
+      });
+
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}));
+        setMatchError(data.message ?? data.error ?? "Request failed");
+        setAppState("idle");
+        return;
+      }
+
+      await processStream(res);
+    } catch {
+      setMatchError("Failed to reach the server.");
+      setAppState("idle");
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Cancel
   // ---------------------------------------------------------------------------
 
@@ -355,6 +390,7 @@ export function useMatchRunner(): UseMatchRunnerReturn {
     handleFileUpload,
     handleMatch,
     handleRescore,
+    handleAccept,
     handleCancel,
     scoreColor,
   };
