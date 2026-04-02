@@ -131,7 +131,7 @@ export async function runMatchGraph(options: RunMatchGraphOptions): Promise<void
         null,
         false
       );
-      await getCheckpointer().deleteThread(config);
+      await getCheckpointer().deleteThread(options.threadId);
     } catch (error) {
       emitError(error, emit);
     } finally {
@@ -156,12 +156,12 @@ export async function runMatchGraph(options: RunMatchGraphOptions): Promise<void
     const isInterrupted = snapshot.next.length > 0;
     await emitResult(state, emit, newThreadId, runStartTime, capture, isInterrupted);
     if (!isInterrupted) {
-      await getCheckpointer().deleteThread(config);
+      await getCheckpointer().deleteThread(newThreadId);
     }
   } catch (error) {
     if (abort.signal.aborted) {
       // Intentionally cancelled — don't emit an error event
-      await getCheckpointer().deleteThread(config);
+      await getCheckpointer().deleteThread(newThreadId);
       return;
     }
     emitError(error, emit);
