@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { createSSEStream } from "../../_lib/stream.js";
+import { createSSEStream, handleClientDisconnect } from "../../_lib/stream.js";
 import { runMatchGraph } from "../../_lib/runner.js";
 
 const router = Router();
@@ -20,6 +20,7 @@ router.post("/", (req, res) => {
   const { emit, close } = createSSEStream(res);
   const abort = new AbortController();
 
+  handleClientDisconnect(req, res, abort);
   runMatchGraph({ kind: "accept", threadId, emit, close, abort });
 });
 
