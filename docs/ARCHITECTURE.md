@@ -232,9 +232,9 @@ or usage-based pricing.
 ### Waitlist flow
 Chrome Web Store listing → "Get early access" in extension popup
   → user enters email → stored in Supabase waitlist table
-  → you create account in Supabase dashboard → 
-  → trigger invite email (magic link) → 
-  → user clicks link, sets their own password →
+  → you create account in Supabase dashboard 
+  → trigger invite email (magic link)
+  → user clicks link, sets their own password
   → logs into Chrome extension with email/password
 
 ### Supabase waitlist table
