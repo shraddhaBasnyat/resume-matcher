@@ -24,7 +24,12 @@ type ResumeRunOptions = SharedOptions & {
   threadId: string;
 };
 
-export type RunMatchGraphOptions = FreshRunOptions | ResumeRunOptions;
+type AcceptRunOptions = Omit<SharedOptions, "threadId"> & {
+  kind: "accept";
+  threadId: string;
+};
+
+export type RunMatchGraphOptions = FreshRunOptions | ResumeRunOptions | AcceptRunOptions;
 
 function buildCallbacks(
   emit: (eventName: string, data: object) => void,
@@ -40,7 +45,7 @@ function buildCallbacks(
   return { callbacks: [...(capture ? [capture] : []), progressEmitter], capture };
 }
 
-async function invokeGraph(options: RunMatchGraphOptions, invokeConfig: Parameters<typeof graph.invoke>[1]) {
+async function invokeGraph(options: FreshRunOptions | ResumeRunOptions, invokeConfig: Parameters<typeof graph.invoke>[1]) {
   if (options.kind === "resume") {
     return graph.invoke(new Command({ resume: options.humanContext }), invokeConfig);
   }
@@ -109,8 +114,31 @@ function emitError(
 }
 
 export async function runMatchGraph(options: RunMatchGraphOptions): Promise<void> {
-  const { emit, close, abort } = options;
+  const { emit, close } = options;
   const runStartTime = Date.now();
+
+  // Accept: read existing state from checkpointer and emit — no graph invocation
+  if (options.kind === "accept") {
+    try {
+      const config = { configurable: { thread_id: options.threadId } };
+      const snapshot = await graph.getState(config);
+      await emitResult(
+        snapshot.values as Awaited<ReturnType<typeof graph.invoke>>,
+        emit,
+        options.threadId,
+        runStartTime,
+        null,
+        false
+      );
+    } catch (error) {
+      emitError(error, emit);
+    } finally {
+      close();
+    }
+    return;
+  }
+
+  const { abort } = options;
   const newThreadId = options.threadId ?? crypto.randomUUID();
   const config = { configurable: { thread_id: newThreadId } };
 
