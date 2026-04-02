@@ -26,7 +26,6 @@ export async function setupCheckpointer(): Promise<void> {
   }
 
   if (sharedCheckpointer instanceof PostgresSaver) {
-    await sharedCheckpointer.setup();
     return;
   }
 
