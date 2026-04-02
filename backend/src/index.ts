@@ -7,6 +7,7 @@ import matchAcceptRouter from "./routes/match/accept.js";
 import matchCancelRouter from "./routes/match/cancel.js";
 import parseResumeRouter from "./routes/parse-resume.js";
 import healthRouter from "./routes/health.js";
+import { setupCheckpointer } from "../lib/graph/scoring-graph.js";
 
 const app = express();
 
@@ -23,6 +24,11 @@ app.use("/api/parse-resume", parseResumeRouter);
 app.use("/api/health", healthRouter);
 
 const port = process.env.PORT ?? 3001;
-app.listen(port, () => {
-  console.log(`Backend listening on http://localhost:${port}`);
-});
+
+setupCheckpointer()
+  .then(() => {
+    app.listen(port);
+  })
+  .catch(() => {
+    process.exit(1);
+  });
