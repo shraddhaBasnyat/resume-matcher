@@ -6,7 +6,7 @@ import { runMatchGraph } from "../../_lib/runner.js";
 const router = Router();
 
 const AcceptRequestSchema = z.object({
-  threadId: z.string().min(1),
+  threadId: z.string().min(1).max(256),
 });
 
 router.post("/", (req, res) => {
