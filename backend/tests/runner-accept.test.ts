@@ -1,0 +1,178 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { runMatchGraph } from "../src/_lib/runner.js";
+
+// ---------------------------------------------------------------------------
+// Module mocks
+// ---------------------------------------------------------------------------
+
+// vi.mock is hoisted — use vi.hoisted() so the variables are available inside the factory
+const { mockGetState, mockInvoke } = vi.hoisted(() => ({
+  mockGetState: vi.fn(),
+  mockInvoke: vi.fn(),
+}));
+
+// Prevent real ChatOllama / LangGraph graph from being created
+vi.mock("../src/_lib/graph-instance.js", () => ({
+  graph: {
+    getState: mockGetState,
+    invoke: mockInvoke,
+  },
+}));
+
+// Keep LangSmith tracing disabled so traceUrl is always null in assertions
+vi.mock("../lib/langsmith.js", () => ({
+  isTracingEnabled: () => false,
+  getTraceUrl: vi.fn(),
+  RootRunCapture: vi.fn(),
+  RUN_NAMES: {
+    COMPLETED: "resume-match-graph: completed",
+    CANCELLED: "resume-match-graph: cancelled-by-human",
+    HITL_RESUMED: "resume-match-graph: hitl-resumed",
+    FAILED: "resume-match-graph: failed",
+  },
+}));
+
+// ---------------------------------------------------------------------------
+// Shared fixtures
+// ---------------------------------------------------------------------------
+
+const checkpointedMatchResult = {
+  score: 42,
+  matchedSkills: ["TypeScript"],
+  missingSkills: ["Kubernetes", "Docker"],
+  narrativeAlignment: "Decent frontend background but missing DevOps.",
+  gaps: ["No cloud infrastructure experience"],
+  resumeAdvice: ["Add a section on cloud deployments"],
+  weakMatch: true,
+  weakMatchReason: "Missing key infrastructure skills.",
+};
+
+const checkpointedResumeData = {
+  name: "Jane Doe",
+  email: "jane@example.com",
+  phone: "555-1234",
+  skills: ["TypeScript"],
+  experience: [],
+  education: [],
+  careerNarrative: { trajectory: "junior", dominantTheme: "frontend" },
+};
+
+const checkpointedJobData = {
+  title: "DevOps Engineer",
+  requiredSkills: ["Kubernetes", "Docker"],
+  niceToHaveSkills: [],
+  keywords: [],
+};
+
+function buildAcceptOptions(overrides: Partial<Parameters<typeof runMatchGraph>[0]> = {}) {
+  const emitted: { event: string; data: object }[] = [];
+  const closed = vi.fn();
+  return {
+    options: {
+      kind: "accept" as const,
+      threadId: "thread-123",
+      emit: (event: string, data: object) => emitted.push({ event, data }),
+      close: closed,
+      abort: new AbortController(),
+      ...overrides,
+    },
+    emitted,
+    closed,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe("runMatchGraph — kind: accept", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Default: getState returns a valid checkpointed snapshot
+    mockGetState.mockResolvedValue({
+      values: {
+        matchResult: checkpointedMatchResult,
+        resumeData: checkpointedResumeData,
+        jobData: checkpointedJobData,
+      },
+      next: [],
+    });
+  });
+
+  it("emits a completed event with the checkpointed state", async () => {
+    const { options, emitted, closed } = buildAcceptOptions();
+
+    await runMatchGraph(options);
+
+    const completedEvents = emitted.filter((e) => e.event === "completed");
+    expect(completedEvents).toHaveLength(1);
+
+    const { result } = completedEvents[0].data as { result: Record<string, unknown> };
+    expect(result.score).toBe(42);
+    expect(result.matchedSkills).toEqual(["TypeScript"]);
+    expect(result.missingSkills).toEqual(["Kubernetes", "Docker"]);
+    expect(result.resumeData).toEqual(checkpointedResumeData);
+    expect(result.jobData).toEqual(checkpointedJobData);
+    expect(result.interrupted).toBe(false);
+    expect(result.threadId).toBe("thread-123");
+    expect(closed).toHaveBeenCalledOnce();
+  });
+
+  it("never invokes the graph (no scoring or gap analysis)", async () => {
+    const { options } = buildAcceptOptions();
+
+    await runMatchGraph(options);
+
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it("calls getState with the correct threadId config", async () => {
+    const { options } = buildAcceptOptions({ threadId: "my-specific-thread" });
+
+    await runMatchGraph(options);
+
+    expect(mockGetState).toHaveBeenCalledWith({
+      configurable: { thread_id: "my-specific-thread" },
+    });
+  });
+
+  it("emits an error event when matchResult is missing from the snapshot", async () => {
+    mockGetState.mockResolvedValue({
+      values: { matchResult: undefined, resumeData: null, jobData: null },
+      next: [],
+    });
+    const { options, emitted, closed } = buildAcceptOptions();
+
+    await runMatchGraph(options);
+
+    const errorEvents = emitted.filter((e) => e.event === "error");
+    expect(errorEvents).toHaveLength(1);
+    expect((errorEvents[0].data as { error: string }).error).toBe("Incomplete graph result");
+    expect(closed).toHaveBeenCalledOnce();
+  });
+
+  it("emits an error event and still closes when getState throws", async () => {
+    mockGetState.mockRejectedValue(new Error("checkpointer unavailable"));
+    const { options, emitted, closed } = buildAcceptOptions();
+
+    await runMatchGraph(options);
+
+    const errorEvents = emitted.filter((e) => e.event === "error");
+    expect(errorEvents).toHaveLength(1);
+    expect((errorEvents[0].data as { message: string }).message).toContain("checkpointer unavailable");
+    expect(closed).toHaveBeenCalledOnce();
+  });
+
+  it("includes _meta with traceUrl null and a durationMs in the completed payload", async () => {
+    const { options, emitted } = buildAcceptOptions();
+
+    await runMatchGraph(options);
+
+    const { result } = (emitted.find((e) => e.event === "completed")!.data) as {
+      result: { _meta: { traceUrl: unknown; durationMs: number } };
+    };
+    expect(result._meta.traceUrl).toBeNull();
+    expect(typeof result._meta.durationMs).toBe("number");
+    expect(result._meta.durationMs).toBeGreaterThanOrEqual(0);
+  });
+});
