@@ -47,8 +47,9 @@ router.post("/", async (req, res) => {
   if (run) {
     run.abort();
     activeRuns.delete(threadId);
-    await getCheckpointer().deleteThread(threadId);
   }
+  // always clean up checkpoint, covers both active runs and interrupted HITL threads
+  await getCheckpointer().deleteThread(threadId);
 
   res.json({ cancelled: true });
 });
