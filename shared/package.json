@@ -2,8 +2,11 @@
   "name": "@resume-matcher/shared",
   "version": "1.0.0",
   "type": "module",
+  "scripts": {
+    "build": "tsc -b"
+  },
   "exports": {
-    "./types/*": "./types/*.ts",
-    "./constants/*": "./constants/*.ts"
+    "./types/*": "./dist/types/*.js",
+    "./constants/*": "./dist/constants/*.js"
   }
 }

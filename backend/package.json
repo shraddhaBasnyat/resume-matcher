@@ -4,8 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js",
+    "build": "tsc -b ../shared && tsc -b",
+    "start": "node dist/src/index.js",
     "test": "vitest run"
   },
   "dependencies": {
