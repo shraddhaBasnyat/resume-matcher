@@ -6,7 +6,7 @@
     "dev:frontend": "npm run dev --workspace=@resume-matcher/frontend",
     "dev:backend": "npm run dev --workspace=@resume-matcher/backend",
     "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
-    "build:frontend": "npm run build --workspace=@resume-matcher/frontend",
+    "build:frontend": "npm run build --workspace=@resume-matcher/shared && npm run build --workspace=@resume-matcher/frontend",
     "build:backend": "npm run build --workspace=@resume-matcher/shared && npm run build --workspace=@resume-matcher/backend",
     "test": "npm run test --workspace=@resume-matcher/backend"
   },
