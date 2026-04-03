@@ -3,6 +3,7 @@ import { z } from "zod";
 import { Client } from "langsmith";
 import { isTracingEnabled } from "../../../lib/langsmith.js";
 import { activeRuns } from "../../../lib/active-runs.js";
+import { getCheckpointer } from "../../../lib/graph/scoring-graph.js";
 
 const router = Router();
 
@@ -46,6 +47,7 @@ router.post("/", async (req, res) => {
   if (run) {
     run.abort();
     activeRuns.delete(threadId);
+    await getCheckpointer().deleteThread(threadId);
   }
 
   res.json({ cancelled: true });
