@@ -39,7 +39,7 @@ export function MatchResult({
         <div>
           <h3 className="text-sm font-semibold mb-2">Matched Skills</h3>
           <div className="flex flex-wrap gap-2">
-            {result.matchedSkills.map((s) => (
+            {result.matchedSkills.map((s: string) => (
               <span key={s} className="px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs">
                 {s}
               </span>
@@ -53,7 +53,7 @@ export function MatchResult({
         <div>
           <h3 className="text-sm font-semibold mb-2">Missing Skills</h3>
           <div className="flex flex-wrap gap-2">
-            {result.missingSkills.map((s) => (
+            {result.missingSkills.map((s: string) => (
               <span key={s} className="px-2 py-0.5 bg-red-100 text-red-800 rounded text-xs">
                 {s}
               </span>
@@ -67,7 +67,7 @@ export function MatchResult({
         <div>
           <h3 className="text-sm font-semibold mb-2">Gaps</h3>
           <ul className="list-disc list-inside space-y-1">
-            {result.gaps.map((gap, i) => (
+            {result.gaps.map((gap: string, i: number) => (
               <li key={i} className="text-sm text-gray-600">
                 {gap}
               </li>
@@ -81,7 +81,7 @@ export function MatchResult({
         <div>
           <h3 className="text-sm font-semibold mb-2">Resume Advice</h3>
           <ol className="list-decimal list-inside space-y-1">
-            {result.resumeAdvice.map((advice, i) => (
+            {result.resumeAdvice.map((advice: string, i: number) => (
               <li key={i} className="text-sm text-gray-700">
                 {advice}
               </li>
