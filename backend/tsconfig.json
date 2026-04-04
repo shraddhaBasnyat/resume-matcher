@@ -12,6 +12,12 @@
     "resolveJsonModule": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src/**/*", "lib/**/*"],
+  "include": [
+    "src/**/*",
+    "graphs/**/*",
+    "chains/**/*",
+    "types/**/*",
+    "*.ts"
+  ],
   "exclude": ["node_modules", "dist"]
 }

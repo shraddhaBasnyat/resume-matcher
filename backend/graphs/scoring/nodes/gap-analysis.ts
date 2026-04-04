@@ -1,6 +1,6 @@
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { buildGapAnalysisChain } from "../../chains/gap-analysis-chain.js";
-import type { GraphStateType } from "../state.js";
+import { buildGapAnalysisChain } from "../../../chains/gap-analysis-chain.js";
+import type { GraphStateType } from "../scoring-graph-state.js";
 
 export function makeGapAnalysisNode(model: BaseChatModel) {
   const chain = buildGapAnalysisChain(model);

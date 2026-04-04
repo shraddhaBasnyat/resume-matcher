@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ResumeSchema } from "../lib/schemas/resume-schema.js";
-import { buildResumeChain } from "../lib/chains/resume-chain.js";
+import { ResumeSchema } from "../chains/resume-chain.js";
+import { buildResumeChain } from "../chains/resume-chain.js";
 
 // --- Schema validation tests ---
 
@@ -181,7 +181,7 @@ describe("buildResumeChain — validation failure handling", () => {
     };
 
     const logValidationFailureMock = vi.fn().mockResolvedValue(undefined);
-    vi.doMock("../lib/langsmith.js", () => ({
+    vi.doMock("../langsmith.js", () => ({
       isTracingEnabled: vi.fn().mockReturnValue(false),
       RootRunCapture: class {
         name = "root_run_capture";
@@ -191,7 +191,7 @@ describe("buildResumeChain — validation failure handling", () => {
       logValidationFailure: logValidationFailureMock,
     }));
 
-    const { buildResumeChain: buildResumeChainMocked } = await import("../lib/chains/resume-chain.js");
+    const { buildResumeChain: buildResumeChainMocked } = await import("../chains/resume-chain.js");
     const chain = buildResumeChainMocked(mockModel);
 
     // parse() will throw because careerNarrative is required with no default
@@ -251,7 +251,7 @@ describe("buildResumeChain — validation failure handling", () => {
     };
 
     const logValidationFailureMock = vi.fn().mockResolvedValue(undefined);
-    vi.doMock("../lib/langsmith.js", () => ({
+    vi.doMock("../langsmith.js", () => ({
       isTracingEnabled: vi.fn().mockReturnValue(false),
       RootRunCapture: class {
         name = "root_run_capture";
@@ -261,7 +261,7 @@ describe("buildResumeChain — validation failure handling", () => {
       logValidationFailure: logValidationFailureMock,
     }));
 
-    const { buildResumeChain: buildResumeChainMocked } = await import("../lib/chains/resume-chain.js");
+    const { buildResumeChain: buildResumeChainMocked } = await import("../chains/resume-chain.js");
     const chain = buildResumeChainMocked(mockModel);
     await chain.invoke({ resume_text: "Jane resume..." });
 

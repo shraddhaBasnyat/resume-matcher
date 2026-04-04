@@ -1,7 +1,7 @@
 import { StateGraph, interrupt, MemorySaver } from "@langchain/langgraph";
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { GraphState, type GraphStateType } from "./state.js";
+import { GraphState, type GraphStateType } from "./scoring-graph-state.js";
 import { makeParseResumeNode } from "./nodes/parse-resume.js";
 import { makeParseJobNode } from "./nodes/parse-job.js";
 import { makeScoreMatchNode } from "./nodes/score-match.js";
