@@ -1,7 +1,7 @@
 import { Annotation } from "@langchain/langgraph";
-import type { Resume } from "../schemas/resume-schema.js";
-import type { JobDescription } from "../schemas/job-schema.js";
-import type { MatchResult } from "../schemas/match-schema.js";
+import type { Resume } from "../../chains/resume-chain.js";
+import type { JobDescription } from "../../chains/job-chain.js";
+import type { MatchResult } from "../../chains/scoring-chain.js";
 
 /**
  * GRAPH STATE

@@ -1,7 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import { setupCheckpointer } from "../lib/graph/scoring-graph.js";
+import { setupCheckpointer } from "../graphs/scoring/scoring-graph.js";
 
 const app = express();
 

@@ -10,12 +10,14 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "verbatimModuleSyntax": true,
-    "paths": {
-      "@resume-matcher/shared/*": ["../shared/dist/*"]
-    }
+    "verbatimModuleSyntax": true
   },
-  "include": ["src/**/*", "lib/**/*"],
-  "exclude": ["node_modules", "dist"],
-  "references": [{ "path": "../shared" }]
+  "include": [
+    "src/**/*",
+    "graphs/**/*",
+    "chains/**/*",
+    "types/**/*",
+    "*.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
 }

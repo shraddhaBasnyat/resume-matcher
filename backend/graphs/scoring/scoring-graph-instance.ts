@@ -1,6 +1,6 @@
 import { ChatOllama } from "@langchain/ollama";
 import { ChatAnthropic } from "@langchain/anthropic";
-import { buildScoringGraph } from "../../lib/graph/scoring-graph.js";
+import { buildScoringGraph } from "./scoring-graph.js";
 
 const useCloudLLM = process.env.USE_CLOUD_LLM === "true";
 

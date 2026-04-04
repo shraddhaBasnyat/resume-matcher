@@ -1,9 +1,9 @@
 import { Command } from "@langchain/langgraph";
-import { isTracingEnabled, getTraceUrl, RootRunCapture, RUN_NAMES } from "../../lib/langsmith.js";
-import { activeRuns } from "../../lib/active-runs.js";
+import { isTracingEnabled, getTraceUrl, RootRunCapture, RUN_NAMES } from "../../langsmith.js";
+import { activeRuns } from "../../active-runs.js";
 import { NodeProgressEmitter } from "./emitter.js";
-import { graph } from "./graph-instance.js";
-import { getCheckpointer } from "../../lib/graph/scoring-graph.js";
+import { graph } from "../../graphs/scoring/scoring-graph-instance.js";
+import { getCheckpointer } from "../../graphs/scoring/scoring-graph.js";
 
 type SharedOptions = {
   humanContext?: string;

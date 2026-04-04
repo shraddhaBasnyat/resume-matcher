@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { runMatchGraph } from "../src/_lib/runner.js";
+import { runMatchGraph } from "../src/infra/runner.js";
 
 // ---------------------------------------------------------------------------
 // Module mocks
@@ -12,7 +12,7 @@ const { mockGetState, mockInvoke } = vi.hoisted(() => ({
 }));
 
 // Prevent real ChatOllama / LangGraph graph from being created
-vi.mock("../src/_lib/graph-instance.js", () => ({
+vi.mock("../graphs/scoring/scoring-graph-instance.js", () => ({
   graph: {
     getState: mockGetState,
     invoke: mockInvoke,
@@ -20,7 +20,7 @@ vi.mock("../src/_lib/graph-instance.js", () => ({
 }));
 
 // Keep LangSmith tracing disabled so traceUrl is always null in assertions
-vi.mock("../lib/langsmith.js", () => ({
+vi.mock("../langsmith.js", () => ({
   isTracingEnabled: () => false,
   getTraceUrl: vi.fn(),
   RootRunCapture: vi.fn(),

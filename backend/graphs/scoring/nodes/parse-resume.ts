@@ -1,6 +1,6 @@
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { buildResumeChain } from "../../chains/resume-chain.js";
-import type { GraphStateType } from "../state.js";
+import { buildResumeChain } from "../../../chains/resume-chain.js";
+import type { GraphStateType } from "../scoring-graph-state.js";
 
 export function makeParseResumeNode(model: BaseChatModel) {
   const chain = buildResumeChain(model);

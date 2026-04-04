@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import { Client } from "langsmith";
-import { isTracingEnabled } from "../../../lib/langsmith.js";
-import { activeRuns } from "../../../lib/active-runs.js";
-import { getCheckpointer } from "../../../lib/graph/scoring-graph.js";
+import { isTracingEnabled } from "../../../langsmith.js";
+import { activeRuns } from "../../../active-runs.js";
+import { getCheckpointer } from "../../../graphs/scoring/scoring-graph.js";
 
 const router = Router();
 

@@ -1,6 +1,6 @@
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { buildJobChain } from "../../chains/job-chain.js";
-import type { GraphStateType } from "../state.js";
+import { buildJobChain } from "../../../chains/job-chain.js";
+import type { GraphStateType } from "../scoring-graph-state.js";
 
 export function makeParseJobNode(model: BaseChatModel) {
   const chain = buildJobChain(model);

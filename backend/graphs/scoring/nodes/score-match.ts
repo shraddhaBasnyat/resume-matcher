@@ -1,6 +1,6 @@
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { buildScoringChain } from "../../chains/scoring-chain.js";
-import type { GraphStateType } from "../state.js";
+import { buildScoringChain } from "../../../chains/scoring-chain.js";
+import type { GraphStateType } from "../scoring-graph-state.js";
 
 export function makeScoreMatchNode(model: BaseChatModel) {
   const chain = buildScoringChain(model);
