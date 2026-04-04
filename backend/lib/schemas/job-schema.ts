@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Job } from "@resume-matcher/shared/types/job.js";
+import type { Job } from "../types/api.js";
 
 export const JobSchema: z.ZodType<Job> = z.object({
   title: z.string().describe("Job title"),
@@ -15,5 +15,4 @@ export const JobSchema: z.ZodType<Job> = z.object({
 });
 
 export type { Job };
-/** @deprecated Use Job from @resume-matcher/shared/types/job instead */
 export type JobDescription = Job;

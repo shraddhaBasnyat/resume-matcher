@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Resume } from "@resume-matcher/shared/types/resume.js";
+import type { Resume } from "../types/api.js";
 
 export const ResumeSchema: z.ZodType<Resume, z.ZodTypeDef, unknown> = z.object({
   name: z.string().describe("Full name of the candidate"),

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { MatchResult } from "@resume-matcher/shared/types/match.js";
+import type { MatchResult } from "../types/api.js";
 
 export const MatchSchema: z.ZodType<MatchResult> = z
   .object({

@@ -1,4 +1,4 @@
-import type { MatchResponse } from "@resume-matcher/shared/types/api";
+import type { MatchResponse } from "./types/api";
 
 export type AppState = "idle" | "running" | "interrupted" | "completed";
 export type StepStatus = "waiting" | "running" | "done";
