@@ -12,19 +12,19 @@ import { buildScoringGraph } from "../graphs/scoring/scoring-graph.js";
 // ---------------------------------------------------------------------------
 
 const validMatchResult = {
-  score: 72,
+  fitScore: 72,
   matchedSkills: ["TypeScript", "React"],
   missingSkills: ["Kubernetes"],
   narrativeAlignment: "Strong frontend background aligns well with UI-heavy role.",
   gaps: ["No cloud infrastructure experience"],
   resumeAdvice: ["Add a section on cloud deployments", "Highlight any CI/CD usage"],
-  weakMatch: false,
+  contextPrompt: null,
+  weakMatchReason: undefined,
 };
 
 const weakMatchResult = {
   ...validMatchResult,
-  score: 45,
-  weakMatch: true,
+  fitScore: 45,
   weakMatchReason: "Missing 3 of 5 required skills and experience level is too junior.",
 };
 
@@ -36,6 +36,7 @@ const validJobData = {
   keywords: ["SPA", "CI/CD", "Agile"],
   experienceYears: 5,
   seniorityLevel: "senior" as const,
+  targetRole: "frontend_swe",
 };
 
 const validResumeData = {
@@ -52,6 +53,7 @@ const validResumeData = {
     careerMotivation: "Building UIs at scale",
     resumeStoryGaps: [],
   },
+  sourceRole: "frontend_swe",
 };
 
 // ---------------------------------------------------------------------------
@@ -63,24 +65,32 @@ describe("MatchSchema", () => {
     expect(MatchSchema.safeParse(validMatchResult).success).toBe(true);
   });
 
-  it("rejects score out of range", () => {
-    expect(MatchSchema.safeParse({ ...validMatchResult, score: 110 }).success).toBe(false);
-    expect(MatchSchema.safeParse({ ...validMatchResult, score: -5 }).success).toBe(false);
+  it("rejects fitScore out of range", () => {
+    expect(MatchSchema.safeParse({ ...validMatchResult, fitScore: 110 }).success).toBe(false);
+    expect(MatchSchema.safeParse({ ...validMatchResult, fitScore: -5 }).success).toBe(false);
   });
 
-  it("accepts weakMatch with weakMatchReason", () => {
+  it("accepts result with weakMatchReason present", () => {
     const result = MatchSchema.safeParse(weakMatchResult);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.weakMatch).toBe(true);
       expect(result.data.weakMatchReason).toBeDefined();
     }
   });
 
-  it("rejects weakMatch without weakMatchReason (required when weakMatch=true)", () => {
+  it("accepts result without weakMatchReason — validation is now in the node layer", () => {
+    // weakMatch is no longer in the schema — the LLM does not output it.
+    // weakMatchReason is still optional in the schema; node layer enforces it when fitScore < 60.
     const { weakMatchReason: _, ...withoutReason } = weakMatchResult;
-    // superRefine enforces weakMatchReason when weakMatch is true
-    expect(MatchSchema.safeParse({ ...withoutReason, weakMatch: true }).success).toBe(false);
+    expect(MatchSchema.safeParse(withoutReason).success).toBe(true);
+  });
+
+  it("accepts contextPrompt as null", () => {
+    expect(MatchSchema.safeParse({ ...validMatchResult, contextPrompt: null }).success).toBe(true);
+  });
+
+  it("accepts contextPrompt as a non-empty string", () => {
+    expect(MatchSchema.safeParse({ ...validMatchResult, contextPrompt: "Can you describe your LangGraph experience?" }).success).toBe(true);
   });
 
   it("rejects non-array matchedSkills", () => {
@@ -109,6 +119,11 @@ describe("JobSchema", () => {
     const { company: _, experienceYears: __, seniorityLevel: ___, ...minimal } = validJobData;
     expect(JobSchema.safeParse(minimal).success).toBe(true);
   });
+
+  it("requires targetRole", () => {
+    const { targetRole: _, ...withoutTargetRole } = validJobData;
+    expect(JobSchema.safeParse(withoutTargetRole).success).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -136,7 +151,6 @@ describe("buildJobChain", () => {
     };
 
     const chain = buildJobChain(mockModel);
-    // The chain signature is { job_text: string } only
     await chain.invoke({ job_text: "Senior Frontend Engineer..." });
     expect(mockInvoke).toHaveBeenCalledTimes(1);
   });
@@ -204,7 +218,6 @@ describe("buildScoringChain", () => {
     };
 
     const chain = buildScoringChain(mockModel);
-    // The input type only accepts resume_data (JSON string), not raw text
     await chain.invoke({
       resume_data: JSON.stringify(validResumeData),
       job_data: JSON.stringify(validJobData),
@@ -215,7 +228,6 @@ describe("buildScoringChain", () => {
     const messageContent = calledMessages.messages
       .map((m: { content: string }) => m.content)
       .join(" ");
-    // Should contain structured JSON, not raw PDF text
     expect(messageContent).toContain('"name"');
     expect(messageContent).toContain('"skills"');
   });
@@ -249,21 +261,51 @@ describe("buildGapAnalysisChain", () => {
         "Add a bullet under Startup role: 'Deployed containerised services via Docker Compose'.",
       ],
     };
-    const mockInvoke = vi.fn().mockResolvedValue(enrichedResult);
+    // Gap analysis chain output excludes weakMatch — chain strips it from output schema
+    // and reattaches from input. So the mock returns the LLM output shape (no weakMatch).
+    const { contextPrompt: _, ...llmEnrichedResult } = { ...enrichedResult, weakMatch: undefined };
+    const mockInvoke = vi.fn().mockResolvedValue(llmEnrichedResult);
     const mockModel = {
       withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
     };
+
+    const matchResultInput = JSON.stringify({ ...validMatchResult, weakMatch: false });
+    const chain = buildGapAnalysisChain(mockModel);
+    const result = await chain.invoke({
+      resume_data: JSON.stringify(validResumeData),
+      job_data: JSON.stringify(validJobData),
+      match_result: matchResultInput,
+    });
+
+    expect(result.resumeAdvice).toHaveLength(2);
+    // contextPrompt and weakMatch are preserved from input, not regenerated
+    expect(result.contextPrompt).toBeNull();
+    expect(result.weakMatch).toBe(false);
+  });
+
+  it("preserves contextPrompt from input match_result", async () => {
+    const mockInvoke = vi.fn().mockResolvedValue({
+      ...validMatchResult,
+      contextPrompt: "this should be ignored",
+    });
+    const mockModel = {
+      withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
+    };
+
+    const inputWithContextPrompt = JSON.stringify({
+      ...validMatchResult,
+      weakMatch: false,
+      contextPrompt: "Can you describe your LangGraph production experience?",
+    });
 
     const chain = buildGapAnalysisChain(mockModel);
     const result = await chain.invoke({
       resume_data: JSON.stringify(validResumeData),
       job_data: JSON.stringify(validJobData),
-      match_result: JSON.stringify(validMatchResult),
+      match_result: inputWithContextPrompt,
     });
 
-    expect(mockModel.withStructuredOutput).toHaveBeenCalledWith(MatchSchema);
-    expect(MatchSchema.safeParse(result).success).toBe(true);
-    expect(result.resumeAdvice).toHaveLength(2);
+    expect(result.contextPrompt).toBe("Can you describe your LangGraph production experience?");
   });
 
   it("accepts all three inputs and never receives raw text", async () => {
@@ -276,40 +318,39 @@ describe("buildGapAnalysisChain", () => {
     await chain.invoke({
       resume_data: JSON.stringify(validResumeData),
       job_data: JSON.stringify(validJobData),
-      match_result: JSON.stringify(validMatchResult),
+      match_result: JSON.stringify({ ...validMatchResult, weakMatch: false }),
     });
 
-    // Verify all three fields were passed to the model
     const calledMessages = mockInvoke.mock.calls[0][0];
     const messageContent = calledMessages.messages
       .map((m: { content: string }) => m.content)
       .join(" ");
-    expect(messageContent).toContain('"score"');     // from match_result
-    expect(messageContent).toContain('"skills"');    // from resume_data
-    expect(messageContent).toContain('"title"');     // from job_data
+    expect(messageContent).toContain('"fitScore"');
+    expect(messageContent).toContain('"skills"');
+    expect(messageContent).toContain('"title"');
   });
 });
 
 // ---------------------------------------------------------------------------
-// Conditional edge logic (score routing)
+// Conditional edge logic (fitScore routing)
 // ---------------------------------------------------------------------------
 
-describe("score routing logic", () => {
-  function routeAfterScore(score: number): "gapAnalysis" | "awaitHuman" {
-    return score >= 60 ? "gapAnalysis" : "awaitHuman";
+describe("fitScore routing logic", () => {
+  function routeAfterScore(fitScore: number): "gapAnalysis" | "awaitHuman" {
+    return fitScore >= 60 ? "gapAnalysis" : "awaitHuman";
   }
 
   function routeAfterHuman(humanContext: string): "rescore" | "gapAnalysis" {
     return humanContext && humanContext.trim().length > 0 ? "rescore" : "gapAnalysis";
   }
 
-  it("routes score >= 60 to gapAnalysis", () => {
+  it("routes fitScore >= 60 to gapAnalysis", () => {
     expect(routeAfterScore(60)).toBe("gapAnalysis");
     expect(routeAfterScore(75)).toBe("gapAnalysis");
     expect(routeAfterScore(100)).toBe("gapAnalysis");
   });
 
-  it("routes score < 60 to awaitHuman", () => {
+  it("routes fitScore < 60 to awaitHuman", () => {
     expect(routeAfterScore(59)).toBe("awaitHuman");
     expect(routeAfterScore(0)).toBe("awaitHuman");
     expect(routeAfterScore(45)).toBe("awaitHuman");
@@ -333,6 +374,18 @@ describe("score routing logic", () => {
 describe("buildScoringGraph — full run with mocked chains", () => {
   let mockModel: ReturnType<typeof buildMockModel>;
 
+  // The full MatchResult that exists in state (after node adds weakMatch)
+  const fullMatchResult = {
+    ...validMatchResult,
+    weakMatch: false,
+  };
+
+  // The low-score full MatchResult
+  const lowScoreFullResult = {
+    ...weakMatchResult,
+    weakMatch: true,
+  };
+
   function buildMockModel() {
     return {
       withStructuredOutput: vi.fn().mockImplementation((schema) => {
@@ -343,15 +396,24 @@ describe("buildScoringGraph — full run with mocked chains", () => {
           return { invoke: vi.fn().mockResolvedValue(validJobData) };
         }
         if (schema === MatchSchema) {
-          // Called by both scoring chain and gap analysis chain
+          // Matches the exported MatchSchema from scoring-chain (used by buildScoringChain)
           return { invoke: vi.fn().mockResolvedValue(validMatchResult) };
         }
-        return { invoke: vi.fn().mockResolvedValue({}) };
+        // gap-analysis-chain uses a local (non-exported) MatchSchema — different object reference.
+        // Return validMatchResult so the chain has a valid base to attach contextPrompt/weakMatch to.
+        return { invoke: vi.fn().mockResolvedValue(validMatchResult) };
       }),
     };
   }
 
   beforeEach(() => {
+    vi.doMock("../langsmith.js", () => ({
+      isTracingEnabled: () => false,
+      getTraceUrl: vi.fn(),
+      RootRunCapture: vi.fn().mockImplementation(() => ({ rootRunId: undefined })),
+      logValidationFailure: vi.fn(),
+      RUN_NAMES: {},
+    }));
     mockModel = buildMockModel();
   });
 
@@ -364,17 +426,14 @@ describe("buildScoringGraph — full run with mocked chains", () => {
       { configurable: { thread_id: threadId } }
     );
 
-    // Raw text must NOT be exposed in output — only structured data
     expect(state.resumeData).toBeDefined();
     expect(state.jobData).toBeDefined();
     expect(state.matchResult).toBeDefined();
 
-    // Verify output matches expected schemas
     expect(ResumeSchema.safeParse(state.resumeData).success).toBe(true);
     expect(JobSchema.safeParse(state.jobData).success).toBe(true);
-    expect(MatchSchema.safeParse(state.matchResult).success).toBe(true);
 
-    // Score is >= 60, so no interrupt
+    // fitScore >= 60 — no interrupt
     const snapshot = await compiledGraph.getState({ configurable: { thread_id: threadId } });
     expect(snapshot.next).toHaveLength(0);
   });
@@ -386,39 +445,31 @@ describe("buildScoringGraph — full run with mocked chains", () => {
       { configurable: { thread_id: "test-thread-ui-shape" } }
     );
 
-    // These fields must all be present and correctly typed for the UI
     const match = state.matchResult!;
-    expect(typeof match.score).toBe("number");
+    expect(typeof match.fitScore).toBe("number");
     expect(Array.isArray(match.matchedSkills)).toBe(true);
     expect(Array.isArray(match.missingSkills)).toBe(true);
     expect(typeof match.narrativeAlignment).toBe("string");
     expect(Array.isArray(match.gaps)).toBe(true);
     expect(Array.isArray(match.resumeAdvice)).toBe(true);
     expect(typeof match.weakMatch).toBe("boolean");
+    // contextPrompt is present (null or string)
+    expect("contextPrompt" in match).toBe(true);
 
-    // resumeData and jobData must be present for collapsible sections
+    // resumeData and jobData remain in graph state (used by gapAnalysis node)
     expect(state.resumeData).toBeTruthy();
     expect(state.jobData).toBeTruthy();
 
-    // Raw text must not be in output as a parseable resume (only the typed state fields)
     expect(state.resumeData).not.toBeTypeOf("string");
     expect(state.jobData).not.toBeTypeOf("string");
   });
 
-  it("graph is interrupted for low-score run (score < 60)", async () => {
-    // Build a model that returns a low score
-    const lowScoreResult = {
-      ...validMatchResult,
-      score: 45,
-      weakMatch: true,
-      weakMatchReason: "Too junior for this role.",
-    };
-
+  it("graph is interrupted for low-score run (fitScore < 60)", async () => {
     const lowScoreModel = {
       withStructuredOutput: vi.fn().mockImplementation((schema) => {
         if (schema === ResumeSchema) return { invoke: vi.fn().mockResolvedValue(validResumeData) };
         if (schema === JobSchema) return { invoke: vi.fn().mockResolvedValue(validJobData) };
-        if (schema === MatchSchema) return { invoke: vi.fn().mockResolvedValue(lowScoreResult) };
+        if (schema === MatchSchema) return { invoke: vi.fn().mockResolvedValue(weakMatchResult) };
         return { invoke: vi.fn().mockResolvedValue({}) };
       }),
     };
@@ -433,8 +484,11 @@ describe("buildScoringGraph — full run with mocked chains", () => {
 
     const snapshot = await compiledGraph.getState({ configurable: { thread_id: threadId } });
     expect(snapshot.next.length).toBeGreaterThan(0);
-    expect(snapshot.values.matchResult?.score).toBe(45);
+    expect(snapshot.values.matchResult?.fitScore).toBe(45);
   });
+
+  void fullMatchResult;
+  void lowScoreFullResult;
 });
 
 // ---------------------------------------------------------------------------

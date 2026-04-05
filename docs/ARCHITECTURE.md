@@ -1,5 +1,15 @@
 # Architecture decisions & known limitations
 
+## Breaking changes
+
+### `score` renamed to `fitScore` (2026-04-05)
+`MatchResult.score` and `MatchResponse.score` renamed to `fitScore` across backend and frontend.
+`atsScore: number | undefined` added alongside it — set to `undefined` until the `atsAnalysis` node lands in Phase 1.
+Any client reading the `score` field from the `/api/match/run` SSE stream will receive `undefined` after this change.
+The field is now `fitScore` in the `completed` event payload.
+
+---
+
 ## Why this exists
 This is a learning project built to understand LangChain and LangGraph
 by building something real. Decisions here prioritize clarity over

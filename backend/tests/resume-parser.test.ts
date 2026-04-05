@@ -18,6 +18,7 @@ describe("ResumeSchema", () => {
       { degree: "B.Sc. Computer Science", institution: "State University" },
     ],
     careerNarrative: {},
+    sourceRole: "backend_swe",
   };
 
   it("accepts a valid resume object", () => {
@@ -216,6 +217,7 @@ describe("buildResumeChain — validation failure handling", () => {
       education: [],
       careerNarrative: { trajectory: "IC to lead" },
       // dominantTheme, inferredStrengths, careerMotivation, resumeStoryGaps omitted
+      sourceRole: "backend_swe",
     };
 
     const mockInvoke = vi.fn().mockResolvedValue(partialOutput);
@@ -243,6 +245,7 @@ describe("buildResumeChain — validation failure handling", () => {
       experience: [],
       education: [],
       careerNarrative: {},
+      sourceRole: "backend_swe",
     };
 
     const mockInvoke = vi.fn().mockResolvedValue(validOutput);
@@ -291,6 +294,7 @@ describe("buildResumeChain", () => {
         careerMotivation: "Building reliable backend infrastructure",
         resumeStoryGaps: [],
       },
+      sourceRole: "backend_swe",
     };
 
     const mockInvoke = vi.fn().mockResolvedValue(expectedOutput);

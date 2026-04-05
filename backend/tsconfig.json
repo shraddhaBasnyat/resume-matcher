@@ -17,6 +17,7 @@
     "graphs/**/*",
     "chains/**/*",
     "types/**/*",
+    "archetypes/**/*",
     "*.ts"
   ],
   "exclude": ["node_modules", "dist"]

@@ -5,13 +5,11 @@ import { runMatchGraph } from "../src/infra/runner.js";
 // Module mocks
 // ---------------------------------------------------------------------------
 
-// vi.mock is hoisted — use vi.hoisted() so the variables are available inside the factory
 const { mockGetState, mockInvoke } = vi.hoisted(() => ({
   mockGetState: vi.fn(),
   mockInvoke: vi.fn(),
 }));
 
-// Prevent real ChatOllama / LangGraph graph from being created
 vi.mock("../graphs/scoring/scoring-graph-instance.js", () => ({
   graph: {
     getState: mockGetState,
@@ -19,7 +17,6 @@ vi.mock("../graphs/scoring/scoring-graph-instance.js", () => ({
   },
 }));
 
-// Keep LangSmith tracing disabled so traceUrl is always null in assertions
 vi.mock("../langsmith.js", () => ({
   isTracingEnabled: () => false,
   getTraceUrl: vi.fn(),
@@ -37,31 +34,15 @@ vi.mock("../langsmith.js", () => ({
 // ---------------------------------------------------------------------------
 
 const checkpointedMatchResult = {
-  score: 42,
+  fitScore: 42,
   matchedSkills: ["TypeScript"],
   missingSkills: ["Kubernetes", "Docker"],
   narrativeAlignment: "Decent frontend background but missing DevOps.",
   gaps: ["No cloud infrastructure experience"],
   resumeAdvice: ["Add a section on cloud deployments"],
+  contextPrompt: null,
   weakMatch: true,
   weakMatchReason: "Missing key infrastructure skills.",
-};
-
-const checkpointedResumeData = {
-  name: "Jane Doe",
-  email: "jane@example.com",
-  phone: "555-1234",
-  skills: ["TypeScript"],
-  experience: [],
-  education: [],
-  careerNarrative: { trajectory: "junior", dominantTheme: "frontend" },
-};
-
-const checkpointedJobData = {
-  title: "DevOps Engineer",
-  requiredSkills: ["Kubernetes", "Docker"],
-  niceToHaveSkills: [],
-  keywords: [],
 };
 
 function buildAcceptOptions(overrides: Partial<Parameters<typeof runMatchGraph>[0]> = {}) {
@@ -88,18 +69,15 @@ function buildAcceptOptions(overrides: Partial<Parameters<typeof runMatchGraph>[
 describe("runMatchGraph — kind: accept", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Default: getState returns a valid checkpointed snapshot
     mockGetState.mockResolvedValue({
       values: {
         matchResult: checkpointedMatchResult,
-        resumeData: checkpointedResumeData,
-        jobData: checkpointedJobData,
       },
       next: [],
     });
   });
 
-  it("emits a completed event with the checkpointed state", async () => {
+  it("emits a completed event with the checkpointed match result", async () => {
     const { options, emitted, closed } = buildAcceptOptions();
 
     await runMatchGraph(options);
@@ -108,14 +86,24 @@ describe("runMatchGraph — kind: accept", () => {
     expect(completedEvents).toHaveLength(1);
 
     const { result } = completedEvents[0].data as { result: Record<string, unknown> };
-    expect(result.score).toBe(42);
+    expect(result.fitScore).toBe(42);
     expect(result.matchedSkills).toEqual(["TypeScript"]);
     expect(result.missingSkills).toEqual(["Kubernetes", "Docker"]);
-    expect(result.resumeData).toEqual(checkpointedResumeData);
-    expect(result.jobData).toEqual(checkpointedJobData);
     expect(result.interrupted).toBe(false);
     expect(result.threadId).toBe("thread-123");
     expect(closed).toHaveBeenCalledOnce();
+  });
+
+  it("does not include resumeData or jobData in the completed event", async () => {
+    const { options, emitted } = buildAcceptOptions();
+
+    await runMatchGraph(options);
+
+    const { result } = (emitted.find((e) => e.event === "completed")!.data) as {
+      result: Record<string, unknown>;
+    };
+    expect(result.resumeData).toBeUndefined();
+    expect(result.jobData).toBeUndefined();
   });
 
   it("never invokes the graph (no scoring or gap analysis)", async () => {
@@ -138,7 +126,7 @@ describe("runMatchGraph — kind: accept", () => {
 
   it("emits an error event when matchResult is missing from the snapshot", async () => {
     mockGetState.mockResolvedValue({
-      values: { matchResult: undefined, resumeData: null, jobData: null },
+      values: { matchResult: undefined },
       next: [],
     });
     const { options, emitted, closed } = buildAcceptOptions();
