@@ -41,7 +41,6 @@ Second, it treats all users as having the same intent. A user who thinks they ar
 
 ---
 
-
 ## Product tiers
 
 The product ships in two tiers. The tier boundary is archetype detection — everything else is available to all users.
@@ -61,7 +60,7 @@ The product ships in two tiers. The tier boundary is archetype detection — eve
 - `analyzeRoadmap` powered by archetype data — specific milestones, timeline estimates, portfolio projects from archetype research rather than generic advice
 
 ### Tier gate implementation
-The gate is a single conditional: if `buildContext` returns non-null AND the user is on the paid tier, inject archetype context and route to `analyzeArchetypeGap`. If free tier, skip injection and route to `analyzeNarrativeGap` as fallback. One conditional, no separate code paths.
+`userTier` is derived server-side from the auth middleware — the client never sends it. The gate is: if `state.archetypeContext` is non-null AND `state.userTier` is `"paid"`, inject archetype context and route to `analyzeArchetypeGap`. If free tier, skip injection and route to `analyzeNarrativeGap` as fallback. One conditional, no separate code paths.
 
 The upgrade moment is natural — a user gets a mid-range score and generic narrative advice, and the UI indicates that a known transition archetype exists for their profile. The specific gap analysis is behind the tier gate.
 
@@ -69,7 +68,7 @@ The upgrade moment is natural — a user gets a mid-range score and generic narr
 
 ## Request body — new shape
 
-The `/api/match/run` request body changes significantly. `humanContext` is removed from the first run entirely. Structured intent fields replace it.
+The `/api/match/run` request body. `humanContext` is absent on first run — it only ever appears on HITL resume. Structured intent fields replace it.
 
 ```typescript
 {
@@ -77,7 +76,8 @@ The `/api/match/run` request body changes significantly. `humanContext` is remov
   jobText: string
   intent: "confident_match" | "exploring_gap"
   intentContext: ConfidentMatchContext | ExploringGapContext
-  humanContext?: string  // absent on first run — HITL only
+  // humanContext is NOT in the first run request body
+  // it only appears in /api/match/resume (HITL)
 }
 
 interface ConfidentMatchContext {
@@ -106,7 +106,7 @@ interface ExploringGapContext {
 }
 ```
 
-`/api/match/resume` (HITL) is unchanged except that `humanContext` now only ever appears here — it is the free-text field reserved for when a user has seen their score and wants to disagree with it.
+`/api/match/resume` (HITL) accepts `{ threadId: string, humanContext: string }`. `humanContext` must be non-empty — validated by Zod `z.string().min(1)` at the route handler before the graph resumes. This is the only point in the flow where free text is accepted.
 
 ### Why structured selections, not free text upfront
 
@@ -124,11 +124,11 @@ Structured selections are unambiguous — the graph routes on them deterministic
 
 Every routing decision uses two independent scores:
 
-**ATS score** — can a machine read this resume and surface it for this role? Keyword density, exact title matching, layout parseability, section headers, date formats. Mechanical, literal, no inference. No benefit of the doubt.
+**ATS score (`atsScore`)** — can a machine read this resume and surface it for this role? Keyword density, exact title matching, layout parseability, section headers, date formats. Mechanical, literal, no inference. No benefit of the doubt.
 
-**Fit score** — does this candidate actually match this role? Career narrative, transferable skills, trajectory, intent signals. Semantic, inferential, generous. Human context and archetype detection only affect this dimension.
+**Fit score (`fitScore`)** — does this candidate actually match this role? Career narrative, transferable skills, trajectory, intent signals. Semantic, inferential, generous. Human context and archetype detection only affect this dimension.
 
-These are orthogonal. A candidate can score high on one and low on the other. Routing is always a function of both.
+These are orthogonal. A candidate can score high on one and low on the other. Routing is always a function of both. Both scores are returned in the API response — the frontend decides how to display them (badge colour, threshold, etc.). No `atsWarning` field — the scenario node advice explains ATS problems in natural language.
 
 ### Intent as a fit score modifier
 
@@ -141,7 +141,7 @@ These are orthogonal. A candidate can score high on one and low on the other. Ro
 
 ### Archetypes as a fit dimension modifier
 
-Archetypes are purely a fit-layer concern. An ATS parser doesn't know or care about career transition archetypes — it scans for keywords. Archetype detection only fires after the fit score is computed and changes what the fit analysis node does, not the score itself. See `prd-archetype-system.md`.
+Archetypes are purely a fit-layer concern. An ATS parser doesn't know or care about career transition archetypes — it scans for keywords. Archetype detection runs as a dedicated node (`detectArchetype`) after fit parsing and before scoring. It puts the result in state for all downstream nodes to read. See `prd-archetype-system.md`.
 
 ---
 
@@ -152,14 +152,15 @@ Archetypes are purely a fit-layer concern. An ATS parser doesn't know or care ab
 ```
 parseResumeATS ──┐
                  ├──► atsAnalysis ──► [conditional] ──► parseResumeFit ──┐
-parseJobATS    ──┘         │          (ATS passes)      parseJobFit    ──┴──► scoreMatch ──► [2D conditional] ──► scenario nodes
+parseJobATS    ──┘         │          (ATS passes)      parseJobFit    ──┴──► detectArchetype ──► scoreMatch ──► [2D conditional] ──► scenario nodes
                            │
                            └──► END (short circuit — format error or critical fields missing)
                            └──► END (short circuit — confident_match + catastrophic keyword gap)
 
-awaitHuman ──► rescore ──► analyzeSkepticalReconciliation ──► END
+analyzeSkepticalReconciliation ──► [hitlFired check] ──► awaitHuman ──► rescore ──► analyzeSkepticalReconciliation ──► END
+                                                     └──► END (hitlFired is true — second pass)
 
-All scenario nodes ──► END
+All other scenario nodes ──► END
 ```
 
 ### ATS parse nodes — `parseResumeATS`, `parseJobATS`
@@ -192,14 +193,14 @@ Always short circuit, regardless of intent:
 - Critical fields missing — `contactInfo` not extractable. Return critical field error.
 
 Short circuit only for `confident_match`:
-- Catastrophic keyword gap — near-zero overlap between `skillsVerbatim` and `requiredKeywords`. Return ATS reality check — the user thinks they match but the machine sees nothing. Spending tokens on fit analysis is misleading here.
+- Catastrophic keyword gap — near-zero overlap between `skillsVerbatim` and `requiredKeywords`. Return ATS reality check. Spending tokens on fit analysis is misleading here.
 
 Never short circuit for `exploring_gap`:
-- Low ATS score is expected and informative for this user. The `atsProfile` is the most valuable output they receive — it tells them exactly what keywords and terminology they need to build toward. Route through the full pipeline regardless of ATS score.
+- Low ATS score is expected and informative. The `atsProfile` is the most valuable output — it tells them exactly what keywords to build toward. Route through full pipeline regardless of ATS score.
 
 ### Fit parse nodes — `parseResumeFit`, `parseJobFit`
 
-Run in parallel after ATS conditional passes. Semantic, inferential, generous. These nodes explicitly do not extract critical fields — ATS parse owns those.
+Run in parallel after ATS conditional passes. Semantic, inferential, generous. Do not extract critical fields — ATS parse owns those.
 
 **Resume fit parse extracts:**
 - Career narrative — the arc of the candidate's work history and trajectory
@@ -213,71 +214,113 @@ Run in parallel after ATS conditional passes. Semantic, inferential, generous. T
 - `targetRole` — semantic inference using controlled vocabulary
 - Implicit requirements — what the role needs that isn't stated explicitly
 
+### `detectArchetype` node
+
+Runs after fit parse nodes complete, before `scoreMatch`. Pure dictionary lookup — no LLM call.
+
+- Reads `state.resumeData.sourceRole` and `state.jobData.targetRole`
+- Calls `buildContext(sourceRole, targetRole)`
+- Writes result to `state.archetypeContext` — either the full `ArchetypeContext` object or null
+- Logs when both roles are known controlled vocabulary values but no archetype matched — unmatched transitions tracked for future research prioritisation
+- Null is a valid, expected result — no error thrown
+
+All downstream nodes read `state.archetypeContext` without recomputing. Archetype detection happens once per run.
+
 ### `scoreMatch` node
 
-Receives `atsProfile`, fit parse outputs, `intent`, and `intentContext`. Produces `fitScore` (0–100) and `atsScore` (carried from `atsAnalysis`). Derives `weakMatch = fitScore < 60` deterministically — LLM does not compute this.
+Receives `atsProfile`, fit parse outputs, `intent`, `intentContext`, `archetypeContext`, and `userTier` from state. Produces `fitScore` (0–100). `atsScore` is carried from `atsAnalysis` state. Derives `weakMatch = fitScore < 60` deterministically — LLM does not compute this.
 
-`intentContext` informs how much benefit of the doubt the model extends on the fit score. `atsProfile` informs the model of the machine-readability surface so the fit score reflects realistic hiring outcomes, not just semantic alignment.
+When `state.archetypeContext` is non-null and `state.userTier` is `"paid"`, passes tier 1 `skillMap` + critical/high `gapProfile` to the scoring chain for calibration. When null or free tier, generic scoring prompt.
+
+`intentContext` informs how much benefit of the doubt the model extends. `atsProfile` informs the model of the machine-readability surface.
 
 ### Two-dimensional routing table
-
-Routing after `scoreMatch` uses both `atsScore` and `fitScore`:
 
 ```
                       fitScore
                    Low (<50)        Mid (50–75)              High (75+)
               ┌──────────────┬──────────────────────┬───────────────────────┐
-atsScore      │              │ S2: narrativeGap     │ S1b: ATSGap           │
-High (75+)    │ S5: honest   │ S3: archetypeGap     │ (strong fit,          │
-              │ misfit       │ (archetype if known) │ ATS exposure)         │
+atsScore      │              │ S2: narrativeGap     │ S1a: strongMatch      │
+High (75+)    │ S5/S4:       │ S3: archetypeGap     │ (strong fit,          │
+              │ skeptical    │ (paid, archetype      │ ATS ready)            │
+              │              │ known)               │                       │
               ├──────────────┼──────────────────────┼───────────────────────┤
 atsScore      │              │ S2/S3 + ATS problem  │ S1b: ATSGap           │
 Low (<50)     │ Short        │ (archetype still     │ (urgent — good        │
-              │ circuit*     │ applies if known)    │ candidate, invisible) │
+              │ circuit*     │ applies if paid)     │ candidate, invisible) │
               └──────────────┴──────────────────────┴───────────────────────┘
 
 * Short circuit from atsAnalysis, before scoreMatch runs
+exploring_gap intent overrides all mid/low fit cells → analyzeRoadmap
 ```
-
-Intent modifies routing in the mid/low fit cells:
-- `exploring_gap` + low fitScore → always route to roadmap analysis, never to skeptical reconciliation
-- `confident_match` + low fitScore → route to skeptical reconciliation or honest misfit
-- `exploring_gap` + `applying_now` + low fitScore → honest assessment with immediate actionable gaps
-- `exploring_gap` + `one_year_plus` + low fitScore → roadmap with timeline-appropriate milestones
 
 ### Conditional edge logic
 
 ```
-atsScore and fitScore both known
-weakMatch = fitScore < 60  (derived, not LLM output)
+// intent takes priority — checked first
+if intent is "exploring_gap":
+  → analyzeRoadmap
 
-// ATS short circuits already handled before this point
-
-if fitScore >= 75 and atsScore >= 75:
+// strong fit cases
+elif fitScore >= 75 and atsScore >= 75:
   → analyzeStrongMatch (Scenario 1a)
 
-if fitScore >= 75 and atsScore < 75:
-  → analyzeATSGap (Scenario 1b — urgent)
+elif fitScore >= 75 and atsScore < 75:
+  → analyzeATSGap (Scenario 1b — urgent) [Phase 1]
 
-elif fitScore >= 50 and archetypeContext is not null:
+// archetype check — before narrativeGap to win the 50–70 overlap
+elif archetypeContext is not null and userTier is "paid" and fitScore >= 50:
   → analyzeArchetypeGap (Scenario 3)
-  // atsScore low: node receives atsProfile, includes ATS advice alongside archetype advice
 
 elif fitScore >= 60:
   → analyzeNarrativeGap (Scenario 2)
-  // atsScore low: node receives atsProfile, includes ATS advice
 
-elif intent is "exploring_gap":
-  → analyzeRoadmap (exploring_gap variant of Scenario 3/4)
-
-elif humanContext is absent:
-  → awaitHuman
-
+// low fit, confident_match — always runs analyzeSkepticalReconciliation first
 else:
   → analyzeSkepticalReconciliation (Scenario 4/5)
 ```
 
-Archetype check is evaluated before `fitScore >= 60` branch — archetype takes priority in the 50–70 overlap range. The prose description is authoritative; code must follow this order.
+**Notes:**
+- `analyzeATSGap` is Phase 1 work — not in scope for current implementation. Until Phase 1 ships, `fitScore >= 75 and atsScore < 75` falls through to `analyzeStrongMatch`.
+- After HITL, `state.hitlFired` is true. `routeAfterScore` checks `hitlFired` first — if true, always routes to `analyzeSkepticalReconciliation` regardless of new score. The conversation context after HITL is different from a fresh run.
+- `atsScore` is `number | undefined` until Phase 1 `atsAnalysis` node is built. Routing conditions that check `atsScore` treat `undefined` as passing (no ATS gate applied).
+
+### HITL — scoped to `analyzeSkepticalReconciliation` only
+
+HITL does not fire from `scoreMatch`. It fires from inside the `analyzeSkepticalReconciliation` path only, after analysis has run and `contextPrompt` exists.
+
+**HITL fires when:**
+- `intent` is `confident_match` AND
+- `fitScore < 60` AND
+- `state.hitlFired` is false (first pass only)
+
+**Flow:**
+```
+analyzeSkepticalReconciliation runs → produces contextPrompt, weakMatchReason
+    ↓
+[check state.hitlFired]
+    ↓ false (first pass)          ↓ true (second pass)
+awaitHuman                        END
+    ↓
+sets hitlFired: true in state
+interrupts graph
+    ↓
+user provides humanContext via /api/match/resume (free text, min 1 char)
+    ↓
+rescore runs
+    ↓
+routeAfterScore sees hitlFired: true → always routes to analyzeSkepticalReconciliation
+    ↓
+analyzeSkepticalReconciliation runs with humanContext in state
+    ↓
+[check state.hitlFired] → true → END
+```
+
+Loop is capped at one exchange. `hitlFired: true` prevents a second interrupt regardless of new score.
+
+**`exploring_gap` users never hit HITL** — they route to `analyzeRoadmap` before reaching `analyzeSkepticalReconciliation`.
+
+**Interrupted SSE event payload:** `{ fitScore, contextPrompt, threadId }` — `contextPrompt` is always present because `analyzeSkepticalReconciliation` runs before the interrupt fires.
 
 ---
 
@@ -288,28 +331,20 @@ Archetype check is evaluated before `fitScore >= 60` branch — archetype takes 
 **atsScore:** 75+  
 **Graph node:** `analyzeStrongMatch`
 
-The candidate fits the role and their resume surfaces correctly to the machine. The rarest case. `resumeAdvice` may be empty — this is correct behaviour, not a failure. The model should not manufacture advice.
+The candidate fits the role and their resume surfaces correctly to the machine. `resumeAdvice` may be empty — this is correct behaviour, not a failure. The model should not manufacture advice.
 
 **What the user needs:** Confirmation they are a strong fit on both dimensions. Minimal or no resume advice.
 
 ---
 
-### Scenario 1b — Strong fit, ATS exposure
+### Scenario 1b — Strong fit, ATS exposure *(Phase 1)*
 **fitScore:** 75+  
 **atsScore:** < 75  
 **Graph node:** `analyzeATSGap`
 
-The candidate genuinely fits the role but their resume won't survive automated filtering before a human sees them. This is the highest urgency advice case — the candidate is good but invisible. The advice is not "do more work," it is "describe your existing work differently."
+The candidate genuinely fits the role but their resume won't survive automated filtering. Highest urgency advice case — the candidate is good but invisible. Advice is surgical terminology swaps, not "do more work."
 
-The model looks for:
-- Bullet points where the candidate's language describes the same thing the JD describes but uses different terminology — flag the JD term and where to swap it in
-- Keywords present in the JD that are absent from the resume even though the underlying experience exists
-- Section ordering — if the JD leads with something the candidate buries, flag the reorder
-- Layout issues flagged by `atsProfile` — multi-column, graphics, non-standard headers
-
-Advice must be specific and surgical. "Change 'built internal tooling' to 'developed developer productivity tooling' to match the JD's exact framing" is correct. "Strengthen your experience section" is not.
-
-**What the user needs:** Urgent, precise ATS alignment advice. Confirmation the underlying fit is strong. No roadmap — they don't need to do more work, they need to communicate existing work better.
+**What the user needs:** Urgent, precise ATS alignment advice. Confirmation the underlying fit is strong.
 
 ---
 
@@ -318,9 +353,9 @@ Advice must be specific and surgical. "Change 'built internal tooling' to 'devel
 **atsScore:** high or low  
 **Graph node:** `analyzeNarrativeGap`
 
-The candidate's career trajectory fits the role but their resume is framed around their previous identity, not their target one. The gap isn't skills — it's presentation. If `atsScore` is also low, the node receives `atsProfile` and includes ATS-specific reframing advice alongside narrative reframing.
+Career trajectory fits the role but resume is framed around previous identity. Gap is presentation, not skills. If `atsScore` is low, node receives `atsProfile` and includes ATS-specific reframing advice.
 
-**What the user needs:** Reframing advice. If human context is absent or the model can't connect it to the role, a specific `contextPrompt` asking for the experience that would close the framing gap.
+**What the user needs:** Reframing advice. Specific `contextPrompt` if model can't connect context to role.
 
 ---
 
@@ -329,35 +364,32 @@ The candidate's career trajectory fits the role but their resume is framed aroun
 **atsScore:** high or low  
 **Graph node:** `analyzeArchetypeGap`
 
-The candidate is making a recognisable career transition. Archetype-specific gap analysis is injected — known gaps, hidden strengths, credibility signals. If `atsScore` is low, the node also surfaces which archetype-specific keywords are absent from the resume ("you have LangGraph experience but your resume calls it 'workflow automation' — the ATS will never surface you for agent dev roles").
+Recognisable career transition. Archetype-specific coaching injected — hidden strengths, credibility signals, mental model shift. If `atsScore` is low, node surfaces which archetype-specific keywords are absent from the resume. Falls back silently to `analyzeNarrativeGap` when archetype unavailable or free tier.
 
-When archetype context is unavailable, falls back silently to `analyzeNarrativeGap`.
-
-**What the user needs:** Structured, transition-specific gap analysis. Clear path forward. Honest about the work required.
+**What the user needs:** Structured, transition-specific gap analysis. Clear path forward. Honest about work required.
 
 ---
 
 ### Scenario 4 — Weak fit, human context suggests a path
 **fitScore:** < 60  
 **intent:** `confident_match`  
-**humanContext:** present, model not yet convinced  
+**humanContext:** present (post-HITL), model not yet convinced  
 **Graph node:** `analyzeSkepticalReconciliation`
 
-The candidate scored low but provided human context via HITL that suggests a plausible match. The model has weighed the context and isn't yet convinced — not because the context is irrelevant but because it lacks specificity.
+Scored low, provided context via HITL, model not convinced — context lacks specificity.
 
-**What the user needs:** A specific `contextPrompt` — "you mentioned X, we'd need to know specifically A and B to factor that in."
+**What the user needs:** Specific `contextPrompt` — "you mentioned X, we'd need to know A and B specifically."
 
 ---
 
 ### Scenario 5 — Genuine weak match
 **fitScore:** < 60  
 **intent:** `confident_match`  
-**humanContext:** absent or doesn't close the gap  
-**Graph node:** `analyzeSkepticalReconciliation` or `awaitHuman`
+**Graph node:** `analyzeSkepticalReconciliation` → `awaitHuman` → `analyzeSkepticalReconciliation`
 
-The candidate is not suited for this role at this time. The model cannot formulate a question that would change its assessment. `contextPrompt` is null — its absence on a low score is a signal the gap is real.
+Not suited for this role at this time. Model cannot formulate a question that would change assessment. `contextPrompt` is null — its absence on a low score signals the gap is real.
 
-**What the user needs:** A direct, honest `weakMatchReason`. No false optimism.
+**What the user needs:** Direct, honest `weakMatchReason`. No false optimism.
 
 ---
 
@@ -366,91 +398,107 @@ The candidate is not suited for this role at this time. The model cannot formula
 **intent:** `exploring_gap`  
 **Graph node:** `analyzeRoadmap`
 
-The user has declared they know they're off. The score is not a surprise — it's a starting point. The output is a structured roadmap calibrated to their `timeline` and `currentStatus`. `one_year_plus` + `starting_from_scratch` gets a different roadmap than `applying_now` + `side_projects` + `self_taught`.
+User has declared they know they're off. Score is a starting point, not a verdict. HITL never fires for this intent. `atsProfile` surfaced as keyword target list.
 
-HITL never fires for `exploring_gap` users regardless of fitScore — they came for the gap, interrupting them for context is the wrong interaction.
-
-**What the user needs:** Structured gap analysis with timeline-appropriate milestones. Honest about distance. `atsProfile` surfaced as a keyword target list — "these are the terms you need to get into your resume."
+**What the user needs:** Structured gap analysis with timeline-appropriate milestones. Honest about distance.
 
 ---
 
-## New and changed fields
+## Graph state — new and changed fields
 
-### `atsScore` (new — graph state)
-0–100. Produced by `atsAnalysis`. Independent of `fitScore`. Carried through state to all scenario nodes.
+### `fitScore` (renamed from `score`)
+Primary fit score, 0–100. LLM output from `scoreMatch`. Replaces `score` everywhere — `MatchResult`, `MatchResponse`, graph state, routing conditions, SSE events, tests. Breaking change — noted in ADR.
 
-### `atsProfile` (new — graph state)
-Structured output of `atsAnalysis`. Contains keyword overlap, missing required keywords, layout flags, parsing errors. Injected into scenario nodes that need it.
+### `atsScore` (new)
+ATS surface score, 0–100. Produced by `atsAnalysis`. `number | undefined` until Phase 1 `atsAnalysis` node is built — routing treats `undefined` as passing. Both `fitScore` and `atsScore` returned in API response. Frontend handles display decisions (badge colour, threshold). No `atsWarning` field.
 
-### `intent` (new — graph state)
-`"confident_match"` | `"exploring_gap"`. From request body. Used for routing and as fit score modifier.
+### `atsProfile` (new)
+Structured output of `atsAnalysis`. Contains keyword overlap, missing required keywords, layout flags, parsing errors. Injected into scenario nodes that need it. Type definition owned by implementation.
 
-### `intentContext` (new — graph state)
-`ConfidentMatchContext` | `ExploringGapContext`. From request body. Shapes benefit of the doubt on fit score and roadmap depth on `exploring_gap` runs.
+### `archetypeContext` (new)
+`ArchetypeContext | null`. Written by `detectArchetype` node. Read by `scoreMatch`, `analyzeArchetypeGap`, `analyzeRoadmap`. Never recomputed after `detectArchetype` runs.
+
+### `intent` (new)
+`"confident_match"` | `"exploring_gap"`. From request body. First routing condition checked — takes priority over all other conditions.
+
+### `intentContext` (new)
+`ConfidentMatchContext` | `ExploringGapContext`. From request body. Shapes benefit of the doubt on fit score.
+
+### `userTier` (new)
+`"base"` | `"paid"`. Derived server-side from auth middleware — never from request body. Set in initial graph state by route handler from `req.user.tier`. Default `"base"`. Used by routing and chain factories for tier gate.
+
+### `hitlFired` (new)
+`boolean`. Default `false`. Set to `true` by `awaitHuman` node before interrupting. Prevents HITL firing more than once per thread. `routeAfterScore` checks this first when `hitlFired` is true — always routes to `analyzeSkepticalReconciliation` regardless of new score.
+
+### `humanContext` (changed)
+No longer set on first run — only populated via `/api/match/resume` (HITL). Its presence in state indicates HITL has already fired once.
 
 ### `contextPrompt` (new — response field)
-A question generated by the model asking for specific information that would materially change the score. Present when the model sees a plausible path to a better score. Null when the gap is real and no context would help. Null `contextPrompt` on a low score is meaningful. Does not trigger a second HITL interrupt.
+Generated by analysis nodes. Null when gap is real and no context would help. Always present in interrupted SSE event because `analyzeSkepticalReconciliation` runs before HITL fires.
 
 ### `weakMatch` (changed — now derived)
-Derived deterministically as `fitScore < 60` in the `scoreMatch` node. LLM does not compute this. `superRefine` cross-field validation removed from `MatchSchema` — validation moves to node layer.
+Derived deterministically as `fitScore < 60` in `scoreMatch` node. LLM does not compute this. `superRefine` removed from `MatchSchema`.
 
-### `weakMatchReason` (unchanged in position, clarified in intent)
-LLM output field. Only meaningful when `fitScore < 60`. Honest and direct in Scenario 5. Explains the specific context gap in Scenario 4. Not motivational copy.
+### `narrativeAlignment` (unchanged)
+Remains in `MatchResult` and API response.
 
-### `resumeAdvice` (behaviour change)
-Empty array is correct in Scenario 1a. Scenario 1b advice is ATS-specific and surgical. Scenario 6 advice is roadmap-structured. The model is not permitted to pad advice to appear helpful.
-
-### Critical fields (moved)
-`contactInfo`, `jobTitle`, `workExperienceDates` move from `MatchSchema` to `atsProfile`. They are extracted by ATS parse nodes, not fit analysis. If critical fields are missing, the graph short-circuits before fit analysis runs.
+### Removed from API response
+`resumeData` and `jobData` (parsed resume and job) are no longer included in the completed SSE event. Internal parsing outputs stay in graph state for node use only. Client receives analysis outputs only: `fitScore`, `atsScore`, `matchedSkills`, `missingSkills`, `gaps`, `resumeAdvice`, `contextPrompt`, `weakMatch`, `weakMatchReason`, `narrativeAlignment`.
 
 ---
 
-## HITL — updated behaviour
+## Auth and tier middleware
 
-HITL fires only when:
-- `fitScore < 60` AND
-- `humanContext` is absent AND
-- `intent` is `confident_match`
+Two middleware layers run before route handlers on all match routes:
 
-`exploring_gap` users never hit HITL. They came for the gap — interrupting them is the wrong interaction.
+**Auth middleware** — verifies JWT, performs Supabase lookup, attaches `{ userId, tier, usage, resetAt }` to `req.user`. Uses `@supabase/supabase-js` admin SDK with `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` environment variables. Separate from the raw Postgres connection used by the checkpointer.
 
-After HITL, the user provides free-text `humanContext` via `/api/match/resume`. This is the only point in the flow where free text is accepted. `rescore` runs, then routes to `analyzeSkepticalReconciliation` regardless of new score — the conversation context is different from a fresh run.
+**Usage middleware** — checks `req.user.usage` against tier limit. Returns 429 with reset date if over limit.
 
-`contextPrompt` is included in the interrupted SSE event payload — `{ score, threadId, contextPrompt }` — so the frontend can show the user specifically what to provide rather than a generic prompt.
+Route handler reads `req.user.tier` and passes `userTier` into initial graph state. Client never sends `userTier` — server always derives it from auth. `userTier` is a server-derived value, not a client claim.
+
+**`/api/match/resume` (HITL resume):** Re-verifies JWT is valid. Reads `userTier` from checkpointed graph state, not a fresh Supabase lookup — the tier active when the run started is preserved across the HITL exchange.
 
 ---
 
 ## Resolved decisions
 
-**Intent-aware short circuits:** Unreadable resume and missing critical fields always short-circuit. Catastrophic keyword gap short-circuits only for `confident_match`. `exploring_gap` users never short-circuit on low ATS — the gap is what they came to see.
+**detectArchetype as dedicated node:** Archetype detection is a pure dictionary lookup with no LLM call. It runs as its own node after fit parse, before `scoreMatch`, and writes `archetypeContext` to state once. All downstream nodes read from state without recomputing.
 
-**contextPrompt and HITL:** contextPrompt triggers a single HITL interrupt — the user sees the question, provides free-text context via /api/match/resume, and rescore runs. After that single exchange, no further contextPrompt is generated. The loop is capped at one round of clarification. rescore always routes to analyzeSkepticalReconciliation on the second pass regardless of new score.
+**analyzeArchetypeGap injection scope:** Receives coaching material only — `hiddenStrengths`, `credibilitySignals`, `mentalModelShift`. Does not receive `skillMap` or `gapProfile`. Those go to `scoreMatch` for scoring calibration. Scoring and coaching are separate concerns in separate nodes.
 
-**contextPrompt in interrupted SSE event:** Included. Lets frontend show specific follow-up prompt rather than generic HITL message.
+**Intent takes priority in routing:** `exploring_gap` is checked before archetype, before fitScore thresholds. A paid tier `exploring_gap` user with a known archetype routes to `analyzeRoadmap`, not `analyzeArchetypeGap`.
 
-**Score branching implementation:** Separate graph nodes per scenario. Not a single prompt with conditional instruction blocks. Routing is a graph responsibility — scores are known before routing happens.
+**HITL moved to after analyzeSkepticalReconciliation:** `contextPrompt` is always generated before HITL fires. Interrupted event always includes `contextPrompt`. `scoreMatch` does not gate HITL.
 
-**Scenario 3 fallback:** When archetype context unavailable, conditional edge routes to `analyzeNarrativeGap` silently. No UI indication.
+**hitlFired boolean:** Explicit state field. More readable than inferring first-pass from `humanContext` absence. `hitlFired: true` caps the loop regardless of what `humanContext` contains.
 
-**sourceRole/targetRole vocabulary:** Free text with LLM instructed to use controlled vocabulary. Exact-match lookup. Mismatches degrade gracefully to null. See `prd-archetype-system.md`.
+**userTier source:** Auth middleware, Supabase lookup, attached to `req.user`. Passed into initial graph state. Never from request body. HITL resume reads from checkpointed state.
 
-**weakMatch derivation:** In `scoreMatch` node, not inside chain `invoke`. Chain returns LLM output, node derives deterministic fields before writing to state.
+**fitScore rename:** `score` renamed to `fitScore` everywhere. Breaking change recorded in ADR. `atsScore` added alongside as `number | undefined` until Phase 1.
 
-**mentalModelShift:** Included in `ArchetypeContext`, injected into `analyzeArchetypeGap` only. See `prd-archetype-system.md`.
+**atsScore display:** Both scores returned in API response. No `atsWarning` field. Frontend handles display. Scenario node advice explains ATS problems in natural language.
 
-**rescore after HITL:** Fixed edge to `analyzeSkepticalReconciliation` always, regardless of new score. Conversation context after HITL is different from a fresh run.
+**Parsed resume/job removed from response:** Internal to graph state only. Client receives analysis outputs only.
 
-**contextPrompt preservation in gap analysis:** Strip from output schema, reattach programmatically from input. Trusting the model to echo it is a reliability risk.
+**contextPrompt and HITL:** Triggers a single HITL interrupt. Loop capped at one exchange by `hitlFired`. After HITL exchange, `rescore` always routes to `analyzeSkepticalReconciliation` regardless of new score.
 
-**mentalModelShift type:** Structured object `{ from: string; to: string; practicalImplication: string }`.
+**contextPrompt preservation in gap analysis:** Stripped from output schema, reattached programmatically from input. Model does not regenerate it.
+
+**weakMatch derivation:** In `scoreMatch` node, not inside chain `invoke`.
+
+**rescore after HITL:** `hitlFired: true` in state forces `analyzeSkepticalReconciliation` on second pass regardless of new score.
+
+**narrativeAlignment:** Stays in API response — accidentally omitted from earlier field list.
+
+**analyzeATSGap:** Phase 1 work. Until Phase 1 ships, `fitScore >= 75 and atsScore < 75` falls through to `analyzeStrongMatch`.
 
 ---
 
 ## Open questions
 
 - Is there a minimum fitScore threshold (e.g. < 20) below which we skip all scenario analysis and return early with just `weakMatchReason`, even for `exploring_gap` users?
-- Should `atsScore` be surfaced in the UI as a separate visible number, or only used internally for routing and advice generation?
-- Multi-model routing per node — `analyzeStrongMatch` and `parseResumeATS`/`parseJobATS` are small/fast model candidates. `analyzeSkepticalReconciliation` and `analyzeArchetypeGap` are stronger model candidates. Implemented with eval harness PRD.
+- Multi-model routing per node — `analyzeStrongMatch` and ATS parse nodes are small/fast model candidates. `analyzeSkepticalReconciliation` and `analyzeArchetypeGap` are stronger model candidates. Implemented with eval harness PRD.
 
 ---
 
@@ -461,3 +509,4 @@ After HITL, the user provides free-text `humanContext` via `/api/match/resume`. 
 - Archetype injection details (see `prd-archetype-system.md`)
 - Frontend UI implementation of intent selector and intentContext dropdowns
 - Zod schema definitions for request body validation (owned by implementation)
+- `atsProfile` TypeScript interface definition (owned by implementation)

@@ -4,7 +4,7 @@
 **Author:** sbasnyat  
 **Last updated:** 2026-04-05  
 **Related ADR:** `docs/architecture.md`  
-**Related PRD:** `prd-match-scenarios.md` (score branching, graph architecture, and product tiers — read first)
+**Related PRD:** `prd-match-scenarios.md` (score branching, graph architecture, product tiers, and auth middleware — read first)
 
 ---
 
@@ -19,10 +19,10 @@ The archetype system encodes research about specific career transitions into the
 ## Goals
 
 - Define a typed structure for encoding career transition archetypes in TypeScript
-- Build a lookup system that derives the transition type from resume and job data with no LLM call
-- Inject archetype context selectively into the graph nodes based on which analysis task is running
+- Build a dedicated `detectArchetype` node that derives transition type with no LLM call and writes to graph state once
+- Inject archetype context selectively into graph nodes based on which analysis task is running and the user's tier
 - Include `mentalModelShift` in `ArchetypeContext` for injection into gap analysis nodes
-- Fail gracefully — if the transition is unknown, nodes fall back to generic behaviour with no error
+- Fail gracefully — if the transition is unknown or user is free tier, nodes fall back to generic behaviour with no error
 - Ship one archetype (backend\_swe → ai\_agent\_dev) as the reference implementation
 - Gate archetype-specific analysis behind the paid tier — see `prd-match-scenarios.md` product tiers section
 
@@ -49,61 +49,86 @@ An archetype represents a specific source-to-target role transition. It is built
 
 **Credibility signals** — what hiring managers and clients actually look for, ordered by priority. Distinct from skills — these are the signals that determine whether a candidate is taken seriously in interview or freelance contexts.
 
-**Mental model shift** — the underlying change in how the candidate needs to think about building, not just what they need to learn. Gives gap analysis advice depth beyond a skill checklist. Included in `ArchetypeContext` and injected into gap analysis nodes.
+**Mental model shift** — the underlying change in how the candidate needs to think about building, not just what they need to learn. Gives gap analysis advice depth beyond a skill checklist.
+
+---
+
+## detectArchetype node
+
+Archetype detection is a dedicated graph node — not computed inside `scoreMatch` or any other node.
+
+**Position in graph:** Runs after `parseResumeFit` and `parseJobFit` complete, before `scoreMatch`. Sequential — `scoreMatch` needs `archetypeContext` in state to calibrate scoring.
+
+**Behaviour:**
+- Reads `state.resumeData.sourceRole` and `state.jobData.targetRole`
+- Calls `buildContext(sourceRole, targetRole)`
+- Writes result to `state.archetypeContext` — either the full `ArchetypeContext` object or null
+- Logs when both roles are known controlled vocabulary values but no archetype matched — unmatched transitions tracked for future research prioritisation
+- Null is a valid, expected result — no error thrown, no degraded state
+
+**Why dedicated:** Archetype detection is pure and cheap — a dictionary lookup that takes milliseconds. Putting it in a dedicated node means the result is in state for every downstream node without recomputing. `scoreMatch`, `analyzeArchetypeGap`, and `analyzeRoadmap` all read `state.archetypeContext` — none of them call `buildContext` themselves.
 
 ---
 
 ## Transition detection
 
-Transition type is derived from two fields added to the fit parse node outputs:
+`sourceRole` and `targetRole` are extracted by the fit parse nodes — not the ATS parse nodes. ATS parsing is mechanical and literal; role inference requires semantic understanding of career trajectory, which belongs in the fit parse layer.
 
 - `sourceRole` added to `ResumeSchema` output by `parseResumeFit`
 - `targetRole` added to `JobSchema` output by `parseJobFit`
 
-These are extracted by the fit parse nodes — not the ATS parse nodes. ATS parsing is mechanical and literal; role inference requires semantic understanding of career trajectory, which belongs in the fit parse layer. No additional LLM call is needed — `sourceRole` and `targetRole` are extracted as part of normal fit parsing.
-
-The LLM is instructed to use a controlled vocabulary of known values (e.g. "backend\_swe", "frontend\_swe", "ai\_agent\_dev"). The lookup key is `${sourceRole}__${targetRole}` (double underscore separator). Lookup is exact match only.
+The LLM is instructed to use a controlled vocabulary of known values. The lookup key is `${sourceRole}__${targetRole}` (double underscore separator). Lookup is exact match only.
 
 `deriveTransitionType(sourceRole, targetRole)` returns the registry key if found, null otherwise.
 
 `buildContext(sourceRole, targetRole)` returns the full `ArchetypeContext` if found, null otherwise. Handles undefined and empty string inputs — returns null in both cases.
 
-Null return means nodes fall back to generic prompt behaviour. The archetype system is an enhancement layer, not a dependency.
+### Controlled vocabulary
+
+The complete list of known `sourceRole` and `targetRole` values must be defined and shared between `parseResumeFit`, `parseJobFit`, and the archetype registry. Both parse prompts must use the same list. Adding a new archetype requires adding its `sourceRole` and `targetRole` values to the vocabulary if not already present.
+
+Current known values: `"backend_swe"`, `"frontend_swe"`, `"fullstack_swe"`, `"ai_agent_dev"`, `"ml_engineer"`, `"data_scientist"`, `"devops_engineer"`, `"product_manager"`. If no value fits, LLM returns `"unknown"` — which never matches a registry key and degrades gracefully.
 
 ---
 
 ## Selective injection
 
-The full archetype object is approximately 2,300 tokens. It is never injected wholesale. Each graph node receives only the sections relevant to its analysis task. Archetype injection only fires when `buildContext` returns non-null AND the user is on the paid tier.
+The full archetype object is approximately 2,300 tokens. It is never injected wholesale. Each graph node receives only the sections relevant to its analysis task. Archetype injection only fires when `state.archetypeContext` is non-null AND `state.userTier` is `"paid"`.
 
 | Graph node | Injected sections | Approximate tokens | Tier |
 |---|---|---|---|
 | `scoreMatch` | `skillMap` (tier 1 only) + `gapProfile` (critical + high severity only) | 400–500 | Paid |
 | `analyzeArchetypeGap` | `hiddenStrengths` + `credibilitySignals` + `mentalModelShift` | 500–600 | Paid |
-| `analyzeRoadmap` | `skillMap` (all tiers) + `gapProfile` (all severities) + timeline + portfolio projects | 600–800 | Paid |
+| `analyzeRoadmap` | `skillMap` (all tiers) + `gapProfile` (all severities) | 600–800 | Paid |
 | `analyzeNarrativeGap` | none (generic prompt) | — | Base |
 | `analyzeStrongMatch` | none (generic prompt) | — | Base |
 | `analyzeSkepticalReconciliation` | none (generic prompt) | — | Base |
 
-Tier 2 and tier 3 skills are not injected into `scoreMatch` — only into `analyzeRoadmap` where the full picture is needed to produce a realistic transition timeline. Keeping tier 1 only in `scoreMatch` reduces token cost and focuses scoring on what actually gates hiring decisions.
+### scoreMatch receives skillMap and gapProfile — analyzeArchetypeGap does not
+
+`scoreMatch` receives tier 1 `skillMap` + critical/high `gapProfile` because it is producing a score — it needs to know what skills gate hiring decisions and what gaps are most likely to cause failures. This is scoring calibration.
+
+`analyzeArchetypeGap` receives `hiddenStrengths` + `credibilitySignals` + `mentalModelShift` because it is producing coaching advice — it needs to surface what the candidate already has that differentiates them, and how they need to think differently. This is coaching, not scoring. Injecting `skillMap` and `gapProfile` into `analyzeArchetypeGap` would duplicate scoring context into a coaching node, which is noise.
+
+### Why analyzeArchetypeGap gets mentalModelShift
+
+The mental model shift is the underlying change in how the candidate needs to think, not just what they need to learn. It is specific to Scenario 3 — structured guidance for a known transition. It is excluded from `scoreMatch` because it is coaching content, not scoring criteria.
+
+### Why analyzeRoadmap gets all tiers and severities
+
+A roadmap needs the full picture. Tier 2 and tier 3 skills are the differentiators and nice-to-haves that matter for the timeline. Medium severity gaps surface in interviews even if they don't cause immediate filtering. `scoreMatch` only needs the critical signal; `analyzeRoadmap` needs the complete transition map.
 
 Archetype context is injected into the system prompt, not the human turn. It is scoring rubric and coaching information — not candidate information.
-
-### Why `analyzeArchetypeGap` gets `mentalModelShift`
-
-The mental model shift is the underlying change in how the candidate needs to think, not just what they need to learn. It is specific to Scenario 3 — a candidate who fits a known transition archetype and needs structured guidance. Injecting it into other analysis nodes would be noise. It is excluded from `scoreMatch` because it is coaching content, not scoring criteria.
-
-### Why `analyzeRoadmap` gets all tiers and severities
-
-A roadmap needs the full picture. Tier 2 and tier 3 skills are the differentiators and nice-to-haves that matter for the timeline — a candidate on a one-year plan needs to know what to build toward beyond table stakes. Medium severity gaps matter too — they won't get someone filtered out immediately but they surface in interviews. `scoreMatch` only needs the critical signal; `analyzeRoadmap` needs the complete transition map.
 
 ---
 
 ## Fallback behaviour
 
-If `buildContext` returns null — because `sourceRole` or `targetRole` is unknown, missing, or the combination has no registered archetype — the conditional edge does not route to `analyzeArchetypeGap`. It falls through to `analyzeNarrativeGap` instead. `analyzeRoadmap` produces generic output rather than archetype-powered output. No error is thrown, no degraded state is surfaced to the user.
+**Archetype unknown:** `buildContext` returns null — `sourceRole` or `targetRole` is unknown, missing, or combination has no registered archetype. `state.archetypeContext` is null. Conditional edge does not route to `analyzeArchetypeGap`. Falls through to `analyzeNarrativeGap`. `analyzeRoadmap` produces generic output. No error thrown.
 
-If the user is on the free tier and `buildContext` returns non-null, the archetype is detected but not injected. The UI surfaces the upgrade prompt — "we recognise this transition" — but analysis nodes run without archetype context. Same fallback behaviour as unknown transition, different UI message.
+**Free tier with known archetype:** `buildContext` returns non-null but `state.userTier` is `"base"`. Archetype is detected but not injected. UI surfaces upgrade prompt — "we recognise this transition" — but analysis nodes run without archetype context. Same analysis behaviour as unknown transition, different UI message.
+
+In both cases the fallback is silent to the analysis pipeline. No degraded state, no error.
 
 ---
 
@@ -127,13 +152,11 @@ The first and only archetype in v1. Research source: real 2026 job postings from
 - From: engineer as builder — output is clean, correct, predictable code; goal is to eliminate variance
 - To: engineer as experimentalist — output is information about how the system behaves; goal is to harness variance productively
 
-**Research ownership:** Manual, by the project author, from job posting analysis. New archetypes require the same research process — real postings, weighted skills, failure mode documentation — before they are added to the registry. There is no automated or LLM-assisted research pipeline in v1.
+**Research ownership:** Manual, by the project author, from job posting analysis. New archetypes require the same research process before being added to the registry. No automated or LLM-assisted research pipeline in v1.
 
 ---
 
 ## Adding a new archetype (process)
-
-When a new transition is ready to encode:
 
 1. Research at least 5 real job postings for the target role
 2. Derive skill map with weights from actual posting language
@@ -142,7 +165,7 @@ When a new transition is ready to encode:
 5. Write the mental model shift — from/to framing, practical implication
 6. Add the archetype object to `archetypes.ts` following the existing structure
 7. Register the key in the `ARCHETYPES` record as `${sourceRole}__${targetRole}`
-8. Add the new `sourceRole` and `targetRole` values to the fit parse prompt controlled vocabulary
+8. Add the new `sourceRole` and `targetRole` values to the controlled vocabulary if not already present — both `parseResumeFit` and `parseJobFit` prompts must be updated
 9. Write eval cases for the new transition before using it in production
 
 No archetype ships without eval cases. See eval harness PRD (to follow).
@@ -152,51 +175,60 @@ No archetype ships without eval cases. See eval harness PRD (to follow).
 ## Schema fields affected
 
 ### `ResumeSchema` (modified)
-Adds `sourceRole: string` — the candidate's current or most recent role category, extracted by `parseResumeFit` using controlled vocabulary. Not extracted by `parseResumeATS` — role inference is semantic, not mechanical.
+Adds `sourceRole: string` — extracted by `parseResumeFit` using controlled vocabulary. Not extracted by `parseResumeATS` — role inference is semantic, not mechanical.
 
 ### `JobSchema` (modified)
-Adds `targetRole: string` — the role category being hired for, extracted by `parseJobFit` using controlled vocabulary. Not extracted by `parseJobATS`.
+Adds `targetRole: string` — extracted by `parseJobFit` using controlled vocabulary. Not extracted by `parseJobATS`.
 
 ### `ArchetypeContext` (new)
-The selectively-injected object passed into graph nodes. Contains:
+The object written to `state.archetypeContext` by `detectArchetype` and read by downstream nodes. Contains the full archetype data — filtering to relevant sections happens at injection time per node, not at build time.
+
+Fields:
 - `archetypeId` — registry key
 - `label` — human-readable transition label
-- `skillMap` — tier 1 only for `scoreMatch` and `analyzeArchetypeGap`; all tiers for `analyzeRoadmap` (filtered at injection time)
-- `gapProfile` — critical and high severity only for `scoreMatch` and `analyzeArchetypeGap`; all severities for `analyzeRoadmap` (filtered at injection time)
-- `hiddenStrengths`
-- `credibilitySignals`
-- `mentalModelShift` — structured object `{ from: string; to: string; practicalImplication: string }`
+- `skillMap` — all three tiers (tier 1 injected into `scoreMatch`, all tiers injected into `analyzeRoadmap`)
+- `gapProfile` — all severities (critical + high injected into `scoreMatch`, all injected into `analyzeRoadmap`)
+- `hiddenStrengths` — injected into `analyzeArchetypeGap`
+- `credibilitySignals` — injected into `analyzeArchetypeGap`
+- `mentalModelShift` — structured object `{ from: string; to: string; practicalImplication: string }`, injected into `analyzeArchetypeGap`
 
-The full archetype object (all tiers, all severities) lives in the registry. `ArchetypeContext` is the full projection; filtering happens at injection time per node, not at build time.
+### `detectArchetype` node (new)
+Dedicated node. No model argument. Reads fit parse outputs, calls `buildContext`, writes `archetypeContext` to state. See detectArchetype node section above.
 
 ### `scoreMatch` node (modified)
-Computes `buildContext(state.resumeData.sourceRole, state.jobData.targetRole)` and passes tier 1 `skillMap` + critical/high `gapProfile` to `buildScoringChain` when non-null and user is paid tier.
+Reads `state.archetypeContext` and `state.userTier`. When both conditions met (non-null + paid), passes tier 1 `skillMap` + critical/high `gapProfile` to `buildScoringChain`. Does not call `buildContext` — reads from state only.
 
 ### `analyzeArchetypeGap` node (new)
-Calls `buildGapAnalysisChain` with `hiddenStrengths` + `credibilitySignals` + `mentalModelShift` injected. Only reached when `buildContext` returns non-null, user is paid tier, and fitScore is 50–70.
+Reads `state.archetypeContext` and `state.userTier`. Calls `buildGapAnalysisChain` with `hiddenStrengths` + `credibilitySignals` + `mentalModelShift` injected. Only reached when `archetypeContext` is non-null, `userTier` is `"paid"`, and `fitScore` is 50–70.
 
 ### `analyzeRoadmap` node (new)
-Calls `buildGapAnalysisChain` with full `skillMap` + full `gapProfile` + archetype timeline and portfolio data injected when archetype is known and user is paid tier. Generic prompt when archetype is null or free tier.
+Reads `state.archetypeContext` and `state.userTier`. Calls `buildGapAnalysisChain` with full `skillMap` + full `gapProfile` when archetype is known and user is paid tier. Generic prompt when archetype is null or free tier.
 
 ### `buildScoringChain` (modified)
-Accepts optional `archetypeContext?: ArchetypeContext` and `userTier: "base" | "paid"`. When both are present and tier is paid, appends tier 1 skill map and critical/high gap profile to system prompt. When absent or free tier, behaviour is identical to current.
+Accepts optional `archetypeContext?: ArchetypeContext` and `userTier: "base" | "paid"`. When both present and tier is paid, appends tier 1 skill map and critical/high gap profile to system prompt. When absent or free tier, behaviour is identical to current.
 
 ### `buildGapAnalysisChain` (modified)
-Accepts optional `archetypeContext?: ArchetypeContext`, `promptVariant`, and `userTier: "base" | "paid"`. Injection behaviour varies by variant and tier as described in the selective injection table above.
+Accepts optional `archetypeContext?: ArchetypeContext`, `promptVariant: AnalysisVariant`, and `userTier: "base" | "paid"`. Injection behaviour varies by variant and tier as described in the selective injection table.
 
 ---
 
 ## Resolved decisions
 
-**sourceRole/targetRole as free text vs enum:** Free text extracted by fit parse nodes, with the LLM instructed to use a controlled vocabulary. No TypeScript enum — that would require a code change for every new archetype. Mismatches return null from `buildContext` and degrade gracefully. If `sourceRole` or `targetRole` doesn't match any known registry key, the value should be logged (not thrown) so unmatched transitions can be prioritised for future archetype research.
+**detectArchetype as dedicated node:** Pure dictionary lookup, no LLM call, runs once per graph execution, writes to state. All downstream nodes read `state.archetypeContext` — none recompute it.
 
-**mentalModelShift in ArchetypeContext:** Included. It is specific enough to be useful in `analyzeArchetypeGap` and already encoded in the research JSON. Excluding it would mean adding it back when the eval harness reveals the gap analysis is shallow for archetype transitions.
+**analyzeArchetypeGap injection scope:** Coaching material only — `hiddenStrengths`, `credibilitySignals`, `mentalModelShift`. Does not receive `skillMap` or `gapProfile`. Scoring and coaching are separate concerns in separate nodes. `scoreMatch` owns scoring calibration; `analyzeArchetypeGap` owns transition-specific coaching.
+
+**Intent takes priority over archetype in routing:** `exploring_gap` intent is checked first in `routeAfterScore`. A paid tier `exploring_gap` user with a known archetype routes to `analyzeRoadmap`, not `analyzeArchetypeGap`. Archetype enriches the roadmap output but does not change the routing destination.
+
+**userTier source:** Auth middleware, Supabase lookup via `@supabase/supabase-js` admin SDK, attached to `req.user`. Passed into initial graph state as `userTier`. Never from request body. `/api/match/resume` reads `userTier` from checkpointed state, not a fresh lookup — tier active when run started is preserved across HITL exchange.
+
+**sourceRole/targetRole as free text with controlled vocabulary:** No TypeScript enum — that would require a code change for every new archetype. LLM instructed to use known values. Mismatches return null from `buildContext` and degrade gracefully. Unmatched transitions logged for future research prioritisation.
 
 **mentalModelShift type:** Structured object `{ from: string; to: string; practicalImplication: string }` — more injectable into a prompt than a text blob, more maintainable when adding new archetypes.
 
-**Registry as static TypeScript file:** Stays a static file in v1. Moving to a database table is a v2 concern — it only becomes necessary when archetypes need to be added without a code deploy, or when the registry grows large enough that a file is unwieldy. Neither applies in v1.
+**ArchetypeContext filtering at injection time:** `buildContext` returns the full projection. Each node filters to what it needs at injection time. Filtering logic colocated with injection logic.
 
-**ArchetypeContext filtering:** Filtering happens at injection time per node, not at build time. `buildContext` returns the full projection; each node filters to what it needs. This is simpler than building multiple filtered projections upfront and keeps the filtering logic colocated with the injection logic.
+**Registry as static TypeScript file:** Stays static in v1. Moving to database is a v2 concern.
 
 ---
 
