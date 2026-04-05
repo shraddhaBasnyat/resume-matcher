@@ -10,20 +10,25 @@
 
 ## Problem
 
-The current scoring chain has one mode: score the resume against the job and produce advice. This works for a straightforward match but produces poor results across the range of real user situations — it over-advises strong matches, under-explains weak ones, and has no way to distinguish "weak match because of a framing gap" from "weak match because the candidate is genuinely not suited."
+The current scoring chain has one mode: score the resume against the job and produce advice. This produces poor results across the range of real user situations for two reasons.
 
-Additionally, the current UI only collects human context after a low score triggers HITL. Users making career transitions — the primary target user — almost always have relevant context their resume doesn't show. They shouldn't have to wait for a weak score to provide it.
+First, it conflates two independent questions: can a machine read this resume, and does this candidate actually match this role. These require different parsing strategies and different analysis modes. Mixing them produces scores that are neither accurate ATS simulations nor accurate fit assessments.
+
+Second, it treats all users as having the same intent. A user who thinks they are a strong match needs honest confirmation or correction. A user who already knows they are far off needs a roadmap, not a rejection. The same score means different things to different users and should produce different output.
 
 ---
 
 ## Goals
 
+- Separate ATS analysis from fit analysis — two independent scoring dimensions
+- Collect structured user intent before the first run so routing is informed from the start
 - Match the LLM's analysis mode to the actual situation the user is in
-- Give users a clear, honest signal in all five match scenarios
-- Collect human context upfront so the first score is as informed as possible
+- Give users a clear, honest signal across all scenarios
 - Introduce `contextPrompt` as a new output field that tells the user specifically what information would change their score
 - Derive `weakMatch` deterministically rather than asking the LLM to compute it
 - Route to scenario-specific analysis nodes in the graph — not a single prompt trying to self-route
+- Short-circuit expensive analysis when ATS reveals the resume is unreadable or critical fields are missing
+- Gate archetype-specific analysis behind a paid tier — base product is two-dimensional scoring and generic scenario analysis
 
 ---
 
@@ -32,192 +37,420 @@ Additionally, the current UI only collects human context after a low score trigg
 - Archetype wiring and skill graph injection (covered in `prd-archetype-system.md`)
 - Eval harness design (separate PRD, to follow)
 - Multi-model routing by score branch (designed here, implemented with eval harness)
-- Subscription or usage limit changes
+- Payment infrastructure and billing (Stripe integration, subscription management)
 
 ---
 
-## Users & scenarios
 
-The five scenarios below are the core design surface for this PRD. Every product, schema, and graph routing decision traces back to one of these.
+## Product tiers
 
----
+The product ships in two tiers. The tier boundary is archetype detection — everything else is available to all users.
 
-### Scenario 1 — Strong match, resume already shows it
-**Score range:** 75+  
-**Human context:** present or absent — doesn't change the outcome  
-**Graph node:** `analyzeStrongMatch`
+### Base tier (free / all users)
+- Two-dimensional scoring — ATS score and fit score independently
+- Intent-based routing — `confident_match` and `exploring_gap` flows
+- All scenario nodes except `analyzeArchetypeGap`
+- `analyzeRoadmap` with generic output (not archetype-powered)
+- `contextPrompt`, `weakMatchReason`, `atsProfile` keyword gaps
+- HITL for `confident_match` low-score runs
 
-The candidate fits the role and their resume demonstrates it clearly. The risk here is the LLM manufacturing advice because it was asked to produce some. The prompt must explicitly give the model permission to return sparse or empty `resumeAdvice`. Padding this case with generic suggestions erodes trust in the tool.
+### Paid tier (archetype analysis)
+- Everything in base tier
+- Archetype detection — `buildContext` fires, transition is recognised
+- `analyzeArchetypeGap` node — transition-specific gap analysis, named gaps from research, hidden strengths, credibility signals
+- `analyzeRoadmap` powered by archetype data — specific milestones, timeline estimates, portfolio projects from archetype research rather than generic advice
 
-**What the user needs:** Confirmation. Brief summary of why they fit. Minimal or no resume advice.
+### Tier gate implementation
+The gate is a single conditional: if `buildContext` returns non-null AND the user is on the paid tier, inject archetype context and route to `analyzeArchetypeGap`. If free tier, skip injection and route to `analyzeNarrativeGap` as fallback. One conditional, no separate code paths.
 
----
-
-### Scenario 2 — Narrative fit, resume doesn't show it
-**Score range:** 60–75  
-**Human context:** absent or insufficient  
-**Graph node:** `analyzeNarrativeGap`
-
-The candidate's career trajectory fits the role but their resume is framed around their previous identity, not their target one. The gap isn't skills — it's presentation. The advice here isn't "go learn X," it's "rewrite your experience section to surface what you already did."
-
-This is also the primary case where upfront human context changes the first score. A candidate who volunteers "I've been doing agent work for three months on a side project" before the first run gets a more accurate score immediately rather than waiting for HITL.
-
-**What the user needs:** Reframing advice. If human context is absent or the model can't connect it to the role, a specific `contextPrompt` asking for the experience that would close the framing gap.
+The upgrade moment is natural — a user gets a mid-range score and generic narrative advice, and the UI indicates that a known transition archetype exists for their profile. The specific gap analysis is behind the tier gate.
 
 ---
 
-### Scenario 3 — Fits a known transition archetype, needs deliberate work
-**Score range:** 50–70  
-**Human context:** may or may not be present  
-**Graph node:** `analyzeArchetypeGap`
+## Request body — new shape
 
-The candidate is making a recognisable career transition — for example, backend SWE to AI agent developer. The gaps are known and well-understood. Generic advice is less useful here than archetype-specific guidance: "your eval methodology section is missing, here's why that matters for this role specifically."
+The `/api/match/run` request body changes significantly. `humanContext` is removed from the first run entirely. Structured intent fields replace it.
 
-When archetype context is unavailable (transition not in registry), this node is not invoked — the conditional edge falls through to `analyzeNarrativeGap` silently. No UI indication.
+```typescript
+{
+  resumeText: string
+  jobText: string
+  intent: "confident_match" | "exploring_gap"
+  intentContext: ConfidentMatchContext | ExploringGapContext
+  humanContext?: string  // absent on first run — HITL only
+}
 
-**What the user needs:** Structured, transition-specific gap analysis. Clear path forward with known milestones. Honest about the work required.
+interface ConfidentMatchContext {
+  basis: Array<
+    | "direct_experience"   // I've done this job or something very close
+    | "adjacent_role"       // coming from a related field
+    | "side_projects"       // I've shipped relevant work independently
+    | "self_taught"         // I've studied and built toward this deliberately
+    | "career_pivot"        // I know it's a stretch, I have transferable skills
+  >  // min 1 selection, multi-select
+}
 
----
+interface ExploringGapContext {
+  timeline:
+    | "applying_now"          // submitting applications now
+    | "three_to_six_months"   // planning to apply soon
+    | "one_year_plus"         // building toward this long term
 
-### Scenario 4 — Weak match, human context suggests a path
-**Score range:** < 60  
-**Human context:** present, but model not yet convinced  
-**Graph node:** `analyzeSkepticalReconciliation`
-
-The candidate scored low on resume alone but provided human context that suggests a plausible match. The model has weighed the context and isn't yet convinced — not because the context is irrelevant but because it lacks specificity. The candidate may genuinely have the background, they just haven't given the model enough to verify it.
-
-This is distinct from Scenario 5. The path is unclear but not closed.
-
-**What the user needs:** A specific `contextPrompt` — not "tell us more" generically, but "you mentioned X, we'd need to know specifically A and B to factor that in." The user either has that answer or they don't, and both outcomes are informative.
-
----
-
-### Scenario 5 — Genuine weak match, no plausible path from context
-**Score range:** < 60  
-**Human context:** absent, or present but doesn't close the gap  
-**Graph node:** `analyzeSkepticalReconciliation` (humanContext present) or `awaitHuman` then `analyzeSkepticalReconciliation` (humanContext absent)
-
-The candidate is not suited for this role at this time, or would need a significant period of deliberate work to get there. No amount of reframing changes this. The model cannot formulate a question that would change its assessment.
-
-The current prompt pushes toward advice in this case, which means it manufactures a path that doesn't exist. This erodes trust more than an honest assessment would.
-
-**What the user needs:** A direct, honest `weakMatchReason`. No false optimism. `contextPrompt` is null — its absence on a low score is itself a signal that the gap is real.
-
----
-
-## Graph architecture
-
-Score branching is implemented as conditional edges in the LangGraph, not as a single prompt that self-routes. The score is deterministic once `scoreMatch` returns it — routing on that score is a graph responsibility, not an LLM responsibility.
-
-### Node structure
-
-```
-parseResume ──┐
-              ├──► scoreMatch ──► [conditional edge] ──► analyzeStrongMatch             (75+)
-parseJob    ──┘                                      ──► analyzeNarrativeGap            (60–75)
-                                                     ──► analyzeArchetypeGap            (50–70, archetype known)
-                                                     ──► awaitHuman                     (< 60, no humanContext)
-                                                     ──► analyzeSkepticalReconciliation (< 60, humanContext present)
-
-awaitHuman ──► rescore ──► analyzeSkepticalReconciliation
-
-All analysis nodes ──► END
+  currentStatus: Array<
+    | "side_projects"         // I've shipped relevant work
+    | "self_taught"           // actively studying toward this
+    | "transferable_skills"   // relevant skills from current role
+    | "starting_from_scratch" // at the beginning
+    | "already_retraining"    // in a course, bootcamp, or similar
+  >  // min 1 selection, multi-select
+}
 ```
 
-### Why this structure
+`/api/match/resume` (HITL) is unchanged except that `humanContext` now only ever appears here — it is the free-text field reserved for when a user has seen their score and wants to disagree with it.
 
-Each analysis node calls `buildGapAnalysisChain` with a different prompt template. The deterministic routing lives in the graph. The prompt specialisation lives in the chain. Each node is independently testable and becomes its own eval target in the eval harness. This is why a single prompt with conditional instruction blocks was rejected — it asks the model to self-route on a score it is also computing, which is circular.
+### Why structured selections, not free text upfront
+
+Structured selections are unambiguous — the graph routes on them deterministically before any LLM call. Free text upfront is noise — users don't know what's relevant until they've seen the analysis. Reserving free text for HITL means it arrives as high-signal reactive context, not speculative pre-context.
+
+### Why intent changes the analysis
+
+`confident_match` users expect a high score. A low score is a surprise that needs explaining. The tool's job is honest confirmation or correction.
+
+`exploring_gap` users have already accepted the gap. A low score is expected. The tool's job is a structured roadmap, not a rejection verdict. The same score of 45 is a failure signal for `confident_match` and a useful starting point for `exploring_gap`.
+
+---
+
+## Two-dimensional scoring
+
+Every routing decision uses two independent scores:
+
+**ATS score** — can a machine read this resume and surface it for this role? Keyword density, exact title matching, layout parseability, section headers, date formats. Mechanical, literal, no inference. No benefit of the doubt.
+
+**Fit score** — does this candidate actually match this role? Career narrative, transferable skills, trajectory, intent signals. Semantic, inferential, generous. Human context and archetype detection only affect this dimension.
+
+These are orthogonal. A candidate can score high on one and low on the other. Routing is always a function of both.
+
+### Intent as a fit score modifier
+
+`intent` and `intentContext` feed into the fit scoring as benefit-of-the-doubt modifiers. They do not change the ATS score. Examples:
+
+- `confident_match` + `side_projects` + `adjacent_role` → extend significant benefit of the doubt on fit score
+- `confident_match` + `career_pivot` alone → extend less benefit of the doubt
+- `exploring_gap` + `already_retraining` + `side_projects` → extend moderate benefit of the doubt, prioritise roadmap output
+- `exploring_gap` + `starting_from_scratch` → minimal benefit of the doubt, honest gap assessment
+
+### Archetypes as a fit dimension modifier
+
+Archetypes are purely a fit-layer concern. An ATS parser doesn't know or care about career transition archetypes — it scans for keywords. Archetype detection only fires after the fit score is computed and changes what the fit analysis node does, not the score itself. See `prd-archetype-system.md`.
+
+---
+
+## Graph pipeline
+
+### Full node structure
+
+```
+parseResumeATS ──┐
+                 ├──► atsAnalysis ──► [conditional] ──► parseResumeFit ──┐
+parseJobATS    ──┘         │          (ATS passes)      parseJobFit    ──┴──► scoreMatch ──► [2D conditional] ──► scenario nodes
+                           │
+                           └──► END (short circuit — format error or critical fields missing)
+                           └──► END (short circuit — confident_match + catastrophic keyword gap)
+
+awaitHuman ──► rescore ──► analyzeSkepticalReconciliation ──► END
+
+All scenario nodes ──► END
+```
+
+### ATS parse nodes — `parseResumeATS`, `parseJobATS`
+
+Run in parallel. Mechanical, literal extraction — no semantic inference. Small model, fast, cheap.
+
+**Resume ATS parse extracts:**
+- `contactInfo` — name, email, phone. Critical fields. If missing, hard stop.
+- `jobTitle` — exact current title as written
+- `workExperienceDates` — validates parseability, flags inconsistent formats
+- `skillsVerbatim` — keywords exactly as written in the resume, no inference
+- `sectionHeaders` — standard or non-standard, flags unclassified sections
+- `layoutParseability` — single column, multi-column, graphics-heavy. Flags layouts that scramble text extraction.
+- `parsingErrors` — special characters, emojis, encoding issues
+
+**Job ATS parse extracts:**
+- `requiredKeywords` — exact terms from requirements section
+- `preferredKeywords` — exact terms from nice-to-have section
+- `titleExact` — the exact job title string
+- `requiredYOE` — years of experience if stated
+
+### `atsAnalysis` node
+
+Produces `atsScore` (0–100) and `atsProfile` from both ATS parse outputs. Owns all critical field validation. Gates whether fit parse runs at all.
+
+**Short circuit conditions:**
+
+Always short circuit, regardless of intent:
+- Resume is unreadable — multi-column, garbled extraction, no parseable text. Return format error to client. No further analysis.
+- Critical fields missing — `contactInfo` not extractable. Return critical field error.
+
+Short circuit only for `confident_match`:
+- Catastrophic keyword gap — near-zero overlap between `skillsVerbatim` and `requiredKeywords`. Return ATS reality check — the user thinks they match but the machine sees nothing. Spending tokens on fit analysis is misleading here.
+
+Never short circuit for `exploring_gap`:
+- Low ATS score is expected and informative for this user. The `atsProfile` is the most valuable output they receive — it tells them exactly what keywords and terminology they need to build toward. Route through the full pipeline regardless of ATS score.
+
+### Fit parse nodes — `parseResumeFit`, `parseJobFit`
+
+Run in parallel after ATS conditional passes. Semantic, inferential, generous. These nodes explicitly do not extract critical fields — ATS parse owns those.
+
+**Resume fit parse extracts:**
+- Career narrative — the arc of the candidate's work history and trajectory
+- Transferable experience — what their experience means beyond the literal title
+- `sourceRole` — semantic inference using controlled vocabulary
+- Strength signals — what this person is unusually good at based on trajectory
+- Hidden experience — work that exists but isn't foregrounded in the resume
+
+**Job fit parse extracts:**
+- Role narrative — what kind of person succeeds in this role beyond the keyword list
+- `targetRole` — semantic inference using controlled vocabulary
+- Implicit requirements — what the role needs that isn't stated explicitly
+
+### `scoreMatch` node
+
+Receives `atsProfile`, fit parse outputs, `intent`, and `intentContext`. Produces `fitScore` (0–100) and `atsScore` (carried from `atsAnalysis`). Derives `weakMatch = fitScore < 60` deterministically — LLM does not compute this.
+
+`intentContext` informs how much benefit of the doubt the model extends on the fit score. `atsProfile` informs the model of the machine-readability surface so the fit score reflects realistic hiring outcomes, not just semantic alignment.
+
+### Two-dimensional routing table
+
+Routing after `scoreMatch` uses both `atsScore` and `fitScore`:
+
+```
+                      fitScore
+                   Low (<50)        Mid (50–75)              High (75+)
+              ┌──────────────┬──────────────────────┬───────────────────────┐
+atsScore      │              │ S2: narrativeGap     │ S1b: ATSGap           │
+High (75+)    │ S5: honest   │ S3: archetypeGap     │ (strong fit,          │
+              │ misfit       │ (archetype if known) │ ATS exposure)         │
+              ├──────────────┼──────────────────────┼───────────────────────┤
+atsScore      │              │ S2/S3 + ATS problem  │ S1b: ATSGap           │
+Low (<50)     │ Short        │ (archetype still     │ (urgent — good        │
+              │ circuit*     │ applies if known)    │ candidate, invisible) │
+              └──────────────┴──────────────────────┴───────────────────────┘
+
+* Short circuit from atsAnalysis, before scoreMatch runs
+```
+
+Intent modifies routing in the mid/low fit cells:
+- `exploring_gap` + low fitScore → always route to roadmap analysis, never to skeptical reconciliation
+- `confident_match` + low fitScore → route to skeptical reconciliation or honest misfit
+- `exploring_gap` + `applying_now` + low fitScore → honest assessment with immediate actionable gaps
+- `exploring_gap` + `one_year_plus` + low fitScore → roadmap with timeline-appropriate milestones
 
 ### Conditional edge logic
 
 ```
-weakMatch = score < 60  (derived here, not from LLM)
+atsScore and fitScore both known
+weakMatch = fitScore < 60  (derived, not LLM output)
 
-if score >= 75:
-  → analyzeStrongMatch
+// ATS short circuits already handled before this point
 
-elif score >= 50 and archetypeContext is not null:
-  → analyzeArchetypeGap
+if fitScore >= 75 and atsScore >= 75:
+  → analyzeStrongMatch (Scenario 1a)
 
-elif score >= 60:
-  → analyzeNarrativeGap
+if fitScore >= 75 and atsScore < 75:
+  → analyzeATSGap (Scenario 1b — urgent)
+
+elif fitScore >= 50 and archetypeContext is not null:
+  → analyzeArchetypeGap (Scenario 3)
+  // atsScore low: node receives atsProfile, includes ATS advice alongside archetype advice
+
+elif fitScore >= 60:
+  → analyzeNarrativeGap (Scenario 2)
+  // atsScore low: node receives atsProfile, includes ATS advice
+
+elif intent is "exploring_gap":
+  → analyzeRoadmap (exploring_gap variant of Scenario 3/4)
 
 elif humanContext is absent:
   → awaitHuman
 
 else:
-  → analyzeSkepticalReconciliation
+  → analyzeSkepticalReconciliation (Scenario 4/5)
 ```
 
-Score ranges overlap (50–70 for Scenario 3, 60–75 for Scenario 2). The archetype check is evaluated before the `score >= 60` branch — if an archetype is known and score is 50–70, `analyzeArchetypeGap` takes priority over `analyzeNarrativeGap`. The prose description is authoritative; the code must follow this order.
+Archetype check is evaluated before `fitScore >= 60` branch — archetype takes priority in the 50–70 overlap range. The prose description is authoritative; code must follow this order.
 
-### rescore node
+---
 
-The existing `rescore` node routes to `analyzeSkepticalReconciliation` after HITL resume. humanContext is in state at that point, so the skeptical reconciliation path is always correct after a human interrupt.
+## Scenarios
+
+### Scenario 1a — Strong fit, ATS ready
+**fitScore:** 75+  
+**atsScore:** 75+  
+**Graph node:** `analyzeStrongMatch`
+
+The candidate fits the role and their resume surfaces correctly to the machine. The rarest case. `resumeAdvice` may be empty — this is correct behaviour, not a failure. The model should not manufacture advice.
+
+**What the user needs:** Confirmation they are a strong fit on both dimensions. Minimal or no resume advice.
+
+---
+
+### Scenario 1b — Strong fit, ATS exposure
+**fitScore:** 75+  
+**atsScore:** < 75  
+**Graph node:** `analyzeATSGap`
+
+The candidate genuinely fits the role but their resume won't survive automated filtering before a human sees them. This is the highest urgency advice case — the candidate is good but invisible. The advice is not "do more work," it is "describe your existing work differently."
+
+The model looks for:
+- Bullet points where the candidate's language describes the same thing the JD describes but uses different terminology — flag the JD term and where to swap it in
+- Keywords present in the JD that are absent from the resume even though the underlying experience exists
+- Section ordering — if the JD leads with something the candidate buries, flag the reorder
+- Layout issues flagged by `atsProfile` — multi-column, graphics, non-standard headers
+
+Advice must be specific and surgical. "Change 'built internal tooling' to 'developed developer productivity tooling' to match the JD's exact framing" is correct. "Strengthen your experience section" is not.
+
+**What the user needs:** Urgent, precise ATS alignment advice. Confirmation the underlying fit is strong. No roadmap — they don't need to do more work, they need to communicate existing work better.
+
+---
+
+### Scenario 2 — Narrative fit, resume doesn't show it
+**fitScore:** 60–75  
+**atsScore:** high or low  
+**Graph node:** `analyzeNarrativeGap`
+
+The candidate's career trajectory fits the role but their resume is framed around their previous identity, not their target one. The gap isn't skills — it's presentation. If `atsScore` is also low, the node receives `atsProfile` and includes ATS-specific reframing advice alongside narrative reframing.
+
+**What the user needs:** Reframing advice. If human context is absent or the model can't connect it to the role, a specific `contextPrompt` asking for the experience that would close the framing gap.
+
+---
+
+### Scenario 3 — Fits a known transition archetype, needs deliberate work *(paid tier)*
+**fitScore:** 50–70  
+**atsScore:** high or low  
+**Graph node:** `analyzeArchetypeGap`
+
+The candidate is making a recognisable career transition. Archetype-specific gap analysis is injected — known gaps, hidden strengths, credibility signals. If `atsScore` is low, the node also surfaces which archetype-specific keywords are absent from the resume ("you have LangGraph experience but your resume calls it 'workflow automation' — the ATS will never surface you for agent dev roles").
+
+When archetype context is unavailable, falls back silently to `analyzeNarrativeGap`.
+
+**What the user needs:** Structured, transition-specific gap analysis. Clear path forward. Honest about the work required.
+
+---
+
+### Scenario 4 — Weak fit, human context suggests a path
+**fitScore:** < 60  
+**intent:** `confident_match`  
+**humanContext:** present, model not yet convinced  
+**Graph node:** `analyzeSkepticalReconciliation`
+
+The candidate scored low but provided human context via HITL that suggests a plausible match. The model has weighed the context and isn't yet convinced — not because the context is irrelevant but because it lacks specificity.
+
+**What the user needs:** A specific `contextPrompt` — "you mentioned X, we'd need to know specifically A and B to factor that in."
+
+---
+
+### Scenario 5 — Genuine weak match
+**fitScore:** < 60  
+**intent:** `confident_match`  
+**humanContext:** absent or doesn't close the gap  
+**Graph node:** `analyzeSkepticalReconciliation` or `awaitHuman`
+
+The candidate is not suited for this role at this time. The model cannot formulate a question that would change its assessment. `contextPrompt` is null — its absence on a low score is a signal the gap is real.
+
+**What the user needs:** A direct, honest `weakMatchReason`. No false optimism.
+
+---
+
+### Scenario 6 — Exploring gap, roadmap mode *(archetype-powered roadmap is paid tier)*
+**fitScore:** any  
+**intent:** `exploring_gap`  
+**Graph node:** `analyzeRoadmap`
+
+The user has declared they know they're off. The score is not a surprise — it's a starting point. The output is a structured roadmap calibrated to their `timeline` and `currentStatus`. `one_year_plus` + `starting_from_scratch` gets a different roadmap than `applying_now` + `side_projects` + `self_taught`.
+
+HITL never fires for `exploring_gap` users regardless of fitScore — they came for the gap, interrupting them for context is the wrong interaction.
+
+**What the user needs:** Structured gap analysis with timeline-appropriate milestones. Honest about distance. `atsProfile` surfaced as a keyword target list — "these are the terms you need to get into your resume."
 
 ---
 
 ## New and changed fields
 
-### `contextPrompt` (new)
-A question or prompt generated by the model, surfaced in the UI, asking the user for specific information that would materially change their score.
+### `atsScore` (new — graph state)
+0–100. Produced by `atsAnalysis`. Independent of `fitScore`. Carried through state to all scenario nodes.
 
-- Present when: score is low or mid-range AND the model sees a plausible path to a better score
-- Absent (null) when: the match is genuinely weak and no context would help (Scenario 5)
-- Content varies by trigger:
-  - No human context provided → open-ended, inviting ("your resume shows X, is there relevant experience not listed?")
-  - Human context present but unconvincing → specific and skeptical ("you mentioned Z, we'd need to know A and B specifically")
-- Null `contextPrompt` on a low score is meaningful — it means the model has considered the case and has no question worth asking
-- `contextPrompt` is a response payload field only — it does not trigger a second HITL interrupt in any flow
+### `atsProfile` (new — graph state)
+Structured output of `atsAnalysis`. Contains keyword overlap, missing required keywords, layout flags, parsing errors. Injected into scenario nodes that need it.
+
+### `intent` (new — graph state)
+`"confident_match"` | `"exploring_gap"`. From request body. Used for routing and as fit score modifier.
+
+### `intentContext` (new — graph state)
+`ConfidentMatchContext` | `ExploringGapContext`. From request body. Shapes benefit of the doubt on fit score and roadmap depth on `exploring_gap` runs.
+
+### `contextPrompt` (new — response field)
+A question generated by the model asking for specific information that would materially change the score. Present when the model sees a plausible path to a better score. Null when the gap is real and no context would help. Null `contextPrompt` on a low score is meaningful. Does not trigger a second HITL interrupt.
 
 ### `weakMatch` (changed — now derived)
-Previously an LLM output field. Now derived deterministically as `score < 60` in the `scoreMatch` node after parsing. The LLM is not asked to compute this. The `superRefine` cross-field validation in `MatchSchema` is removed — `weakMatchReason` presence validation moves to the node layer.
+Derived deterministically as `fitScore < 60` in the `scoreMatch` node. LLM does not compute this. `superRefine` cross-field validation removed from `MatchSchema` — validation moves to node layer.
 
 ### `weakMatchReason` (unchanged in position, clarified in intent)
-Remains an LLM output field. Only meaningful when `score < 60`. Should be honest and direct in Scenario 5, and explain the specific context gap in Scenario 4. Not motivational copy.
+LLM output field. Only meaningful when `fitScore < 60`. Honest and direct in Scenario 5. Explains the specific context gap in Scenario 4. Not motivational copy.
 
 ### `resumeAdvice` (behaviour change)
-In Scenario 1, the model is explicitly permitted to return an empty array. Sparse advice on a strong match is correct behaviour, not a failure.
+Empty array is correct in Scenario 1a. Scenario 1b advice is ATS-specific and surgical. Scenario 6 advice is roadmap-structured. The model is not permitted to pad advice to appear helpful.
+
+### Critical fields (moved)
+`contactInfo`, `jobTitle`, `workExperienceDates` move from `MatchSchema` to `atsProfile`. They are extracted by ATS parse nodes, not fit analysis. If critical fields are missing, the graph short-circuits before fit analysis runs.
 
 ---
 
-## Upfront human context — UI change
+## HITL — updated behaviour
 
-### Current behaviour
-The Chrome extension popup collects resume text and job description only. Human context is only collected after a low score triggers HITL.
+HITL fires only when:
+- `fitScore < 60` AND
+- `humanContext` is absent AND
+- `intent` is `confident_match`
 
-### Proposed behaviour
-Add an optional free-text field to the extension popup before the first run:
+`exploring_gap` users never hit HITL. They came for the gap — interrupting them is the wrong interaction.
 
-> "Anything about your background this resume doesn't show? (optional)"
+After HITL, the user provides free-text `humanContext` via `/api/match/resume`. This is the only point in the flow where free text is accepted. `rescore` runs, then routes to `analyzeSkepticalReconciliation` regardless of new score — the conversation context is different from a fresh run.
 
-Maps to the existing `humanContext` field in `/api/match/run` — no backend schema change required.
-
-### HITL path after this change
-HITL fires only when `score < 60` AND `humanContext` is absent. This changes from the current behaviour where HITL fires on `score < 60` unconditionally.
-
-If `humanContext` was provided upfront and score is still low, the graph routes directly to `analyzeSkepticalReconciliation`. `contextPrompt` in the result tells the user what specific follow-up is needed — no interrupt.
+`contextPrompt` is included in the interrupted SSE event payload — `{ score, threadId, contextPrompt }` — so the frontend can show the user specifically what to provide rather than a generic prompt.
 
 ---
 
 ## Resolved decisions
 
-**contextPrompt and HITL:** `contextPrompt` is a payload field only. No second interrupt in any flow. Surfaces in UI inline with result.
+**Intent-aware short circuits:** Unreadable resume and missing critical fields always short-circuit. Catastrophic keyword gap short-circuits only for `confident_match`. `exploring_gap` users never short-circuit on low ATS — the gap is what they came to see.
 
-**contextPrompt in interrupted SSE event:** Included in the interrupted event payload when HITL fires. The scoring chain runs before routing — `contextPrompt` may already be in state when the interrupt fires. Including it lets the frontend show the user specifically what to provide rather than a generic prompt. The runner interrupted event emits `{ score, threadId, contextPrompt }` rather than `{ score, threadId }` only.
+**contextPrompt and HITL:** contextPrompt triggers a single HITL interrupt — the user sees the question, provides free-text context via /api/match/resume, and rescore runs. After that single exchange, no further contextPrompt is generated. The loop is capped at one round of clarification. rescore always routes to analyzeSkepticalReconciliation on the second pass regardless of new score.
 
-**Score branching implementation:** Separate graph nodes per scenario. Not a single prompt with conditional instruction blocks. Routing is a graph responsibility — the score is known before routing happens.
+**contextPrompt in interrupted SSE event:** Included. Lets frontend show specific follow-up prompt rather than generic HITL message.
 
-**Scenario 3 fallback:** When archetype context is unavailable, the conditional edge skips `analyzeArchetypeGap` and routes to `analyzeNarrativeGap`. Silent fallback, no UI indication.
+**Score branching implementation:** Separate graph nodes per scenario. Not a single prompt with conditional instruction blocks. Routing is a graph responsibility — scores are known before routing happens.
 
-**sourceRole/targetRole vocabulary:** Free text extracted by parse nodes with LLM instructed to use a controlled vocabulary of known values. Exact-match lookup against registry. Mismatches return null from `buildContext` and degrade gracefully. See `prd-archetype-system.md`.
+**Scenario 3 fallback:** When archetype context unavailable, conditional edge routes to `analyzeNarrativeGap` silently. No UI indication.
+
+**sourceRole/targetRole vocabulary:** Free text with LLM instructed to use controlled vocabulary. Exact-match lookup. Mismatches degrade gracefully to null. See `prd-archetype-system.md`.
+
+**weakMatch derivation:** In `scoreMatch` node, not inside chain `invoke`. Chain returns LLM output, node derives deterministic fields before writing to state.
+
+**mentalModelShift:** Included in `ArchetypeContext`, injected into `analyzeArchetypeGap` only. See `prd-archetype-system.md`.
+
+**rescore after HITL:** Fixed edge to `analyzeSkepticalReconciliation` always, regardless of new score. Conversation context after HITL is different from a fresh run.
+
+**contextPrompt preservation in gap analysis:** Strip from output schema, reattach programmatically from input. Trusting the model to echo it is a reliability risk.
+
+**mentalModelShift type:** Structured object `{ from: string; to: string; practicalImplication: string }`.
 
 ---
 
 ## Open questions
 
-- Is there a minimum score threshold (e.g. < 20) below which we skip all analysis nodes and return early with just `weakMatchReason`?
-- Multi-model routing per node is a future concern — each analysis node is a candidate for a different model. `analyzeStrongMatch` is a small/fast model candidate. `analyzeSkepticalReconciliation` is a stronger model candidate. Implemented with eval harness PRD.
+- Is there a minimum fitScore threshold (e.g. < 20) below which we skip all scenario analysis and return early with just `weakMatchReason`, even for `exploring_gap` users?
+- Should `atsScore` be surfaced in the UI as a separate visible number, or only used internally for routing and advice generation?
+- Multi-model routing per node — `analyzeStrongMatch` and `parseResumeATS`/`parseJobATS` are small/fast model candidates. `analyzeSkepticalReconciliation` and `analyzeArchetypeGap` are stronger model candidates. Implemented with eval harness PRD.
 
 ---
 
@@ -226,3 +459,5 @@ If `humanContext` was provided upfront and score is still low, the graph routes 
 - Specific prompt copy for each analysis node (owned by implementation, validated by eval harness)
 - Model selection per node (designed here, implemented with eval harness PRD)
 - Archetype injection details (see `prd-archetype-system.md`)
+- Frontend UI implementation of intent selector and intentContext dropdowns
+- Zod schema definitions for request body validation (owned by implementation)
