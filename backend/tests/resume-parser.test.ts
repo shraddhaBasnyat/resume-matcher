@@ -18,6 +18,7 @@ describe("ResumeSchema", () => {
       { degree: "B.Sc. Computer Science", institution: "State University" },
     ],
     careerNarrative: {},
+    sourceRole: "backend_swe",
   };
 
   it("accepts a valid resume object", () => {
@@ -79,6 +80,22 @@ describe("ResumeSchema", () => {
       education: [],
     });
     expect(result.success).toBe(true);
+  });
+
+  it("coerces an out-of-vocabulary sourceRole to 'unknown'", () => {
+    const result = ResumeSchema.safeParse({ ...validResume, sourceRole: "cto" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.sourceRole).toBe("unknown");
+    }
+  });
+
+  it("preserves a valid sourceRole value as-is", () => {
+    const result = ResumeSchema.safeParse({ ...validResume, sourceRole: "ml_engineer" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.sourceRole).toBe("ml_engineer");
+    }
   });
 
   it("rejects non-number totalYearsExperience", () => {
@@ -216,6 +233,7 @@ describe("buildResumeChain — validation failure handling", () => {
       education: [],
       careerNarrative: { trajectory: "IC to lead" },
       // dominantTheme, inferredStrengths, careerMotivation, resumeStoryGaps omitted
+      sourceRole: "backend_swe",
     };
 
     const mockInvoke = vi.fn().mockResolvedValue(partialOutput);
@@ -243,6 +261,7 @@ describe("buildResumeChain — validation failure handling", () => {
       experience: [],
       education: [],
       careerNarrative: {},
+      sourceRole: "backend_swe",
     };
 
     const mockInvoke = vi.fn().mockResolvedValue(validOutput);
@@ -291,6 +310,7 @@ describe("buildResumeChain", () => {
         careerMotivation: "Building reliable backend infrastructure",
         resumeStoryGaps: [],
       },
+      sourceRole: "backend_swe",
     };
 
     const mockInvoke = vi.fn().mockResolvedValue(expectedOutput);

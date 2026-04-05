@@ -1,10 +1,41 @@
+// ---------------------------------------------------------------------------
+// Career transition intent — structured context collected before first run
+// ---------------------------------------------------------------------------
+
+export interface ConfidentMatchContext {
+  basis: Array<
+    | "direct_experience"
+    | "adjacent_role"
+    | "side_projects"
+    | "self_taught"
+    | "career_pivot"
+  >;
+}
+
+export interface ExploringGapContext {
+  timeline: "applying_now" | "three_to_six_months" | "one_year_plus";
+  currentStatus: Array<
+    | "side_projects"
+    | "self_taught"
+    | "transferable_skills"
+    | "starting_from_scratch"
+    | "already_retraining"
+  >;
+}
+
+// ---------------------------------------------------------------------------
+// Core domain types
+// ---------------------------------------------------------------------------
+
 export interface MatchResult {
-  score: number;
+  fitScore: number;
+  atsScore?: number;
   matchedSkills: string[];
   missingSkills: string[];
   narrativeAlignment: string;
   gaps: string[];
   resumeAdvice: string[];
+  contextPrompt: string | null;
   weakMatch: boolean;
   weakMatchReason?: string;
 }
@@ -29,6 +60,7 @@ export interface Resume {
   totalYearsExperience?: number;
   keywords?: string[];
   careerNarrative: CareerNarrative;
+  sourceRole: string;
 }
 
 export interface Job {
@@ -39,12 +71,19 @@ export interface Job {
   keywords: string[];
   experienceYears?: number;
   seniorityLevel?: "junior" | "mid" | "senior" | "lead" | "manager";
+  targetRole: string;
 }
+
+// ---------------------------------------------------------------------------
+// API request / response types
+// ---------------------------------------------------------------------------
 
 export interface RunMatchRequest {
   resumeText: string;
   jobText: string;
-  humanContext?: string;
+  intent: "confident_match" | "exploring_gap";
+  intentContext: ConfidentMatchContext | ExploringGapContext;
+  humanContext?: string; // HITL only — absent on first run
 }
 
 export interface ResumeMatchRequest {
@@ -59,16 +98,16 @@ export interface CancelMatchRequest {
 }
 
 export interface MatchResponse {
-  score: number;
+  fitScore: number;
+  atsScore?: number;
   matchedSkills: string[];
   missingSkills: string[];
   narrativeAlignment: string;
   gaps: string[];
   resumeAdvice: string[];
+  contextPrompt: string | null;
   weakMatch: boolean;
   weakMatchReason?: string;
-  resumeData: Resume;
-  jobData: Job;
   interrupted: boolean;
   threadId: string;
   _meta: { traceUrl: string | null; durationMs: number };

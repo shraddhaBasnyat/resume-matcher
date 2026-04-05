@@ -4,6 +4,7 @@ import { activeRuns } from "../../active-runs.js";
 import { NodeProgressEmitter } from "./emitter.js";
 import { graph } from "../../graphs/scoring/scoring-graph-instance.js";
 import { getCheckpointer } from "../../graphs/scoring/scoring-graph.js";
+import type { ConfidentMatchContext, ExploringGapContext } from "../../types/api.js";
 
 type SharedOptions = {
   humanContext?: string;
@@ -17,6 +18,8 @@ type FreshRunOptions = SharedOptions & {
   kind: "fresh";
   resumeText: string;
   jobText: string;
+  intent: "confident_match" | "exploring_gap";
+  intentContext: ConfidentMatchContext | ExploringGapContext;
 };
 
 type ResumeRunOptions = SharedOptions & {
@@ -51,7 +54,13 @@ async function invokeGraph(options: FreshRunOptions | ResumeRunOptions, invokeCo
     return graph.invoke(new Command({ resume: options.humanContext }), invokeConfig);
   }
   return graph.invoke(
-    { resumeText: options.resumeText, jobText: options.jobText, humanContext: options.humanContext ?? "" },
+    {
+      resumeText: options.resumeText,
+      jobText: options.jobText,
+      intent: options.intent,
+      intentContext: options.intentContext,
+      userTier: "base", // hardcoded until auth middleware lands in Pass 2
+    },
     invokeConfig
   );
 }
@@ -69,20 +78,30 @@ async function emitResult(
 
   if (isInterrupted) {
     emit("interrupted", {
-      score: state.matchResult?.score ?? null,
+      fitScore: state.matchResult?.fitScore ?? null,
+      contextPrompt: state.matchResult?.contextPrompt ?? null,
       threadId,
     });
   } else {
-    const { matchResult, resumeData, jobData } = state;
+    const { matchResult } = state;
     if (!matchResult) {
       emit("error", { error: "Incomplete graph result", message: "Graph completed but matchResult was not populated." });
       return;
     }
+    // Explicit field list — resumeData and jobData are internal graph state only,
+    // not surfaced to the client.
     emit("completed", {
       result: {
-        ...matchResult,
-        resumeData,
-        jobData,
+        fitScore: matchResult.fitScore,
+        atsScore: matchResult.atsScore,
+        matchedSkills: matchResult.matchedSkills,
+        missingSkills: matchResult.missingSkills,
+        narrativeAlignment: matchResult.narrativeAlignment,
+        gaps: matchResult.gaps,
+        resumeAdvice: matchResult.resumeAdvice,
+        contextPrompt: matchResult.contextPrompt,
+        weakMatch: matchResult.weakMatch,
+        weakMatchReason: matchResult.weakMatchReason,
         interrupted: false,
         threadId,
         _meta: {

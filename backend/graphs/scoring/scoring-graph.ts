@@ -71,7 +71,7 @@ export function buildScoringGraph(model: BaseChatModel) {
   }
 
   function routeAfterScore(state: GraphStateType): Extract<NodeName, "gapAnalysis" | "awaitHuman"> {
-    return (state.matchResult?.score ?? 0) >= 60 ? NODES.GAP_ANALYSIS : NODES.AWAIT_HUMAN;
+    return (state.matchResult?.fitScore ?? 0) >= 60 ? NODES.GAP_ANALYSIS : NODES.AWAIT_HUMAN;
   }
 
   const workflow = new StateGraph(GraphState)

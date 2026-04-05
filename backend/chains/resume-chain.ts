@@ -4,6 +4,18 @@ import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import type { Resume } from "../types/api.js";
 import { RootRunCapture, logValidationFailure } from "../langsmith.js";
 
+const SOURCE_ROLE_VOCABULARY = [
+  "backend_swe",
+  "frontend_swe",
+  "fullstack_swe",
+  "ai_agent_dev",
+  "ml_engineer",
+  "data_scientist",
+  "devops_engineer",
+  "product_manager",
+  "unknown",
+] as const;
+
 export const ResumeSchema: z.ZodType<Resume, z.ZodTypeDef, unknown> = z.object({
   name: z.string().describe("Full name of the candidate"),
   email: z.string().email().describe("Email address of the candidate"),
@@ -51,6 +63,14 @@ export const ResumeSchema: z.ZodType<Resume, z.ZodTypeDef, unknown> = z.object({
       resumeStoryGaps: z.array(z.string()).default([]).describe("Gaps, contradictions, or unexplained transitions in the career story"),
     })
     .describe("Inferred career narrative — read between the lines, do not summarize"),
+  sourceRole: z
+    .union([
+      z.enum(SOURCE_ROLE_VOCABULARY),
+      z.string().transform((): typeof SOURCE_ROLE_VOCABULARY[number] => "unknown"),
+    ])
+    .describe(
+      `The candidate's current or most recent role category. Use controlled vocabulary only: ${SOURCE_ROLE_VOCABULARY.join(" | ")}. Infer semantically from the career trajectory — do not use the literal job title. Use "unknown" only when the role category genuinely cannot be determined.`
+    ),
 }) as z.ZodType<Resume, z.ZodTypeDef, unknown>;
 
 export type { Resume };
@@ -77,7 +97,12 @@ This is not optional. Read the full experience section carefully and infer:
 - inferredStrengths: 3-5 strengths implied by the career progression, not just listed skills
 - careerMotivation: what this person seems to move toward based on their choices
 - resumeStoryGaps: skills or experiences listed elsewhere that have no supporting evidence in the experience section
-Do not skip this field. Do not leave it null.`;
+Do not skip this field. Do not leave it null.
+
+For sourceRole, infer the candidate's role category from their overall career trajectory.
+Use ONLY these values: backend_swe | frontend_swe | fullstack_swe | ai_agent_dev | ml_engineer | data_scientist | devops_engineer | product_manager | unknown
+Choose the value that best describes their dominant professional identity, not just their most recent title.
+Use "unknown" only when the role category genuinely cannot be determined from the resume.`;
 
 const HUMAN_PROMPT = `Parse the following resume and extract the structured data:
 

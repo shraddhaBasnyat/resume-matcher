@@ -2,6 +2,8 @@ import { Annotation } from "@langchain/langgraph";
 import type { Resume } from "../../chains/resume-chain.js";
 import type { JobDescription } from "../../chains/job-chain.js";
 import type { MatchResult } from "../../chains/scoring-chain.js";
+import type { ArchetypeContext } from "../../archetypes/types.js";
+import type { ConfidentMatchContext, ExploringGapContext } from "../../types/api.js";
 
 /**
  * GRAPH STATE
@@ -55,6 +57,31 @@ export const GraphState = Annotation.Root({
   // LangGraph thread ID — for HITL resume
   threadId: Annotation<string | undefined>({
     default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  // Structured user intent — set on first run, persisted through HITL
+  intent: Annotation<"confident_match" | "exploring_gap" | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  intentContext: Annotation<ConfidentMatchContext | ExploringGapContext | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  // Archetype detection result — set by detectArchetype node (Pass 2)
+  archetypeContext: Annotation<ArchetypeContext | null>({
+    default: () => null,
+    reducer: (_prev, next) => next,
+  }),
+  // HITL loop guard — set to true by awaitHuman node before interrupting.
+  // Prevents a second interrupt on the rescore pass.
+  hitlFired: Annotation<boolean>({
+    default: () => false,
+    reducer: (_prev, next) => next,
+  }),
+  // User tier — set from auth middleware (Pass 2). Hardcoded to "base" until then.
+  userTier: Annotation<"base" | "paid">({
+    default: () => "base",
     reducer: (_prev, next) => next,
   }),
 });
