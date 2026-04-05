@@ -2,27 +2,19 @@ import { MatchResponse } from "@/lib/match-constants";
 
 interface MatchResultProps {
   result: MatchResponse;
-  showResumeData: boolean;
-  showJobData: boolean;
-  onToggleResumeData: (open: boolean) => void;
-  onToggleJobData: (open: boolean) => void;
   scoreColor: (score: number) => string;
 }
 
 export function MatchResult({
   result,
-  showResumeData,
-  showJobData,
-  onToggleResumeData,
-  onToggleJobData,
   scoreColor,
 }: MatchResultProps) {
   return (
     <div className="space-y-6">
       {/* Score */}
       <div className="flex items-baseline gap-2">
-        <span className={`text-6xl font-bold ${scoreColor(result.score)}`}>
-          {result.score}
+        <span className={`text-6xl font-bold ${scoreColor(result.fitScore)}`}>
+          {result.fitScore}
         </span>
         <span className="text-2xl text-gray-400">/ 100</span>
       </div>
@@ -96,34 +88,6 @@ export function MatchResult({
           {result.weakMatchReason}
         </p>
       )}
-
-      {/* Collapsible: how resume was parsed */}
-      <details
-        open={showResumeData}
-        onToggle={(e) => onToggleResumeData((e.target as HTMLDetailsElement).open)}
-        className="border border-gray-200 rounded"
-      >
-        <summary className="px-4 py-2 cursor-pointer text-sm font-medium text-gray-600 select-none">
-          How your resume was parsed
-        </summary>
-        <pre className="p-4 text-xs bg-gray-50 overflow-auto max-h-80 border-t border-gray-200">
-          {JSON.stringify(result.resumeData, null, 2)}
-        </pre>
-      </details>
-
-      {/* Collapsible: how job was parsed */}
-      <details
-        open={showJobData}
-        onToggle={(e) => onToggleJobData((e.target as HTMLDetailsElement).open)}
-        className="border border-gray-200 rounded"
-      >
-        <summary className="px-4 py-2 cursor-pointer text-sm font-medium text-gray-600 select-none">
-          How the job was parsed
-        </summary>
-        <pre className="p-4 text-xs bg-gray-50 overflow-auto max-h-80 border-t border-gray-200">
-          {JSON.stringify(result.jobData, null, 2)}
-        </pre>
-      </details>
 
       {/* LangSmith trace link */}
       {result._meta.traceUrl && (

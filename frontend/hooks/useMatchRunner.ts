@@ -19,18 +19,15 @@ export interface UseMatchRunnerReturn {
   fileInputRef: React.RefObject<HTMLInputElement>;
   humanContext: string;
   interruptedScore: number | null;
+  interruptedContextPrompt: string | null;
   result: MatchResponse | null;
   matchError: string | null;
   progress: Record<string, NodeProgress>;
-  showResumeData: boolean;
-  showJobData: boolean;
   isInputsDisabled: boolean;
   canMatch: boolean;
   showCancel: boolean;
   setJobDescription: (v: string) => void;
   setHumanContext: (v: string) => void;
-  setShowResumeData: (v: boolean) => void;
-  setShowJobData: (v: boolean) => void;
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => Promise<void>;
   handleMatch: (e: React.FormEvent) => Promise<void>;
   handleRescore: (e: React.FormEvent) => Promise<void>;
@@ -58,6 +55,7 @@ export function useMatchRunner(): UseMatchRunnerReturn {
   // HITL
   const [humanContext, setHumanContext] = useState("");
   const [interruptedScore, setInterruptedScore] = useState<number | null>(null);
+  const [interruptedContextPrompt, setInterruptedContextPrompt] = useState<string | null>(null);
 
   // Results
   const [result, setResult] = useState<MatchResponse | null>(null);
@@ -65,10 +63,6 @@ export function useMatchRunner(): UseMatchRunnerReturn {
 
   // Node progress
   const [progress, setProgress] = useState<Record<string, NodeProgress>>(INITIAL_PROGRESS);
-
-  // Collapsible toggles
-  const [showResumeData, setShowResumeData] = useState(false);
-  const [showJobData, setShowJobData] = useState(false);
 
   // Abort reader ref — used to abandon an in-flight stream
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
@@ -149,7 +143,8 @@ export function useMatchRunner(): UseMatchRunnerReturn {
 
         case "interrupted":
           receivedTerminalEvent = true;
-          setInterruptedScore(payload.score as number | null);
+          setInterruptedScore(payload.fitScore as number | null);
+          if (payload.contextPrompt) setInterruptedContextPrompt(payload.contextPrompt as string);
           if (payload.threadId) setThreadId(payload.threadId as string);
           setAppState("interrupted");
           break;
@@ -226,7 +221,12 @@ export function useMatchRunner(): UseMatchRunnerReturn {
       const res = await fetch(`${BACKEND_URL}/api/match/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resumeText, jobText: jobDescription }),
+        body: JSON.stringify({
+          resumeText,
+          jobText: jobDescription,
+          intent: "confident_match",
+          intentContext: { basis: ["direct_experience"] },
+        }),
       });
 
       if (!res.ok || !res.body) {
@@ -375,18 +375,15 @@ export function useMatchRunner(): UseMatchRunnerReturn {
     fileInputRef,
     humanContext,
     interruptedScore,
+    interruptedContextPrompt,
     result,
     matchError,
     progress,
-    showResumeData,
-    showJobData,
     isInputsDisabled,
     canMatch,
     showCancel,
     setJobDescription,
     setHumanContext,
-    setShowResumeData,
-    setShowJobData,
     handleFileUpload,
     handleMatch,
     handleRescore,

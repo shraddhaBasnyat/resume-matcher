@@ -19,15 +19,11 @@ export default function Home() {
     result,
     matchError,
     progress,
-    showResumeData,
-    showJobData,
     isInputsDisabled,
     canMatch,
     showCancel,
     setJobDescription,
     setHumanContext,
-    setShowResumeData,
-    setShowJobData,
     handleFileUpload,
     handleMatch,
     handleRescore,
@@ -117,10 +113,6 @@ export default function Home() {
       {appState === "completed" && result && (
         <MatchResult
           result={result}
-          showResumeData={showResumeData}
-          showJobData={showJobData}
-          onToggleResumeData={setShowResumeData}
-          onToggleJobData={setShowJobData}
           scoreColor={scoreColor}
         />
       )}
