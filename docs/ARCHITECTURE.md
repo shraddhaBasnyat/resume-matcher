@@ -27,17 +27,29 @@ production readiness.
   RedisSaver) — without it, HITL sessions are dropped silently on restart.
 
 ## Node data flow
+
 `parseResume` and `parseJob` run **in parallel** from `__start__` — both edges are added
 directly to `__start__` in the StateGraph, so they execute concurrently before `scoreMatch`.
 
-| Node        | Reads                             | Writes        | Notes |
-|-------------|-----------------------------------|---------------|-------|
-| parseResume | resumeText                        | resumeData    | parallel with parseJob |
-| parseJob    | jobText                           | jobData       | parallel with parseResume |
-| scoreMatch  | resumeData, jobData, humanContext | matchResult   | |
-| awaitHuman  | —                                 | humanContext  | LangGraph `interrupt()` node; only reached when score < 60; pauses the graph until `/api/match/resume` is called |
-| rescore     | resumeData, jobData, humanContext | matchResult   | same function as scoreMatch, re-bound as a separate node so humanContext is in state |
-| gapAnalysis | matchResult, resumeData, jobData  | matchResult   | |
+| Node        | Reads                                      | Writes                              | Notes |
+|-------------|--------------------------------------------|-------------------------------------|-------|
+| parseResume | resumeText                                 | resumeData (incl. sourceRole)       | parallel with parseJob |
+| parseJob    | jobText                                    | jobData (incl. targetRole)          | parallel with parseResume |
+| scoreMatch  | resumeData, jobData, intent, intentContext | matchResult (fitScore, weakMatch derived) | weakMatch = fitScore < 60, not LLM output |
+| awaitHuman  | —                                          | humanContext                        | LangGraph interrupt(); fitScore < 60 + confident_match only; pauses until /api/match/resume |
+| rescore     | resumeData, jobData, humanContext          | matchResult                         | same function as scoreMatch, re-bound so humanContext is in state |
+| gapAnalysis | matchResult, resumeData, jobData           | matchResult                         | being replaced by scenario nodes in Pass 2 |
+
+### New graph state fields (Pass 1)
+
+| Field | Type | Default | Source |
+|-------|------|---------|--------|
+| intent | "confident_match" \| "exploring_gap" | required | request body |
+| intentContext | ConfidentMatchContext \| ExploringGapContext | required | request body |
+| archetypeContext | ArchetypeContext \| null | null | detectArchetype node (Pass 2) |
+| hitlFired | boolean | false | set by awaitHuman node (Pass 2) |
+| userTier | "base" \| "paid" | "base" | auth middleware (Pass 2), hardcoded for now |
+| atsScore | number \| undefined | undefined | atsAnalysis node (Phase 1 ATS pipeline) |
 
 ### Cancellation
 
@@ -63,27 +75,21 @@ Production traffic: Job queue (BullMQ, Inngest) — cancellation,
 - withStructuredOutput(Schema) shapes LLM output into an object
   but does NOT run Zod validation or apply .default() values
 - Manual Schema.safeParse(result) added after withStructuredOutput() in
-  resume-chain, job-chain, and scoring-chain to apply defaults and catch
-  invalid shapes
-- Known gap: gap-analysis-chain is missing the safeParse call — it returns
-  the raw structuredModel result. Fix is coupled to the planned retry work
-  (critical vs non-critical field distinction) so it will land there.
-- Current gap: critical field failures (name, email) not yet routed
-  differently from non-critical — lands with the planned retry work
+  resume-chain, job-chain, scoring-chain, and gap-analysis-chain to apply
+  defaults and catch invalid shapes
+- weakMatch is no longer an LLM output field — derived deterministically
+  as fitScore < 60 in the scoreMatch node after chain returns
+- contextPrompt is stripped from gap-analysis-chain output schema and
+  reattached programmatically from input — model never regenerates it
+- sourceRole and targetRole validated as z.enum(SOURCE_ROLE_VOCABULARY).catch("unknown")
+  — invalid model output coerces to "unknown" transparently, which returns
+  null from buildContext and degrades gracefully
 
 ### resumeAdvice type
 - Defined in lib/schemas/match-schema.ts as z.array(z.string()) — string[],
   not a single string. Each element is one actionable resume suggestion.
   gapAnalysis rewrites this array with section-level advice referencing
   actual resume content.
-
-### Future: granular schemas per node
-Breaking ResumeSchema into smaller schemas per parsing strategy:
-- ContactSchema → regex (deterministic, free)
-- SkillsSchema → small LLM (fast, cheap)  
-- NarrativeSchema → large LLM (slow, expensive, only when needed)
-Each node validates its own schema before writing to state.
-Self-healing: if primary strategy fails, fall back to next tier.
 
 ## LangSmith observability
 
@@ -106,32 +112,71 @@ Self-healing: if primary strategy fails, fall back to next tier.
 
 | Route | Request body | Response |
 |---|---|---|
-| `POST /api/match/run` | `{ resumeText: string, jobText: string, humanContext?: string }` | SSE stream |
+| `POST /api/match/run` | `{ resumeText, jobText, intent, intentContext }` | SSE stream |
 | `POST /api/match/resume` | `{ threadId: string, humanContext: string }` | SSE stream |
 | `POST /api/match/cancel` | `{ threadId: string, rootRunId?: string, runStartTime?: number }` | `{ cancelled: true }` JSON |
 
-`/run` starts a fresh graph run. `/resume` resumes a HITL-interrupted run via
-LangGraph `Command({ resume })`. `/cancel` aborts the in-flight run via
-`activeRuns` and optionally tags the LangSmith trace as user-cancelled.
+`/run` starts a fresh graph run. `humanContext` is no longer accepted on first run — structured
+`intent` and `intentContext` replace it. Free text context is only accepted via `/resume` (HITL).
+
+`/resume` resumes a HITL-interrupted run via LangGraph `Command({ resume })`. `humanContext`
+must be a non-empty string — validated by Zod `z.string().min(1)` before the graph resumes.
+
+`/cancel` aborts the in-flight run via `activeRuns` and optionally tags the LangSmith trace
+as user-cancelled.
 
 All three routes validate their request bodies with Zod schemas before touching the graph.
-Note: `/run` and `/resume` use dedicated schema files (`run-schema.ts`, `resume-schema.ts`);
-`/cancel`'s schema is defined inline in its route file.
 
+### /api/match/run — request body shape
+```typescript
+{
+  resumeText: string
+  jobText: string
+  intent: "confident_match" | "exploring_gap"
+  intentContext: ConfidentMatchContext | ExploringGapContext
+}
 
-### /api/parse-resume — standalone PDF extraction utility
-Accepts `multipart/form-data` with a single `resume` field (PDF only).
-Uses `pdf2json` to extract raw text, then applies light regex cleanup to fix common
-PDF text-extraction artifacts (e.g. spaced-out characters like `S e n i o r → Senior`).
-Returns `{ text: string }` on success or `{ error, message }` on failure.
-Not connected to the LangGraph pipeline — useful for inspecting raw extracted text
-before passing it to `/api/match/run`.
+// confident_match — user believes they are a strong fit
+interface ConfidentMatchContext {
+  basis: Array<"direct_experience" | "adjacent_role" | "side_projects" | 
+               "self_taught" | "career_pivot">  // min 1
+}
+
+// exploring_gap — user wants to see how far off they are
+interface ExploringGapContext {
+  timeline: "applying_now" | "three_to_six_months" | "one_year_plus"
+  currentStatus: Array<"side_projects" | "self_taught" | "transferable_skills" | 
+                       "starting_from_scratch" | "already_retraining">  // min 1
+}
+```
+
+### /api/match/run — completed SSE event payload
+```typescript
+{
+  fitScore: number         // semantic fit score 0–100
+  atsScore: number | undefined  // ATS surface score — undefined until Phase 1
+  matchedSkills: string[]
+  missingSkills: string[]
+  narrativeAlignment: string
+  gaps: string[]
+  resumeAdvice: string[]
+  contextPrompt: string | null
+  weakMatch: boolean       // derived: fitScore < 60, not LLM output
+  weakMatchReason?: string
+}
+```
+
+Note: `resumeData` and `jobData` are no longer included in the completed event — internal
+graph state only, not surfaced to the client.
 
 ## Resilience strategies
 
 ### Implemented
-- safeParse + logValidationFailure on every chain output (except gap-analysis-chain — see schema section)
-- HITL interrupt for low confidence scores
+- safeParse + logValidationFailure on every chain output including gap-analysis-chain
+- weakMatch derived deterministically in scoreMatch node — removed from LLM schema
+- contextPrompt reattached programmatically in gap-analysis-chain — not regenerated by model
+- sourceRole/targetRole vocabulary enforced at schema level via z.enum().catch("unknown")
+- HITL interrupt for low confidence scores (fitScore < 60, confident_match intent)
 - AbortController for user-initiated cancellation
 - activeRuns Map (lib/active-runs.ts) — in-process memory only; maps threadId
   to abort fn + runStartTime; used by /api/match/cancel to abort in-flight runs
@@ -180,29 +225,6 @@ Render gives us a persistent process — these work without Redis:
 - Circuit breaker: if Anthropic has outages at scale
 - SIGTERM handler: worth adding for clean deploys on Render
 
-## Dual HITL pattern
-
-The same API supports two interaction patterns:
-
-Stateful (web app, localhost + Render):
-  → graph runs → interrupt fires → threadId returned
-  → user adds context → POST /resume with threadId → graph resumes
-  → works on Render because process is persistent
-  → checkpointer: MemorySaver locally, PostgresSaver on Render
-
-Stateless (Chrome extension):
-  → graph runs → low score returned to client
-  → user adds context → POST /run again with humanContext
-  → fresh graph run with humanContext in initial state
-  → chosen because extension popup closes on outside click
-     — threadId would be lost, paused graph orphaned
-
-Caller chooses the pattern. API supports both.
-
-Tradeoff: stateless re-runs parseResume + parseJob.
-Acceptable with Claude Haiku (~2-3s total).
-Not acceptable with local Ollama (~90s).
-
 ### Product model - Chrome Extension
 
 ### Beta (current)
@@ -216,7 +238,7 @@ Not acceptable with local Ollama (~90s).
 Layer 1: per-user monthly usage limit tracked in Supabase
 Layer 2: global Anthropic spending limit as safety net
 
-### Auth flow per request
+### Auth flow per request - Planned
 1. User logs in via Chrome extension → Supabase returns JWT
 2. JWT sent as Bearer token to Render backend
 3. Backend verifies JWT via Supabase service role key

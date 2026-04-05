@@ -16,7 +16,7 @@ const TARGET_ROLE_VOCABULARY = [
   "unknown",
 ] as const;
 
-export const JobSchema: z.ZodType<Job> = z.object({
+export const JobSchema: z.ZodType<Job, z.ZodTypeDef, unknown> = z.object({
   title: z.string().describe("Job title"),
   company: z.string().optional().describe("Company name"),
   requiredSkills: z.array(z.string()).describe("Skills explicitly required for the role"),
@@ -28,7 +28,10 @@ export const JobSchema: z.ZodType<Job> = z.object({
     .optional()
     .describe("Inferred seniority level of the role"),
   targetRole: z
-    .enum(TARGET_ROLE_VOCABULARY)
+    .union([
+      z.enum(TARGET_ROLE_VOCABULARY),
+      z.string().transform((): typeof TARGET_ROLE_VOCABULARY[number] => "unknown"),
+    ])
     .describe(
       `The role category this job is hiring for. Use controlled vocabulary only: ${TARGET_ROLE_VOCABULARY.join(" | ")}. Infer semantically from the role's responsibilities and requirements — do not use the literal job title. Use "unknown" only when the role category genuinely cannot be determined.`
     ),

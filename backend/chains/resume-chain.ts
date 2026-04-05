@@ -64,7 +64,10 @@ export const ResumeSchema: z.ZodType<Resume, z.ZodTypeDef, unknown> = z.object({
     })
     .describe("Inferred career narrative — read between the lines, do not summarize"),
   sourceRole: z
-    .string()
+    .union([
+      z.enum(SOURCE_ROLE_VOCABULARY),
+      z.string().transform((): typeof SOURCE_ROLE_VOCABULARY[number] => "unknown"),
+    ])
     .describe(
       `The candidate's current or most recent role category. Use controlled vocabulary only: ${SOURCE_ROLE_VOCABULARY.join(" | ")}. Infer semantically from the career trajectory — do not use the literal job title. Use "unknown" only when the role category genuinely cannot be determined.`
     ),

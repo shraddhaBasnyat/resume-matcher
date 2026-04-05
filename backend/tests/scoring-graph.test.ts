@@ -374,18 +374,6 @@ describe("fitScore routing logic", () => {
 describe("buildScoringGraph — full run with mocked chains", () => {
   let mockModel: ReturnType<typeof buildMockModel>;
 
-  // The full MatchResult that exists in state (after node adds weakMatch)
-  const fullMatchResult = {
-    ...validMatchResult,
-    weakMatch: false,
-  };
-
-  // The low-score full MatchResult
-  const lowScoreFullResult = {
-    ...weakMatchResult,
-    weakMatch: true,
-  };
-
   function buildMockModel() {
     return {
       withStructuredOutput: vi.fn().mockImplementation((schema) => {
@@ -487,8 +475,6 @@ describe("buildScoringGraph — full run with mocked chains", () => {
     expect(snapshot.values.matchResult?.fitScore).toBe(45);
   });
 
-  void fullMatchResult;
-  void lowScoreFullResult;
 });
 
 // ---------------------------------------------------------------------------
