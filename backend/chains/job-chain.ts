@@ -28,7 +28,7 @@ export const JobSchema: z.ZodType<Job> = z.object({
     .optional()
     .describe("Inferred seniority level of the role"),
   targetRole: z
-    .string()
+    .enum(TARGET_ROLE_VOCABULARY)
     .describe(
       `The role category this job is hiring for. Use controlled vocabulary only: ${TARGET_ROLE_VOCABULARY.join(" | ")}. Infer semantically from the role's responsibilities and requirements — do not use the literal job title. Use "unknown" only when the role category genuinely cannot be determined.`
     ),
