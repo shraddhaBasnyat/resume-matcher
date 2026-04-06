@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { deriveScenario } from "./derive-scenario";
-import { ArchetypeContext } from "../../../archetypes/types";
+import type { ArchetypeContext } from "../../../archetypes/types";
 
 const STRONG_FIT_THRESHOLD = 75;
 const WEAK_FIT_THRESHOLD = 50;

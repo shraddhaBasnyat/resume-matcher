@@ -1,4 +1,4 @@
-import { ArchetypeContext } from "../../../archetypes/types";
+import type { ArchetypeContext } from "../../../archetypes/types";
 
 const STRONG_FIT_THRESHOLD = 75;
 const WEAK_FIT_THRESHOLD = 50;
