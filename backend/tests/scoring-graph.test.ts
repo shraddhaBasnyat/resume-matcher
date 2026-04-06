@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { MatchSchema } from "../chains/scoring-chain.js";
 import { JobSchema } from "../chains/job-chain.js";
 import { ResumeSchema } from "../chains/resume-chain.js";
@@ -137,7 +138,7 @@ describe("buildJobChain", () => {
       withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
     };
 
-    const chain = buildJobChain(mockModel);
+    const chain = buildJobChain(mockModel as unknown as BaseChatModel);
     const result = await chain.invoke({ job_text: "Senior Frontend Engineer at Acme..." });
 
     expect(mockModel.withStructuredOutput).toHaveBeenCalledWith(JobSchema);
@@ -150,7 +151,7 @@ describe("buildJobChain", () => {
       withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
     };
 
-    const chain = buildJobChain(mockModel);
+    const chain = buildJobChain(mockModel as unknown as BaseChatModel);
     await chain.invoke({ job_text: "Senior Frontend Engineer..." });
     expect(mockInvoke).toHaveBeenCalledTimes(1);
   });
@@ -162,7 +163,7 @@ describe("buildJobChain", () => {
       }),
     };
     await expect(
-      buildJobChain(mockModel).invoke({ job_text: "..." })
+      buildJobChain(mockModel as unknown as BaseChatModel).invoke({ job_text: "..." })
     ).rejects.toThrow("parse failed");
   });
 });
@@ -178,7 +179,7 @@ describe("buildScoringChain", () => {
       withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
     };
 
-    const chain = buildScoringChain(mockModel);
+    const chain = buildScoringChain(mockModel as unknown as BaseChatModel);
     const result = await chain.invoke({
       resume_data: JSON.stringify(validResumeData),
       job_data: JSON.stringify(validJobData),
@@ -196,7 +197,7 @@ describe("buildScoringChain", () => {
       withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
     };
 
-    const chain = buildScoringChain(mockModel);
+    const chain = buildScoringChain(mockModel as unknown as BaseChatModel);
     await chain.invoke({
       resume_data: JSON.stringify(validResumeData),
       job_data: JSON.stringify(validJobData),
@@ -217,7 +218,7 @@ describe("buildScoringChain", () => {
       withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
     };
 
-    const chain = buildScoringChain(mockModel);
+    const chain = buildScoringChain(mockModel as unknown as BaseChatModel);
     await chain.invoke({
       resume_data: JSON.stringify(validResumeData),
       job_data: JSON.stringify(validJobData),
@@ -239,7 +240,7 @@ describe("buildScoringChain", () => {
       }),
     };
     await expect(
-      buildScoringChain(mockModel).invoke({
+      buildScoringChain(mockModel as unknown as BaseChatModel).invoke({
         resume_data: "{}",
         job_data: "{}",
         human_context: "",
@@ -270,7 +271,7 @@ describe("buildGapAnalysisChain", () => {
     };
 
     const matchResultInput = JSON.stringify({ ...validMatchResult, weakMatch: false });
-    const chain = buildGapAnalysisChain(mockModel);
+    const chain = buildGapAnalysisChain(mockModel as unknown as BaseChatModel);
     const result = await chain.invoke({
       resume_data: JSON.stringify(validResumeData),
       job_data: JSON.stringify(validJobData),
@@ -298,7 +299,7 @@ describe("buildGapAnalysisChain", () => {
       contextPrompt: "Can you describe your LangGraph production experience?",
     });
 
-    const chain = buildGapAnalysisChain(mockModel);
+    const chain = buildGapAnalysisChain(mockModel as unknown as BaseChatModel);
     const result = await chain.invoke({
       resume_data: JSON.stringify(validResumeData),
       job_data: JSON.stringify(validJobData),
@@ -314,7 +315,7 @@ describe("buildGapAnalysisChain", () => {
       withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
     };
 
-    const chain = buildGapAnalysisChain(mockModel);
+    const chain = buildGapAnalysisChain(mockModel as unknown as BaseChatModel);
     await chain.invoke({
       resume_data: JSON.stringify(validResumeData),
       job_data: JSON.stringify(validJobData),
@@ -372,7 +373,7 @@ describe("buildScoringGraph — full run with mocked chains", () => {
   });
 
   it("produces the expected output state shape for a high-score run", async () => {
-    const compiledGraph = buildScoringGraph(mockModel);
+    const compiledGraph = buildScoringGraph(mockModel as unknown as BaseChatModel);
     const threadId = "test-thread-high-score";
 
     const state = await compiledGraph.invoke(
@@ -403,7 +404,7 @@ describe("buildScoringGraph — full run with mocked chains", () => {
   });
 
   it("response shape matches what the UI expects", async () => {
-    const compiledGraph = buildScoringGraph(mockModel);
+    const compiledGraph = buildScoringGraph(mockModel as unknown as BaseChatModel);
     const state = await compiledGraph.invoke(
       { resumeText: "resume text", jobText: "job text", intent: "confident_match", intentContext: { basis: ["direct_experience"] }, userTier: "base" },
       { configurable: { thread_id: "test-thread-ui-shape" } }
@@ -443,7 +444,7 @@ describe("buildScoringGraph — full run with mocked chains", () => {
       }),
     };
 
-    const compiledGraph = buildScoringGraph(lowScoreModel);
+    const compiledGraph = buildScoringGraph(lowScoreModel as unknown as BaseChatModel);
     const threadId = "test-thread-low-score";
 
     await compiledGraph.invoke(
