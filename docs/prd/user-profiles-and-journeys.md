@@ -1,11 +1,13 @@
 # User Profiles & Journeys
 
-Each scenario has a distinct user in a distinct emotional state. Prompt copy and eval criteria should be calibrated to these profiles — not just to output field correctness.
+Each scenario maps to a distinct user in a distinct emotional state. Prompt copy and eval criteria should be calibrated to these profiles — not just to output field correctness.
+
+Scenarios are derived from two signals only: `fitScore` and `atsScore`. No other routing inputs.
 
 ---
 
-## Scenario 1a — The Validated Applicant
-**Strong fit, ATS ready**
+## Scenario 1a — The Confirmed Fit
+**fitScore >= 75, atsScore >= 75**
 
 **Who they are:** A candidate who genuinely matches the role and has a well-structured, keyword-rich resume that surfaces correctly to automated filters. They've done the work. They just want confirmation.
 
@@ -16,7 +18,7 @@ Each scenario has a distinct user in a distinct emotional state. Prompt copy and
 ---
 
 ## Scenario 1b — The Invisible Expert
-**Strong fit, ATS exposure**
+**fitScore >= 75, atsScore < 75**
 
 **Who they are:** A highly qualified candidate who perfectly matches the job's requirements but has no idea that their resume layout or terminology choices make them completely invisible to automated filters. They keep not getting interviews despite knowing they are the right person for the role.
 
@@ -27,7 +29,7 @@ Each scenario has a distinct user in a distinct emotional state. Prompt copy and
 ---
 
 ## Scenario 2 — The Narrative Gap
-**Fits the work, wrong frame**
+**fitScore 50–74, atsScore any**
 
 **Who they are:** A professional whose career trajectory and transferable skills fit the role well, but whose resume reads as a literal history of past job titles rather than a narrative pointing toward a future role. They have the experience — it's just not framed to show it.
 
@@ -37,58 +39,28 @@ Each scenario has a distinct user in a distinct emotional state. Prompt copy and
 
 ---
 
-## Scenario 3 — The Archetype Pivot
-**Fits a known transition, paid tier**
+## Scenario 3 — The Honest Verdict
+**fitScore < 50, atsScore any**
 
-**Who they are:** A backend engineer who has been applying to AI agent developer roles and keeps getting rejected or ignored without understanding why, despite having years of production experience building reliable systems.
+**Who they are:** A candidate whose confidence may not be grounded in the evidence. The gap is real — either the skills aren't there yet, the experience is too far removed, or the transition requires deliberate work they haven't started. HITL gives them one opportunity to surface context their resume missed — if they can provide it, the score may move and they land in a different scenario. If not, the verdict stands.
 
-**What they're feeling:** Confused and slightly defensive. They know they are highly skilled but are frustrated that their traditional engineering background doesn't seem to translate to recruiters looking specifically for AI talent. They feel their credibility is being dismissed.
+**What they're feeling:** Defensive initially, then potentially deflated. They came in confident and are getting a verdict they didn't expect. If HITL fired, they've already tried to explain themselves once — tone must stay collaborative, not skeptical.
 
-**What success looks like:** They feel seen rather than rejected. The tool surfaces what they already have that directly transfers — building APIs is designing tool schemas, debugging distributed systems is debugging non-deterministic agents, testing culture maps directly to eval culture. They close the tool knowing exactly how to reframe their deterministic background to prove they understand probabilistic systems, and knowing which specific gaps (eval methodology, production agent shipping) are the ones to close first.
+**What success looks like:** They feel respected even though the answer may be no. The tool doesn't manufacture false hope or pad the result with motivational language. The `weakMatchReason` is direct and specific — not cruel, not generic, but honest in a way that a trusted mentor would be. They close the session knowing clearly why the gap exists and what it would actually take to close it. Clarity over comfort.
 
----
-
-## Scenario 4a — The Misread Candidate
-**Weak fit on paper, HITL resolves in their favour**
-
-**Who they are:** A candidate who genuinely has relevant experience that their resume fails to convey. The low score is a framing problem, not a fit problem. HITL gives them the chance to surface what the resume missed.
-
-**What they're feeling:** Anxious and eager to defend themselves. When they see a low score they feel misunderstood — not wrong, misread. They want to explain themselves immediately.
-
-**What success looks like:** They feel heard. The HITL interaction gives them a specific prompt — not "tell us more" generically but "you mentioned X, we need to know A and B specifically." They provide the missing context, the score moves, and they close the session knowing exactly what to add to their resume so they don't have to explain it next time.
+**HITL note:** HITL fires once maximum per run. If the rescore moves `fitScore` above 50, the user lands in Narrative Gap or Confirmed Fit instead. If the score stays below 50 after HITL, the Honest Verdict stands. `hitlFired` prevents a second interrupt.
 
 ---
 
-## Scenario 4b — The Skeptical Follow-up Moment
-**Post-HITL, model still not convinced**
+## Paid tier enrichment
 
-This is a specific interaction within Scenario 4 that deserves its own tone note. The user has already gone through HITL once, provided context, and the model is still asking for more specificity.
+The four scenarios above are the base product. On the paid tier, two context layers can enrich the advice without changing the routing:
 
-**What they're feeling:** A mix of determination and mild frustration. They've already tried to explain themselves once. Being asked again could feel like the tool doesn't believe them.
+**Archetype context** — when a known career transition is detected (e.g. backend SWE → AI agent dev), the verdict node prompt is enriched with transition-specific data: hidden strengths, credibility signals, mental model shift. The scenario doesn't change — the advice gets more specific.
 
-**What success looks like:** The `contextPrompt` in this moment must feel collaborative, not skeptical. Not "we're not convinced" but "you're close — here's the specific thing that would complete the picture." The user should feel like the tool is on their side trying to find the evidence, not acting as a gatekeeper looking for reasons to reject them. This is the most tonally sensitive output in the entire product.
+**Intent context** — when the user declares their intent and current status (e.g. `exploring_gap` + `one_year_plus` + `starting_from_scratch`), the verdict node prompt is calibrated to their declared situation. Base tier always defaults to `confident_match` + `direct_experience`.
 
----
-
-## Scenario 5 — The Honest Verdict
-**Genuine weak match, confident_match intent**
-
-**Who they are:** A candidate whose confidence isn't grounded in the evidence. They believe they are a strong match but the gap is real — either the skills aren't there yet, or the experience is too far removed, or the transition requires years of deliberate work they haven't started.
-
-**What they're feeling:** Defensive initially, then potentially deflated. They came in confident and are getting a verdict they didn't expect.
-
-**What success looks like:** They feel respected even though the answer is no. The tool doesn't manufacture false hope or pad the result with motivational language. The `weakMatchReason` is direct and specific — not cruel, not generic, but honest in a way that a trusted mentor would be. They close the session knowing clearly why the gap exists and what it would actually take to close it, even if that timeline is long. Clarity over comfort.
-
----
-
-## Scenario 6 — The Long-Term Planner
-**Exploring gap intent, any fit score**
-
-**Who they are:** A professional who has accepted the gap and wants a map. This includes both candidates making a known archetype transition (backend SWE → AI agent dev) and those making transitions outside any registered archetype. The `exploring_gap` intent covers both — the archetype just determines whether the roadmap is specific or generic.
-
-**What they're feeling:** Resigned to the current gap but hopeful about the future. They are not expecting a high score today — just honest direction. They came for the roadmap, not the verdict.
-
-**What success looks like:** They feel motivated rather than overwhelmed. They close the tool with a clear, prioritised list of what to build toward and in what order — calibrated to their declared timeline and current status. A `one_year_plus` + `starting_from_scratch` user needs milestones. An `applying_now` + `side_projects` + `self_taught` user needs immediate actionable gaps. The roadmap should feel like it was written for their specific situation, not copied from a generic career guide.
+Neither enrichment changes which scenario the user is in. They change how specifically the verdict node speaks to that user's situation.
 
 ---
 
@@ -96,8 +68,10 @@ This is a specific interaction within Scenario 4 that deserves its own tone note
 
 **Never manufacture advice.** Empty `resumeAdvice` on a strong match is correct. Padding to appear thorough erodes trust faster than saying nothing.
 
-**Honesty over comfort, but never cruelty.** Scenario 5 especially. The tool is a trusted mentor, not a rejection machine.
+**Honesty over comfort, but never cruelty.** Scenario 3 especially. The tool is a trusted mentor, not a rejection machine.
 
 **Specificity is the product.** Generic advice — "strengthen your experience section," "highlight your skills" — is the failure mode in every scenario. The test for any output: could this have been written without reading this specific resume and this specific job description? If yes, it's generic.
 
 **The user's emotional state is the context.** The same information lands differently depending on whether the user feels seen or dismissed. Tone is not decoration — it is part of the output quality.
+
+**ATS advice is secondary context, not the main event.** When `atsScore < 75`, the ATS reality check surfaces alongside the fit verdict. It should feel like a supporting insight — "also, here's why you may be invisible to filters" — not a separate report competing for attention.
