@@ -84,10 +84,17 @@ export function buildScoringGraph(model: BaseChatModel) {
   // not run until after the human provides context and the second pass (4b)
   // completes. This is intentional — full analysis should happen with human context.
   function routeVerdicts(state: GraphStateType) {
+    if (!state.matchResult) {
+      throw new Error("routeVerdicts: matchResult is missing — scoreMatch node did not complete successfully");
+    }
+    if (!state.intent) {
+      throw new Error("routeVerdicts: intent is missing — was not provided in the initial graph invocation");
+    }
+
     const result = deriveScenario(
-      state.matchResult!.fitScore,
-      state.matchResult!.atsScore,
-      state.intent!,
+      state.matchResult.fitScore,
+      state.matchResult.atsScore,
+      state.intent,
       state.archetypeContext,
       state.userTier,
       state.hitlFired,
