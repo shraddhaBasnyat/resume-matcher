@@ -5,10 +5,10 @@ import { GraphState, type GraphStateType } from "./scoring-graph-state.js";
 import { makeParseResumeNode } from "./nodes/parse-resume.js";
 import { makeParseJobNode } from "./nodes/parse-job.js";
 import { makeScoreMatchNode } from "./nodes/score-match.js";
-import { makeAtsAnalysisNode } from "./nodes/make-ats-analysis-node.js";
-import { makeAnalyzeStrongMatchNode } from "./nodes/make-analyze-strong-match-node.js";
-import { makeAnalyzeNarrativeGapNode } from "./nodes/make-analyze-narrative-gap-node.js";
-import { makeAnalyzeSkepticalReconciliationNode } from "./nodes/make-analyze-skeptical-reconciliation-node.js";
+import { makeAtsAnalysisNode } from "./nodes/ats-analysis.js";
+import { makeAnalyzeStrongMatchNode } from "./nodes/analyze-strong-match.js";
+import { makeAnalyzeNarrativeGapNode } from "./nodes/analyze-narrative-gap.js";
+import { makeAnalyzeSkepticalReconciliationNode } from "./nodes/analyze-skeptical-reconciliation.js";
 import { deriveScenario } from "./scenario/derive-scenario.js";
 
 const NODES = {
