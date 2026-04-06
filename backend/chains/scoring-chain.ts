@@ -14,6 +14,8 @@ export const MatchSchema = z.object({
   missingSkills: z.array(z.string()).describe("Required skills the candidate lacks"),
   narrativeAlignment: z.string().describe("How well the candidate's career narrative aligns with the role"),
   gaps: z.array(z.string()).describe("Specific gaps between the candidate's profile and the job requirements"),
+  // TODO: Remove resumeAdvice from scoreMatch output — advice generation moves to verdict nodes.
+  // scoreMatch should output only: fitScore, matchedSkills, missingSkills, narrativeAlignment, gaps, contextPrompt, weakMatchReason.
   resumeAdvice: z
     .array(z.string())
     .describe("Actionable suggestions for how to rewrite resume sections to better target this job. Empty array is correct when fitScore >= 75 — do not pad."),
@@ -24,7 +26,7 @@ export const MatchSchema = z.object({
   weakMatchReason: z
     .string()
     .optional()
-    .describe("Direct explanation of why the match is weak. Required when fitScore < 60. Not motivational — honest and specific."),
+    .describe("Direct explanation of why the match is weak. Required when fitScore < 50. Not motivational — honest and specific."),
 });
 
 export type LLMMatchOutput = z.infer<typeof MatchSchema>;
@@ -39,8 +41,8 @@ Rules:
 - narrativeAlignment: one paragraph on how the candidate's career story aligns with this role.
 - gaps: specific mismatches in experience level, domain, or skills.
 - resumeAdvice: 3-5 actionable suggestions to strengthen the resume for this role. Empty array is correct when fitScore >= 75 — do not manufacture advice.
-- contextPrompt: if fitScore < 60 and you see a plausible path to a better score given more information, write a specific question asking for that information. Set to null if the gap is real and no context would help, or if fitScore >= 75.
-- weakMatchReason: required when fitScore < 60 — explain specifically what is missing. Direct and honest.
+- contextPrompt: if fitScore < 50 and you see a plausible path to a better score given more information, write a specific question asking for that information. Set to null if the gap is real and no context would help, or if fitScore >= 50.
+- weakMatchReason: required when fitScore < 50 — explain specifically what is missing. Direct and honest.
 - If humanContext is provided, weigh it alongside the resume when scoring.`;
 
 const HUMAN_PROMPT = `Resume Data:

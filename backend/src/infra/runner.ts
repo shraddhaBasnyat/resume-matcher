@@ -93,7 +93,6 @@ async function emitResult(
     emit("completed", {
       result: {
         fitScore: matchResult.fitScore,
-        atsScore: matchResult.atsScore,
         matchedSkills: matchResult.matchedSkills,
         missingSkills: matchResult.missingSkills,
         narrativeAlignment: matchResult.narrativeAlignment,
@@ -102,9 +101,8 @@ async function emitResult(
         contextPrompt: matchResult.contextPrompt,
         weakMatch: matchResult.weakMatch,
         weakMatchReason: matchResult.weakMatchReason,
+        atsProfile: state.atsProfile ?? { atsScore: null, missingKeywords: [], layoutFlags: [], terminologyGaps: [] },
         fitAdvice: state.fitAdvice ?? null,
-        atsAdvice: state.atsAdvice ?? null,
-        roadmapAdvice: state.roadmapAdvice ?? null,
         scenarioId: state.scenarioId ?? null,
         interrupted: false,
         threadId,

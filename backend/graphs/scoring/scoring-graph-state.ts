@@ -85,6 +85,16 @@ export const GraphState = Annotation.Root({
     default: () => "base",
     reducer: (_prev, next) => next,
   }),
+  // ATS analysis output — written by atsAnalysis node (runs in parallel with parse nodes).
+  atsProfile: Annotation<{
+    atsScore: number | null;
+    missingKeywords: string[];
+    layoutFlags: string[];
+    terminologyGaps: string[];
+  } | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
   // Scenario routing outputs — written by routeVerdicts and branch nodes.
   scenarioId: Annotation<ScenarioId | undefined>({
     default: () => undefined,

@@ -30,9 +30,9 @@ export function makeAnalyzeSkepticalReconciliationNode(_model: BaseChatModel) {
         });
       }
 
-      // First pass with no follow-up requested (scenario 5): do not interrupt.
-      // Proceed/terminate without requesting human input.
-      return { scenarioId: "5", fitAdvice: {} };
+      // First pass with no follow-up requested (honest_verdict, no context available):
+      // do not interrupt. Proceed/terminate without requesting human input.
+      return { fitAdvice: {} };
     }
 
     // Second pass (scenario 4b): hitlFired is true, human context already incorporated

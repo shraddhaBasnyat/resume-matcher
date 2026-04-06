@@ -438,7 +438,7 @@ describe("buildScoringGraph — full run with mocked chains", () => {
     expect(state.jobData).not.toBeTypeOf("string");
   });
 
-  // Scenario 4a — fitScore < 50 + confident_match → analyzeSkepticalReconciliation → interrupt
+  // honest_verdict — fitScore < 50 → analyzeSkepticalReconciliation → interrupt (contextPrompt non-null)
   it("graph is interrupted for low-score confident_match run (fitScore < 50 routes to analyzeSkepticalReconciliation)", async () => {
     const lowScoreModel = {
       withStructuredOutput: vi.fn().mockImplementation((schema) => {
@@ -482,7 +482,7 @@ describe("buildScoringGraph — full run with mocked chains", () => {
 
     const snapshot = await compiledGraph.getState({ configurable: { thread_id: threadId } });
     expect(snapshot.next).toHaveLength(0);
-    expect(state.scenarioId).toBe("5");
+    expect(state.scenarioId).toBe("honest_verdict");
   });
 
 });

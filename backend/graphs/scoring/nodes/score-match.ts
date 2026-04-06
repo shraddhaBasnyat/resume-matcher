@@ -1,5 +1,6 @@
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { buildScoringChain } from "../../../chains/scoring-chain.js";
+import { WEAK_FIT_THRESHOLD } from "../scenario/derive-scenario.js";
 import type { GraphStateType } from "../scoring-graph-state.js";
 
 export function makeScoreMatchNode(model: BaseChatModel) {
@@ -22,13 +23,14 @@ export function makeScoreMatchNode(model: BaseChatModel) {
     );
 
     // weakMatch is derived deterministically — the LLM does not output it.
-    const weakMatch = result.fitScore < 60;
+    // Threshold aligns with WEAK_FIT_THRESHOLD (50) = the honest_verdict scenario boundary.
+    const weakMatch = result.fitScore < WEAK_FIT_THRESHOLD;
 
     if (weakMatch) {
       if (!result.weakMatchReason?.trim()) {
         throw new Error(
-          `scoreMatch: fitScore is ${result.fitScore} (< 60) but weakMatchReason is missing or empty. ` +
-          "The model must provide weakMatchReason when the score is below 60."
+          `scoreMatch: fitScore is ${result.fitScore} (< ${WEAK_FIT_THRESHOLD}) but weakMatchReason is missing or empty. ` +
+          `The model must provide weakMatchReason when the score is below ${WEAK_FIT_THRESHOLD}.`
         );
       }
     }
