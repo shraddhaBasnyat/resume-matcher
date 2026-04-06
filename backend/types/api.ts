@@ -1,3 +1,5 @@
+import type { ScenarioId } from "../graphs/scoring/scenario/derive-scenario.js";
+
 // ---------------------------------------------------------------------------
 // Career transition intent — structured context collected before first run
 // ---------------------------------------------------------------------------
@@ -108,10 +110,10 @@ export interface MatchResponse {
   contextPrompt: string | null;
   weakMatch: boolean;
   weakMatchReason?: string;
-  fitAdvice: object | null;
-  atsAdvice: object | null;
-  roadmapAdvice: object | null;
-  scenarioId: string | null;
+  fitAdvice: Record<string, unknown> | null;
+  atsAdvice: Record<string, unknown> | null;
+  roadmapAdvice: Record<string, unknown> | null;
+  scenarioId: ScenarioId | null;
   interrupted: boolean;
   threadId: string;
   _meta: { traceUrl: string | null; durationMs: number };

@@ -90,15 +90,15 @@ export const GraphState = Annotation.Root({
     default: () => undefined,
     reducer: (_prev, next) => next,
   }),
-  fitAdvice: Annotation<object | undefined>({
+  fitAdvice: Annotation<Record<string, unknown> | undefined>({
     default: () => undefined,
     reducer: (_prev, next) => next,
   }),
-  atsAdvice: Annotation<object | undefined>({
+  atsAdvice: Annotation<Record<string, unknown> | undefined>({
     default: () => undefined,
     reducer: (_prev, next) => next,
   }),
-  roadmapAdvice: Annotation<object | undefined>({
+  roadmapAdvice: Annotation<Record<string, unknown> | undefined>({
     default: () => undefined,
     reducer: (_prev, next) => next,
   }),
