@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { deriveScenario } from "./derive-scenario";
+import {
+  deriveScenario,
+  STRONG_FIT_THRESHOLD,
+  WEAK_FIT_THRESHOLD,
+  ATS_THRESHOLD,
+} from "./derive-scenario";
 import type { ArchetypeContext } from "../../../archetypes/types";
-
-const STRONG_FIT_THRESHOLD = 75;
-const WEAK_FIT_THRESHOLD = 50;
-const ATS_THRESHOLD = 75;
-
 // Minimal ArchetypeContext fixture
 const archetype: ArchetypeContext = {
   archetypeId: "pm-to-tpm",
