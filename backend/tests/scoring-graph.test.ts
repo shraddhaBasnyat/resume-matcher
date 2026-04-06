@@ -29,6 +29,11 @@ const weakMatchResult = {
   weakMatchReason: "Missing 3 of 5 required skills and experience level is too junior.",
 };
 
+const weakMatchResultWithContextPrompt = {
+  ...weakMatchResult,
+  contextPrompt: "Can you describe any production agent systems you have shipped?",
+};
+
 const validJobData = {
   title: "Senior Frontend Engineer",
   company: "Acme Corp",
@@ -439,7 +444,7 @@ describe("buildScoringGraph — full run with mocked chains", () => {
       withStructuredOutput: vi.fn().mockImplementation((schema) => {
         if (schema === ResumeSchema) return { invoke: vi.fn().mockResolvedValue(validResumeData) };
         if (schema === JobSchema) return { invoke: vi.fn().mockResolvedValue(validJobData) };
-        if (schema === MatchSchema) return { invoke: vi.fn().mockResolvedValue(weakMatchResult) };
+        if (schema === MatchSchema) return { invoke: vi.fn().mockResolvedValue(weakMatchResultWithContextPrompt) };
         return { invoke: vi.fn().mockResolvedValue({}) };
       }),
     };
@@ -455,6 +460,29 @@ describe("buildScoringGraph — full run with mocked chains", () => {
     const snapshot = await compiledGraph.getState({ configurable: { thread_id: threadId } });
     expect(snapshot.next.length).toBeGreaterThan(0);
     expect(snapshot.values.matchResult?.fitScore).toBe(45);
+  });
+
+  it("scenario 5 — low fit with null contextPrompt completes without interrupt", async () => {
+    const scenario5Model = {
+      withStructuredOutput: vi.fn().mockImplementation((schema) => {
+        if (schema === ResumeSchema) return { invoke: vi.fn().mockResolvedValue(validResumeData) };
+        if (schema === JobSchema) return { invoke: vi.fn().mockResolvedValue(validJobData) };
+        if (schema === MatchSchema) return { invoke: vi.fn().mockResolvedValue(weakMatchResult) }; // contextPrompt: null
+        return { invoke: vi.fn().mockResolvedValue({}) };
+      }),
+    };
+
+    const compiledGraph = buildScoringGraph(scenario5Model as unknown as BaseChatModel);
+    const threadId = "test-thread-scenario-5";
+
+    const state = await compiledGraph.invoke(
+      { resumeText: "resume text", jobText: "job text", intent: "confident_match", intentContext: { basis: ["direct_experience"] }, userTier: "base" },
+      { configurable: { thread_id: threadId } }
+    );
+
+    const snapshot = await compiledGraph.getState({ configurable: { thread_id: threadId } });
+    expect(snapshot.next).toHaveLength(0);
+    expect(state.scenarioId).toBe("5");
   });
 
 });
