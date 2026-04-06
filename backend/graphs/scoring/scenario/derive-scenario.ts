@@ -4,15 +4,15 @@ const STRONG_FIT_THRESHOLD = 75;
 const WEAK_FIT_THRESHOLD = 50;
 const ATS_THRESHOLD = 75;
 
-type ScenarioId = "1a" | "1b" | "2" | "3" | "4a" | "4b" | "5" | "6" | "7";
-type VerdictNode =
+export type ScenarioId = "1a" | "1b" | "2" | "3" | "4a" | "4b" | "5" | "6" | "7";
+export type VerdictNode =
   | "analyzeStrongMatch"
   | "analyzeNarrativeGap"
   | "analyzeArchetypeGap"
   | "analyzeSkepticalReconciliation"
   | null;
 
-interface DeriveScenarioResult {
+export interface DeriveScenarioResult {
   scenarioId: ScenarioId;
   verdictNode: VerdictNode;
   runRoadmap: boolean;

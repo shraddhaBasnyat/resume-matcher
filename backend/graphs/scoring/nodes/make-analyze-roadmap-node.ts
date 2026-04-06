@@ -13,6 +13,6 @@ export function makeAnalyzeRoadmapNode(model: BaseChatModel) {
       throw new Error("analyzeRoadmap: jobData is missing from graph state");
     }
     // TODO: implement chain
-    return { matchResult: state.matchResult };
+    return { roadmapAdvice: {} };
   };
 }

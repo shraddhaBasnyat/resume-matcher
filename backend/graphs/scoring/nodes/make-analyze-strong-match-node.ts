@@ -7,6 +7,6 @@ export function makeAnalyzeStrongMatchNode(model: BaseChatModel) {
       throw new Error("analyzeStrongMatch: matchResult is missing from graph state");
     }
     // TODO: implement chain
-    return { matchResult: state.matchResult };
+    return { fitAdvice: {} };
   };
 }

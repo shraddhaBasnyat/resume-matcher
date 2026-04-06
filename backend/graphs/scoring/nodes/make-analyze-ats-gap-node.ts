@@ -13,6 +13,6 @@ export function makeAnalyzeAtsGapNode(model: BaseChatModel) {
       throw new Error("analyzeAtsGap: jobData is missing from graph state");
     }
     // TODO: implement chain
-    return { matchResult: state.matchResult };
+    return { atsAdvice: {} };
   };
 }

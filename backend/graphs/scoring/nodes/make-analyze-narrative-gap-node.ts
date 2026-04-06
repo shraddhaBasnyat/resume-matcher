@@ -13,6 +13,6 @@ export function makeAnalyzeNarrativeGapNode(model: BaseChatModel) {
       throw new Error("analyzeNarrativeGap: jobData is missing from graph state");
     }
     // TODO: implement chain
-    return { matchResult: state.matchResult };
+    return { fitAdvice: {} };
   };
 }

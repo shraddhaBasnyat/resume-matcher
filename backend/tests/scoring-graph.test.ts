@@ -331,41 +331,7 @@ describe("buildGapAnalysisChain", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Conditional edge logic (fitScore routing)
-// ---------------------------------------------------------------------------
-
-describe("fitScore routing logic", () => {
-  function routeAfterScore(fitScore: number): "gapAnalysis" | "awaitHuman" {
-    return fitScore >= 60 ? "gapAnalysis" : "awaitHuman";
-  }
-
-  function routeAfterHuman(humanContext: string): "rescore" | "gapAnalysis" {
-    return humanContext && humanContext.trim().length > 0 ? "rescore" : "gapAnalysis";
-  }
-
-  it("routes fitScore >= 60 to gapAnalysis", () => {
-    expect(routeAfterScore(60)).toBe("gapAnalysis");
-    expect(routeAfterScore(75)).toBe("gapAnalysis");
-    expect(routeAfterScore(100)).toBe("gapAnalysis");
-  });
-
-  it("routes fitScore < 60 to awaitHuman", () => {
-    expect(routeAfterScore(59)).toBe("awaitHuman");
-    expect(routeAfterScore(0)).toBe("awaitHuman");
-    expect(routeAfterScore(45)).toBe("awaitHuman");
-  });
-
-  it("routes non-empty humanContext to rescore", () => {
-    expect(routeAfterHuman("I led a team for 2 years.")).toBe("rescore");
-    expect(routeAfterHuman("  some context  ")).toBe("rescore");
-  });
-
-  it("routes empty humanContext to gapAnalysis (accept result)", () => {
-    expect(routeAfterHuman("")).toBe("gapAnalysis");
-    expect(routeAfterHuman("   ")).toBe("gapAnalysis");
-  });
-});
+// Routing logic is covered by derive-scenario.test.ts — no inline routing tests here.
 
 // ---------------------------------------------------------------------------
 // Full graph run — mocked chains, verifies clean state shape & response
@@ -410,7 +376,13 @@ describe("buildScoringGraph — full run with mocked chains", () => {
     const threadId = "test-thread-high-score";
 
     const state = await compiledGraph.invoke(
-      { resumeText: "Jane Doe resume text", jobText: "Senior Frontend Engineer at Acme" },
+      {
+        resumeText: "Jane Doe resume text",
+        jobText: "Senior Frontend Engineer at Acme",
+        intent: "confident_match",
+        intentContext: { basis: ["direct_experience"] },
+        userTier: "base",
+      },
       { configurable: { thread_id: threadId } }
     );
 
@@ -421,7 +393,11 @@ describe("buildScoringGraph — full run with mocked chains", () => {
     expect(ResumeSchema.safeParse(state.resumeData).success).toBe(true);
     expect(JobSchema.safeParse(state.jobData).success).toBe(true);
 
-    // fitScore >= 60 — no interrupt
+    // Scenario routing fired — scenarioId and fitAdvice should be set
+    expect(state.scenarioId).toBeDefined();
+    expect(state.fitAdvice).toBeDefined();
+
+    // High-score run completes without interrupt
     const snapshot = await compiledGraph.getState({ configurable: { thread_id: threadId } });
     expect(snapshot.next).toHaveLength(0);
   });
@@ -429,7 +405,7 @@ describe("buildScoringGraph — full run with mocked chains", () => {
   it("response shape matches what the UI expects", async () => {
     const compiledGraph = buildScoringGraph(mockModel);
     const state = await compiledGraph.invoke(
-      { resumeText: "resume text", jobText: "job text" },
+      { resumeText: "resume text", jobText: "job text", intent: "confident_match", intentContext: { basis: ["direct_experience"] }, userTier: "base" },
       { configurable: { thread_id: "test-thread-ui-shape" } }
     );
 
@@ -444,7 +420,11 @@ describe("buildScoringGraph — full run with mocked chains", () => {
     // contextPrompt is present (null or string)
     expect("contextPrompt" in match).toBe(true);
 
-    // resumeData and jobData remain in graph state (used by gapAnalysis node)
+    // Scenario routing fields are present in state
+    expect(state.scenarioId).toBeDefined();
+    expect(state.fitAdvice).toBeDefined();
+
+    // resumeData and jobData remain in graph state (available to branch nodes)
     expect(state.resumeData).toBeTruthy();
     expect(state.jobData).toBeTruthy();
 
@@ -466,7 +446,7 @@ describe("buildScoringGraph — full run with mocked chains", () => {
     const threadId = "test-thread-low-score";
 
     await compiledGraph.invoke(
-      { resumeText: "resume text", jobText: "job text" },
+      { resumeText: "resume text", jobText: "job text", intent: "confident_match", intentContext: { basis: ["direct_experience"] }, userTier: "base" },
       { configurable: { thread_id: threadId } }
     );
 

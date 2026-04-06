@@ -108,6 +108,10 @@ export interface MatchResponse {
   contextPrompt: string | null;
   weakMatch: boolean;
   weakMatchReason?: string;
+  fitAdvice: object | null;
+  atsAdvice: object | null;
+  roadmapAdvice: object | null;
+  scenarioId: string | null;
   interrupted: boolean;
   threadId: string;
   _meta: { traceUrl: string | null; durationMs: number };
