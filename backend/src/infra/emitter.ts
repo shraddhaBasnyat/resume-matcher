@@ -2,7 +2,19 @@ import { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 import type { Serialized } from "@langchain/core/load/serializable";
 
 /** Node names that should trigger progress events in the SSE stream. */
-const GRAPH_NODES = new Set(["parseResume", "parseJob", "scoreMatch", "gapAnalysis"]);
+const GRAPH_NODES = new Set([
+  "parseResume",
+  "parseJob",
+  "scoreMatch",
+  "detectArchetype",
+  "routeVerdicts",
+  "analyzeStrongMatch",
+  "analyzeNarrativeGap",
+  "analyzeArchetypeGap",
+  "analyzeSkepticalReconciliation",
+  "analyzeATSGap",
+  "analyzeRoadmap",
+]);
 
 /** Callback handler that emits SSE node_start / node_done events. */
 export class NodeProgressEmitter extends BaseCallbackHandler {

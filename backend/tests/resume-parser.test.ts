@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ResumeSchema } from "../chains/resume-chain.js";
 import { buildResumeChain } from "../chains/resume-chain.js";
 
@@ -209,7 +210,7 @@ describe("buildResumeChain — validation failure handling", () => {
     }));
 
     const { buildResumeChain: buildResumeChainMocked } = await import("../chains/resume-chain.js");
-    const chain = buildResumeChainMocked(mockModel);
+    const chain = buildResumeChainMocked(mockModel as unknown as BaseChatModel);
 
     // parse() will throw because careerNarrative is required with no default
     await expect(chain.invoke({ resume_text: "Jane resume..." })).rejects.toThrow();
@@ -241,7 +242,7 @@ describe("buildResumeChain — validation failure handling", () => {
       withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
     };
 
-    const chain = buildResumeChain(mockModel);
+    const chain = buildResumeChain(mockModel as unknown as BaseChatModel);
     const result = await chain.invoke({ resume_text: "Jane resume..." });
 
     // safeParse succeeds — subfield defaults are applied
@@ -281,7 +282,7 @@ describe("buildResumeChain — validation failure handling", () => {
     }));
 
     const { buildResumeChain: buildResumeChainMocked } = await import("../chains/resume-chain.js");
-    const chain = buildResumeChainMocked(mockModel);
+    const chain = buildResumeChainMocked(mockModel as unknown as BaseChatModel);
     await chain.invoke({ resume_text: "Jane resume..." });
 
     expect(logValidationFailureMock).not.toHaveBeenCalled();
@@ -318,7 +319,7 @@ describe("buildResumeChain", () => {
       withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
     };
 
-    const chain = buildResumeChain(mockModel);
+    const chain = buildResumeChain(mockModel as unknown as BaseChatModel);
     const result = await chain.invoke({ resume_text: "John Smith resume text..." });
 
     expect(mockModel.withStructuredOutput).toHaveBeenCalledWith(ResumeSchema);
@@ -332,7 +333,7 @@ describe("buildResumeChain", () => {
       }),
     };
 
-    const chain = buildResumeChain(mockModel);
+    const chain = buildResumeChain(mockModel as unknown as BaseChatModel);
     await expect(chain.invoke({ resume_text: "..." })).rejects.toThrow("Model error");
   });
 });

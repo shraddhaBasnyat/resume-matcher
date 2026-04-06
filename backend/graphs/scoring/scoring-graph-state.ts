@@ -4,6 +4,7 @@ import type { JobDescription } from "../../chains/job-chain.js";
 import type { MatchResult } from "../../chains/scoring-chain.js";
 import type { ArchetypeContext } from "../../archetypes/types.js";
 import type { ConfidentMatchContext, ExploringGapContext } from "../../types/api.js";
+import type { ScenarioId } from "./scenario/derive-scenario.js";
 
 /**
  * GRAPH STATE
@@ -82,6 +83,23 @@ export const GraphState = Annotation.Root({
   // User tier — set from auth middleware (Pass 2). Hardcoded to "base" until then.
   userTier: Annotation<"base" | "paid">({
     default: () => "base",
+    reducer: (_prev, next) => next,
+  }),
+  // Scenario routing outputs — written by routeVerdicts and branch nodes.
+  scenarioId: Annotation<ScenarioId | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  fitAdvice: Annotation<Record<string, unknown> | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  atsAdvice: Annotation<Record<string, unknown> | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  roadmapAdvice: Annotation<Record<string, unknown> | undefined>({
+    default: () => undefined,
     reducer: (_prev, next) => next,
   }),
 });

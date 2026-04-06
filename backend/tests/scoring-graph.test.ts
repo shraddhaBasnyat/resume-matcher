@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { MatchSchema } from "../chains/scoring-chain.js";
 import { JobSchema } from "../chains/job-chain.js";
 import { ResumeSchema } from "../chains/resume-chain.js";
@@ -26,6 +27,11 @@ const weakMatchResult = {
   ...validMatchResult,
   fitScore: 45,
   weakMatchReason: "Missing 3 of 5 required skills and experience level is too junior.",
+};
+
+const weakMatchResultWithContextPrompt = {
+  ...weakMatchResult,
+  contextPrompt: "Can you describe any production agent systems you have shipped?",
 };
 
 const validJobData = {
@@ -137,7 +143,7 @@ describe("buildJobChain", () => {
       withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
     };
 
-    const chain = buildJobChain(mockModel);
+    const chain = buildJobChain(mockModel as unknown as BaseChatModel);
     const result = await chain.invoke({ job_text: "Senior Frontend Engineer at Acme..." });
 
     expect(mockModel.withStructuredOutput).toHaveBeenCalledWith(JobSchema);
@@ -150,7 +156,7 @@ describe("buildJobChain", () => {
       withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
     };
 
-    const chain = buildJobChain(mockModel);
+    const chain = buildJobChain(mockModel as unknown as BaseChatModel);
     await chain.invoke({ job_text: "Senior Frontend Engineer..." });
     expect(mockInvoke).toHaveBeenCalledTimes(1);
   });
@@ -162,7 +168,7 @@ describe("buildJobChain", () => {
       }),
     };
     await expect(
-      buildJobChain(mockModel).invoke({ job_text: "..." })
+      buildJobChain(mockModel as unknown as BaseChatModel).invoke({ job_text: "..." })
     ).rejects.toThrow("parse failed");
   });
 });
@@ -178,7 +184,7 @@ describe("buildScoringChain", () => {
       withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
     };
 
-    const chain = buildScoringChain(mockModel);
+    const chain = buildScoringChain(mockModel as unknown as BaseChatModel);
     const result = await chain.invoke({
       resume_data: JSON.stringify(validResumeData),
       job_data: JSON.stringify(validJobData),
@@ -196,7 +202,7 @@ describe("buildScoringChain", () => {
       withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
     };
 
-    const chain = buildScoringChain(mockModel);
+    const chain = buildScoringChain(mockModel as unknown as BaseChatModel);
     await chain.invoke({
       resume_data: JSON.stringify(validResumeData),
       job_data: JSON.stringify(validJobData),
@@ -217,7 +223,7 @@ describe("buildScoringChain", () => {
       withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
     };
 
-    const chain = buildScoringChain(mockModel);
+    const chain = buildScoringChain(mockModel as unknown as BaseChatModel);
     await chain.invoke({
       resume_data: JSON.stringify(validResumeData),
       job_data: JSON.stringify(validJobData),
@@ -239,7 +245,7 @@ describe("buildScoringChain", () => {
       }),
     };
     await expect(
-      buildScoringChain(mockModel).invoke({
+      buildScoringChain(mockModel as unknown as BaseChatModel).invoke({
         resume_data: "{}",
         job_data: "{}",
         human_context: "",
@@ -270,7 +276,7 @@ describe("buildGapAnalysisChain", () => {
     };
 
     const matchResultInput = JSON.stringify({ ...validMatchResult, weakMatch: false });
-    const chain = buildGapAnalysisChain(mockModel);
+    const chain = buildGapAnalysisChain(mockModel as unknown as BaseChatModel);
     const result = await chain.invoke({
       resume_data: JSON.stringify(validResumeData),
       job_data: JSON.stringify(validJobData),
@@ -298,7 +304,7 @@ describe("buildGapAnalysisChain", () => {
       contextPrompt: "Can you describe your LangGraph production experience?",
     });
 
-    const chain = buildGapAnalysisChain(mockModel);
+    const chain = buildGapAnalysisChain(mockModel as unknown as BaseChatModel);
     const result = await chain.invoke({
       resume_data: JSON.stringify(validResumeData),
       job_data: JSON.stringify(validJobData),
@@ -314,7 +320,7 @@ describe("buildGapAnalysisChain", () => {
       withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
     };
 
-    const chain = buildGapAnalysisChain(mockModel);
+    const chain = buildGapAnalysisChain(mockModel as unknown as BaseChatModel);
     await chain.invoke({
       resume_data: JSON.stringify(validResumeData),
       job_data: JSON.stringify(validJobData),
@@ -331,41 +337,7 @@ describe("buildGapAnalysisChain", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Conditional edge logic (fitScore routing)
-// ---------------------------------------------------------------------------
-
-describe("fitScore routing logic", () => {
-  function routeAfterScore(fitScore: number): "gapAnalysis" | "awaitHuman" {
-    return fitScore >= 60 ? "gapAnalysis" : "awaitHuman";
-  }
-
-  function routeAfterHuman(humanContext: string): "rescore" | "gapAnalysis" {
-    return humanContext && humanContext.trim().length > 0 ? "rescore" : "gapAnalysis";
-  }
-
-  it("routes fitScore >= 60 to gapAnalysis", () => {
-    expect(routeAfterScore(60)).toBe("gapAnalysis");
-    expect(routeAfterScore(75)).toBe("gapAnalysis");
-    expect(routeAfterScore(100)).toBe("gapAnalysis");
-  });
-
-  it("routes fitScore < 60 to awaitHuman", () => {
-    expect(routeAfterScore(59)).toBe("awaitHuman");
-    expect(routeAfterScore(0)).toBe("awaitHuman");
-    expect(routeAfterScore(45)).toBe("awaitHuman");
-  });
-
-  it("routes non-empty humanContext to rescore", () => {
-    expect(routeAfterHuman("I led a team for 2 years.")).toBe("rescore");
-    expect(routeAfterHuman("  some context  ")).toBe("rescore");
-  });
-
-  it("routes empty humanContext to gapAnalysis (accept result)", () => {
-    expect(routeAfterHuman("")).toBe("gapAnalysis");
-    expect(routeAfterHuman("   ")).toBe("gapAnalysis");
-  });
-});
+// Routing logic is covered by derive-scenario.test.ts — no inline routing tests here.
 
 // ---------------------------------------------------------------------------
 // Full graph run — mocked chains, verifies clean state shape & response
@@ -406,11 +378,17 @@ describe("buildScoringGraph — full run with mocked chains", () => {
   });
 
   it("produces the expected output state shape for a high-score run", async () => {
-    const compiledGraph = buildScoringGraph(mockModel);
+    const compiledGraph = buildScoringGraph(mockModel as unknown as BaseChatModel);
     const threadId = "test-thread-high-score";
 
     const state = await compiledGraph.invoke(
-      { resumeText: "Jane Doe resume text", jobText: "Senior Frontend Engineer at Acme" },
+      {
+        resumeText: "Jane Doe resume text",
+        jobText: "Senior Frontend Engineer at Acme",
+        intent: "confident_match",
+        intentContext: { basis: ["direct_experience"] },
+        userTier: "base",
+      },
       { configurable: { thread_id: threadId } }
     );
 
@@ -421,15 +399,19 @@ describe("buildScoringGraph — full run with mocked chains", () => {
     expect(ResumeSchema.safeParse(state.resumeData).success).toBe(true);
     expect(JobSchema.safeParse(state.jobData).success).toBe(true);
 
-    // fitScore >= 60 — no interrupt
+    // Scenario routing fired — scenarioId and fitAdvice should be set
+    expect(state.scenarioId).toBeDefined();
+    expect(state.fitAdvice).toBeDefined();
+
+    // High-score run completes without interrupt
     const snapshot = await compiledGraph.getState({ configurable: { thread_id: threadId } });
     expect(snapshot.next).toHaveLength(0);
   });
 
   it("response shape matches what the UI expects", async () => {
-    const compiledGraph = buildScoringGraph(mockModel);
+    const compiledGraph = buildScoringGraph(mockModel as unknown as BaseChatModel);
     const state = await compiledGraph.invoke(
-      { resumeText: "resume text", jobText: "job text" },
+      { resumeText: "resume text", jobText: "job text", intent: "confident_match", intentContext: { basis: ["direct_experience"] }, userTier: "base" },
       { configurable: { thread_id: "test-thread-ui-shape" } }
     );
 
@@ -444,7 +426,11 @@ describe("buildScoringGraph — full run with mocked chains", () => {
     // contextPrompt is present (null or string)
     expect("contextPrompt" in match).toBe(true);
 
-    // resumeData and jobData remain in graph state (used by gapAnalysis node)
+    // Scenario routing fields are present in state
+    expect(state.scenarioId).toBeDefined();
+    expect(state.fitAdvice).toBeDefined();
+
+    // resumeData and jobData remain in graph state (available to branch nodes)
     expect(state.resumeData).toBeTruthy();
     expect(state.jobData).toBeTruthy();
 
@@ -452,27 +438,51 @@ describe("buildScoringGraph — full run with mocked chains", () => {
     expect(state.jobData).not.toBeTypeOf("string");
   });
 
-  it("graph is interrupted for low-score run (fitScore < 60)", async () => {
+  // Scenario 4a — fitScore < 50 + confident_match → analyzeSkepticalReconciliation → interrupt
+  it("graph is interrupted for low-score confident_match run (fitScore < 50 routes to analyzeSkepticalReconciliation)", async () => {
     const lowScoreModel = {
       withStructuredOutput: vi.fn().mockImplementation((schema) => {
         if (schema === ResumeSchema) return { invoke: vi.fn().mockResolvedValue(validResumeData) };
         if (schema === JobSchema) return { invoke: vi.fn().mockResolvedValue(validJobData) };
-        if (schema === MatchSchema) return { invoke: vi.fn().mockResolvedValue(weakMatchResult) };
+        if (schema === MatchSchema) return { invoke: vi.fn().mockResolvedValue(weakMatchResultWithContextPrompt) };
         return { invoke: vi.fn().mockResolvedValue({}) };
       }),
     };
 
-    const compiledGraph = buildScoringGraph(lowScoreModel);
+    const compiledGraph = buildScoringGraph(lowScoreModel as unknown as BaseChatModel);
     const threadId = "test-thread-low-score";
 
     await compiledGraph.invoke(
-      { resumeText: "resume text", jobText: "job text" },
+      { resumeText: "resume text", jobText: "job text", intent: "confident_match", intentContext: { basis: ["direct_experience"] }, userTier: "base" },
       { configurable: { thread_id: threadId } }
     );
 
     const snapshot = await compiledGraph.getState({ configurable: { thread_id: threadId } });
     expect(snapshot.next.length).toBeGreaterThan(0);
     expect(snapshot.values.matchResult?.fitScore).toBe(45);
+  });
+
+  it("scenario 5 — low fit with null contextPrompt completes without interrupt", async () => {
+    const scenario5Model = {
+      withStructuredOutput: vi.fn().mockImplementation((schema) => {
+        if (schema === ResumeSchema) return { invoke: vi.fn().mockResolvedValue(validResumeData) };
+        if (schema === JobSchema) return { invoke: vi.fn().mockResolvedValue(validJobData) };
+        if (schema === MatchSchema) return { invoke: vi.fn().mockResolvedValue(weakMatchResult) }; // contextPrompt: null
+        return { invoke: vi.fn().mockResolvedValue({}) };
+      }),
+    };
+
+    const compiledGraph = buildScoringGraph(scenario5Model as unknown as BaseChatModel);
+    const threadId = "test-thread-scenario-5";
+
+    const state = await compiledGraph.invoke(
+      { resumeText: "resume text", jobText: "job text", intent: "confident_match", intentContext: { basis: ["direct_experience"] }, userTier: "base" },
+      { configurable: { thread_id: threadId } }
+    );
+
+    const snapshot = await compiledGraph.getState({ configurable: { thread_id: threadId } });
+    expect(snapshot.next).toHaveLength(0);
+    expect(state.scenarioId).toBe("5");
   });
 
 });

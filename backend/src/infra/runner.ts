@@ -102,6 +102,10 @@ async function emitResult(
         contextPrompt: matchResult.contextPrompt,
         weakMatch: matchResult.weakMatch,
         weakMatchReason: matchResult.weakMatchReason,
+        fitAdvice: state.fitAdvice ?? null,
+        atsAdvice: state.atsAdvice ?? null,
+        roadmapAdvice: state.roadmapAdvice ?? null,
+        scenarioId: state.scenarioId ?? null,
         interrupted: false,
         threadId,
         _meta: {
