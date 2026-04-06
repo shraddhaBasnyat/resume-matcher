@@ -1,8 +1,8 @@
 import type { ArchetypeContext } from "../../../archetypes/types";
 
-const STRONG_FIT_THRESHOLD = 75;
-const WEAK_FIT_THRESHOLD = 50;
-const ATS_THRESHOLD = 75;
+export const STRONG_FIT_THRESHOLD = 75;
+export const WEAK_FIT_THRESHOLD = 50;
+export const ATS_THRESHOLD = 75;
 
 export type ScenarioId = "1a" | "1b" | "2" | "3" | "4a" | "4b" | "5" | "6" | "7";
 export type VerdictNode =

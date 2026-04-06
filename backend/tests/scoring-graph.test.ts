@@ -432,7 +432,8 @@ describe("buildScoringGraph — full run with mocked chains", () => {
     expect(state.jobData).not.toBeTypeOf("string");
   });
 
-  it("graph is interrupted for low-score run (fitScore < 60)", async () => {
+  // Scenario 4a — fitScore < 50 + confident_match → analyzeSkepticalReconciliation → interrupt
+  it("graph is interrupted for low-score confident_match run (fitScore < 50 routes to analyzeSkepticalReconciliation)", async () => {
     const lowScoreModel = {
       withStructuredOutput: vi.fn().mockImplementation((schema) => {
         if (schema === ResumeSchema) return { invoke: vi.fn().mockResolvedValue(validResumeData) };
