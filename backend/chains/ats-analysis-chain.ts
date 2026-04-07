@@ -15,6 +15,12 @@ export const LayoutFlagSchema = z.enum([
   "missing_required_section",
 ]);
 
+// TODO: layoutFlags should be derived deterministically from the PDF parse
+// step rather than inferred by the LLM from plain text. Currently both nodes
+// run in parallel — this would require parseResume to complete first and write
+// structural layout flags to state (columns, tables, text boxes detected from
+// the PDF object model directly), with atsAnalysis reading them as a pre-computed
+// input. LLM layout inference from plain text is noisy by design.
 export type LayoutFlag = z.infer<typeof LayoutFlagSchema>;
 
 export const AtsAnalysisSchema = z.object({
@@ -92,7 +98,9 @@ export function buildAtsAnalysisChain(model: BaseChatModel) {
     ["human", HUMAN_PROMPT],
   ]);
 
-  const structuredModel = model.withStructuredOutput(AtsAnalysisSchema);
+  const structuredModel = model
+    .bind({ temperature: 0 })
+    .withStructuredOutput(AtsAnalysisSchema);
 
   return {
     invoke: async (
