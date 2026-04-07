@@ -14,9 +14,10 @@ export function routeVerdicts(state: GraphStateType) {
     throw new Error("routeVerdicts: matchResult is missing — scoreMatch node did not complete successfully");
   }
 
+  const atsScore = state.atsProfile?.atsScore ?? undefined;
   const { scenarioId, verdictNode } = deriveScenario(
     state.matchResult.fitScore,
-    state.matchResult.atsScore,
+    atsScore,
   );
 
   return new Command({
