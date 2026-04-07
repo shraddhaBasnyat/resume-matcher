@@ -76,7 +76,7 @@ Output keywordPts, layoutPts, and terminologyPts as separate fields. Do not sum 
 Additional outputs:
 - missingKeywords: list every required keyword/phrase from the job description not found in the resume.
 - layoutFlags: list only the flags you detected (empty array if none).
-- terminologyGaps: array of short strings, one per gap, in the form "resume uses X; job posting requires Y.`;
+- terminologyGaps: array of short strings, one per gap, in the form "resume uses X; job posting requires Y."`;
 
 const HUMAN_PROMPT = `Resume Text:
 {resume_text}
