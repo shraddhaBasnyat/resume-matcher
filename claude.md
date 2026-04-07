@@ -48,3 +48,11 @@ Apply this pattern in all verdict nodes.
 Schema.parse({ ...result }) masked real Zod validation errors with TypeErrors when result
 was null/undefined or malformed. throw validated.error surfaces the real failure. The
 integration tests confirmed this — ZodError appeared cleanly once the spread was removed.
+
+## Temperature per node
+
+- Scoring/mechanical nodes (atsAnalysis, scoreMatch, analyzeStrongMatch): .bind({ temperature: 0 })
+  Determinism matters — same input should produce same score.
+- Advice/prose nodes (analyzeNarrativeGap, analyzeSkepticalReconciliation): no temperature override.
+  Let the model default. Explicitly setting a low temperature produces flat prose that fails the
+  specificity test. No .bind() call means no bind mock needed in tests for these nodes.

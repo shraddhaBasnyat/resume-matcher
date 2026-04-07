@@ -59,7 +59,6 @@ export function buildConfirmedFitChain(model: BaseChatModel) {
   ]);
 
   const structuredModel = model
-    .bind({ temperature: 0 })
     .withStructuredOutput(ConfirmedFitLLMSchema);
 
   return {

@@ -66,7 +66,6 @@ export function buildNarrativeGapChain(model: BaseChatModel) {
   ]);
 
   const structuredModel = model
-    .bind({ temperature: 0 })
     .withStructuredOutput(NarrativeGapLLMSchema);
 
   return {
