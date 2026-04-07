@@ -204,7 +204,7 @@ export function buildInvisibleExpertChain(model: BaseChatModel) {
           errors: validated.error,
           rawOutput: result,
         });
-        return InvisibleExpertLLMSchema.parse({ ...result });
+        throw validated.error;
       }
 
       return validated.data;
