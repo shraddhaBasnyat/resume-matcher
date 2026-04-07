@@ -3,6 +3,7 @@ import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { MatchSchema } from "../chains/scoring-chain.js";
 import { JobSchema } from "../chains/job-chain.js";
 import { ResumeSchema } from "../chains/resume-chain.js";
+import { AtsAnalysisSchema } from "../chains/ats-analysis-chain.js";
 import { buildJobChain } from "../chains/job-chain.js";
 import { buildScoringChain } from "../chains/scoring-chain.js";
 import { buildGapAnalysisChain } from "../chains/gap-analysis-chain.js";
@@ -359,6 +360,18 @@ describe("buildScoringGraph — full run with mocked chains", () => {
           // Matches the exported MatchSchema from scoring-chain (used by buildScoringChain)
           return { invoke: vi.fn().mockResolvedValue(validMatchResult) };
         }
+        if (schema === AtsAnalysisSchema) {
+          return {
+            invoke: vi.fn().mockResolvedValue({
+              keywordPts: 40,
+              layoutPts: 28,
+              terminologyPts: 16,
+              missingKeywords: [],
+              layoutFlags: [],
+              terminologyGaps: [],
+            }),
+          };
+        }
         // gap-analysis-chain uses a local (non-exported) MatchSchema — different object reference.
         // Return validMatchResult so the chain has a valid base to attach contextPrompt/weakMatch to.
         return { invoke: vi.fn().mockResolvedValue(validMatchResult) };
@@ -445,6 +458,7 @@ describe("buildScoringGraph — full run with mocked chains", () => {
         if (schema === ResumeSchema) return { invoke: vi.fn().mockResolvedValue(validResumeData) };
         if (schema === JobSchema) return { invoke: vi.fn().mockResolvedValue(validJobData) };
         if (schema === MatchSchema) return { invoke: vi.fn().mockResolvedValue(weakMatchResultWithContextPrompt) };
+        if (schema === AtsAnalysisSchema) return { invoke: vi.fn().mockResolvedValue({ keywordPts: 40, layoutPts: 28, terminologyPts: 16, missingKeywords: [], layoutFlags: [], terminologyGaps: [] }) };
         return { invoke: vi.fn().mockResolvedValue({}) };
       }),
     };
@@ -468,6 +482,7 @@ describe("buildScoringGraph — full run with mocked chains", () => {
         if (schema === ResumeSchema) return { invoke: vi.fn().mockResolvedValue(validResumeData) };
         if (schema === JobSchema) return { invoke: vi.fn().mockResolvedValue(validJobData) };
         if (schema === MatchSchema) return { invoke: vi.fn().mockResolvedValue(weakMatchResult) }; // contextPrompt: null
+        if (schema === AtsAnalysisSchema) return { invoke: vi.fn().mockResolvedValue({ keywordPts: 40, layoutPts: 28, terminologyPts: 16, missingKeywords: [], layoutFlags: [], terminologyGaps: [] }) };
         return { invoke: vi.fn().mockResolvedValue({}) };
       }),
     };
