@@ -119,13 +119,11 @@ export function buildAtsAnalysisChain(model: BaseChatModel) {
           errors: validated.error,
           rawOutput: result,
         });
-        // Re-parse to throw with structured error on unrecoverable failure
+        // Throw with structured error on unrecoverable failure
         AtsAnalysisSchema.parse({ ...result });
       }
 
-      const data = validated.success
-        ? validated.data
-        : AtsAnalysisSchema.parse({ ...result }); // throws on unrecoverable
+      const data = validated.data;
       const atsScore = Math.min(
         100,
         data.keywordPts + data.layoutPts + data.terminologyPts,
