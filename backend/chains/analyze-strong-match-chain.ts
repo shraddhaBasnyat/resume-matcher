@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { Runnable } from "@langchain/core/runnables";
 import { RootRunCapture, logValidationFailure } from "../langsmith.js";
 
 // -----------------------------------------------------------------------
@@ -59,7 +60,6 @@ export function buildConfirmedFitChain(model: BaseChatModel) {
   ]);
 
   const structuredModel = model
-    .bind({ temperature: 0 })
     .withStructuredOutput(ConfirmedFitLLMSchema);
 
   return {
@@ -169,7 +169,6 @@ export function buildInvisibleExpertChain(model: BaseChatModel) {
   ]);
 
   const structuredModel = model
-    .bind({ temperature: 0 })
     .withStructuredOutput(InvisibleExpertLLMSchema);
 
   return {

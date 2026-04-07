@@ -8,6 +8,7 @@ import {
   ConfirmedFitLLMSchema,
   InvisibleExpertLLMSchema,
 } from "../chains/analyze-strong-match-chain.js";
+import { NarrativeGapLLMSchema } from "../chains/analyze-narrative-gap-chain.js";
 import { buildJobChain } from "../chains/job-chain.js";
 import { buildScoringChain } from "../chains/scoring-chain.js";
 import { buildGapAnalysisChain } from "../chains/gap-analysis-chain.js";
@@ -403,6 +404,16 @@ describe("buildScoringGraph — full run with mocked chains", () => {
       }
       if (schema === InvisibleExpertLLMSchema) {
         return { invoke: vi.fn().mockResolvedValue(validInvisibleExpertLLMOutput) };
+      }
+      if (schema === NarrativeGapLLMSchema) {
+        return {
+          invoke: vi.fn().mockResolvedValue({
+            narrativeBridge: "Your background maps to this role.",
+            reframingSuggestions: ["Retitle your role to reflect the target domain."],
+            transferableStrengths: ["TypeScript", "React"],
+            missingSkills: [],
+          }),
+        };
       }
       // gap-analysis-chain uses a local (non-exported) MatchSchema — different object reference.
       // Return validMatchResult so the chain has a valid base to attach contextPrompt/weakMatch to.

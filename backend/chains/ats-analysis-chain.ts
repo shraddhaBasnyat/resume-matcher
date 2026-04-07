@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { Runnable } from "@langchain/core/runnables";
 import { RootRunCapture, logValidationFailure } from "../langsmith.js";
 
 export const LayoutFlagSchema = z.enum([
@@ -98,7 +99,7 @@ export function buildAtsAnalysisChain(model: BaseChatModel) {
     ["human", HUMAN_PROMPT],
   ]);
 
-  const structuredModel = model
+  const structuredModel = (model as Runnable)
     .bind({ temperature: 0 })
     .withStructuredOutput(AtsAnalysisSchema);
 
