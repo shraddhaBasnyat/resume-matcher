@@ -98,10 +98,8 @@ export function buildAtsAnalysisChain(model: BaseChatModel) {
     ["human", HUMAN_PROMPT],
   ]);
 
-  // model is typed as BaseChatModel but .bind() exists at runtime via
-  // Runnable — cast to any to avoid TS2339, behaviour is correct
-  const structuredModel = (model as any)
-    .bind({ temperature: 0 })
+
+  const structuredModel = model
     .withStructuredOutput(AtsAnalysisSchema);
 
   return {
