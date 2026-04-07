@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
+import { ZodError } from "zod";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { NarrativeGapLLMSchema } from "../chains/analyze-narrative-gap-chain.js";
 import { makeAnalyzeNarrativeGapNode } from "../graphs/scoring/nodes/analyze-narrative-gap.js";
 import type { GraphStateType } from "../graphs/scoring/scoring-graph-state.js";
+import * as langsmith from "../langsmith.js";
 
 vi.mock("../langsmith.js", () => ({
   isTracingEnabled: () => false,
@@ -174,5 +176,30 @@ describe("analyzeNarrativeGap — guards", () => {
     await expect(
       node(buildBaseState({ scenarioId: "confirmed_fit" })),
     ).rejects.toThrow('expected scenarioId "narrative_gap"');
+  });
+
+  it("throws ZodError and calls logValidationFailure when LLM returns invalid shape", async () => {
+    const invalidOutput = { narrativeBridge: 42, reframingSuggestions: "not an array" };
+
+    const model = {
+      bind: vi.fn().mockReturnThis(),
+      withStructuredOutput: vi.fn().mockImplementation((schema: unknown) => {
+        if (schema === NarrativeGapLLMSchema) {
+          return { invoke: vi.fn().mockResolvedValue(invalidOutput) };
+        }
+        return { invoke: vi.fn().mockResolvedValue({}) };
+      }),
+    } as unknown as BaseChatModel;
+
+    const node = makeAnalyzeNarrativeGapNode(model);
+
+    await expect(node(buildBaseState())).rejects.toBeInstanceOf(ZodError);
+
+    expect(langsmith.logValidationFailure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nodeName: "analyze-narrative-gap",
+        rawOutput: invalidOutput,
+      }),
+    );
   });
 });

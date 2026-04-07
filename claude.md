@@ -20,6 +20,20 @@
   correct when temperature overrides are added or removed — the test is not coupled to
   whether .bind() is in the chain.
 
+- Every chain must have a validation failure test: mock the model to return an invalid
+  shape, assert the node rejects with ZodError, assert logValidationFailure was called
+  with the raw output and nodeName. This validates the throw validated.error policy —
+  without it a regression back to a silent fallback passes the suite undetected.
+
+- Validation failure tests assert via namespace import: import * as langsmith from "../langsmith.js"
+  gives a reference to the mocked module after vi.mock(). langsmith.logValidationFailure is the 
+  same vi.fn() instance from the mock factory.
+  
+- Use expect.objectContaining({ nodeName: "...", rawOutput: invalidOutput }) — do not assert on
+  runId or errors. nodeName confirms the correct chain reported the failure. rawOutput confirms
+  the raw LLM response was captured, not something derived from it. objectContaining means the
+  test survives additions to the call signature without breaking.
+
 ## Chain conventions
 
 - Verdict nodes (analyzeStrongMatch, analyzeNarrativeGap, analyzeSkepticalReconciliation):
