@@ -123,6 +123,9 @@ export function buildAtsAnalysisChain(model: BaseChatModel) {
         AtsAnalysisSchema.parse({ ...result });
       }
 
+      if (!validated.data) {
+        throw new Error("ats-analysis-chain: validation succeeded but data is undefined");
+      }
       const data = validated.data;
       const atsScore = Math.min(
         100,
