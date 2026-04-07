@@ -59,7 +59,7 @@ export function getCheckpointer(): PostgresSaver | MemorySaver {
 export function buildScoringGraph(model: BaseChatModel) {
   const parseResume = makeParseResumeNode(model);
   const parseJob = makeParseJobNode(model);
-  const atsAnalysis = makeAtsAnalysisNode();
+  const atsAnalysis = makeAtsAnalysisNode(model);
   const scoreMatch = makeScoreMatchNode(model);
   const analyzeStrongMatch = makeAnalyzeStrongMatchNode(model);
   const analyzeNarrativeGap = makeAnalyzeNarrativeGapNode(model);
