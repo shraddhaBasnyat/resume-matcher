@@ -91,16 +91,14 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
 }
 
 function buildMockModel() {
-  const mockBound = {
+  return {
+    bind: vi.fn().mockReturnThis(),
     withStructuredOutput: vi.fn().mockImplementation((schema: unknown) => {
       if (schema === NarrativeGapLLMSchema) {
         return { invoke: vi.fn().mockResolvedValue(validLLMOutput) };
       }
       return { invoke: vi.fn().mockResolvedValue({}) };
     }),
-  };
-  return {
-    bind: vi.fn().mockReturnValue(mockBound),
   } as unknown as BaseChatModel;
 }
 

@@ -14,6 +14,12 @@
 - Do not write schema self-validation tests (fixture validated against itself). They pass
   unconditionally and cover nothing real.
 
+- Model mocks must use bind: vi.fn().mockReturnThis() — not mockReturnValue(mockBound).
+  mockReturnThis() returns the mock object itself, so withStructuredOutput is always called
+  on the same object regardless of whether .bind() is called first. This means mocks stay
+  correct when temperature overrides are added or removed — the test is not coupled to
+  whether .bind() is in the chain.
+
 ## Chain conventions
 
 - Verdict nodes (analyzeStrongMatch, analyzeNarrativeGap, analyzeSkepticalReconciliation):
