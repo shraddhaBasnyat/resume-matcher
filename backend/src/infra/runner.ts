@@ -178,9 +178,12 @@ export async function runMatchGraph(options: RunMatchGraphOptions): Promise<void
     const state = await invokeGraph(options, invokeConfig);
     const snapshot = await graph.getState(config);
     const isInterrupted = snapshot.next.length > 0;
-    await emitResult(state, emit, newThreadId, runStartTime, capture, isInterrupted);
-    if (!isInterrupted) {
-      await getCheckpointer().deleteThread(newThreadId);
+    try {
+      await emitResult(state, emit, newThreadId, runStartTime, capture, isInterrupted);
+    } finally {
+      if (!isInterrupted) {
+        await getCheckpointer().deleteThread(newThreadId);
+      }
     }
   } catch (error) {
     if (abort.signal.aborted) {
