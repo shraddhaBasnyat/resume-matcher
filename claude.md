@@ -51,8 +51,8 @@ integration tests confirmed this — ZodError appeared cleanly once the spread w
 
 ## Temperature per node
 
-- Scoring/mechanical nodes (atsAnalysis, scoreMatch, analyzeStrongMatch): .bind({ temperature: 0 })
-  Determinism matters — same input should produce same score.
-- Advice/prose nodes (analyzeNarrativeGap, analyzeSkepticalReconciliation): no temperature override.
-  Let the model default. Explicitly setting a low temperature produces flat prose that fails the
-  specificity test. No .bind() call means no bind mock needed in tests for these nodes.
+- atsAnalysis, scoreMatch: .bind({ temperature: 0 })
+  These produce scores and structured mechanical outputs — determinism matters.
+- analyzeStrongMatch, analyzeNarrativeGap, analyzeSkepticalReconciliation: no temperature override.
+  Verdict nodes produce prose and advice. Temperature 0 produces flat output that fails the
+  specificity test. No .bind() call — no bind mock needed in tests for these nodes.
