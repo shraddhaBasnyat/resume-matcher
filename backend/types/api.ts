@@ -101,7 +101,6 @@ export interface CancelMatchRequest {
 
 export interface MatchResponse {
   fitScore: number;
-  atsScore?: number;
   matchedSkills: string[];
   missingSkills: string[];
   narrativeAlignment: string;
@@ -110,9 +109,13 @@ export interface MatchResponse {
   contextPrompt: string | null;
   weakMatch: boolean;
   weakMatchReason?: string;
+  atsProfile: {
+    atsScore: number | null;
+    missingKeywords: string[];
+    layoutFlags: string[];
+    terminologyGaps: string[];
+  };
   fitAdvice: Record<string, unknown> | null;
-  atsAdvice: Record<string, unknown> | null;
-  roadmapAdvice: Record<string, unknown> | null;
   scenarioId: ScenarioId | null;
   interrupted: boolean;
   threadId: string;

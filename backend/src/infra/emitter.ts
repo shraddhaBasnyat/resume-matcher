@@ -5,15 +5,13 @@ import type { Serialized } from "@langchain/core/load/serializable";
 const GRAPH_NODES = new Set([
   "parseResume",
   "parseJob",
+  "atsAnalysis",
   "scoreMatch",
   "detectArchetype",
   "routeVerdicts",
   "analyzeStrongMatch",
   "analyzeNarrativeGap",
-  "analyzeArchetypeGap",
   "analyzeSkepticalReconciliation",
-  "analyzeATSGap",
-  "analyzeRoadmap",
 ]);
 
 /** Callback handler that emits SSE node_start / node_done events. */
