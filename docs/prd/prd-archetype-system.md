@@ -66,7 +66,7 @@ An archetype represents a specific source-to-target role transition. It is built
 
 Dedicated graph node. No LLM call. Pure dictionary lookup.
 
-**Position in graph:** Runs after `parseResumeFit` and `parseJobFit` complete, before `scoreMatch`.
+**Position in graph:** Runs after `scoreMatch` completes, before `routeVerdicts`. `parseResume`, `parseJob`, and `atsAnalysis` all run in parallel at the start, fan into `scoreMatch`, and `detectArchetype` runs as prompt enrichment on the linear spine after scoring — it does not affect the fit score.
 
 **Behaviour:**
 - Reads `state.resumeData.sourceRole` and `state.jobData.targetRole`
