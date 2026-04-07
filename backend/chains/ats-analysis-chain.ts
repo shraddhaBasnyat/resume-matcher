@@ -92,7 +92,9 @@ export function buildAtsAnalysisChain(model: BaseChatModel) {
     ["human", HUMAN_PROMPT],
   ]);
 
-  const structuredModel = model.withStructuredOutput(AtsAnalysisSchema);
+  const structuredModel = model
+    .bind({ temperature: 0 })
+    .withStructuredOutput(AtsAnalysisSchema);
 
   return {
     invoke: async (
