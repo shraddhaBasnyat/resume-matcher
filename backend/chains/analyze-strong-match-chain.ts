@@ -87,7 +87,7 @@ export function buildConfirmedFitChain(model: BaseChatModel) {
           errors: validated.error,
           rawOutput: result,
         });
-        return ConfirmedFitLLMSchema.parse({ ...result });
+        throw validated.error;
       }
 
       return validated.data;
