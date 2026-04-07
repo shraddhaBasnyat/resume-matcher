@@ -1,7 +1,7 @@
-import { StateGraph, Command, MemorySaver } from "@langchain/langgraph";
+import { StateGraph, MemorySaver } from "@langchain/langgraph";
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { GraphState, type GraphStateType } from "./scoring-graph-state.js";
+import { GraphState } from "./scoring-graph-state.js";
 import { makeParseResumeNode } from "./nodes/parse-resume.js";
 import { makeParseJobNode } from "./nodes/parse-job.js";
 import { makeScoreMatchNode } from "./nodes/score-match.js";
@@ -9,7 +9,7 @@ import { makeAtsAnalysisNode } from "./nodes/ats-analysis.js";
 import { makeAnalyzeStrongMatchNode } from "./nodes/analyze-strong-match.js";
 import { makeAnalyzeNarrativeGapNode } from "./nodes/analyze-narrative-gap.js";
 import { makeAnalyzeSkepticalReconciliationNode } from "./nodes/analyze-skeptical-reconciliation.js";
-import { deriveScenario } from "./scenario/derive-scenario.js";
+import { detectArchetype, routeVerdicts } from "./edges.js";
 
 const NODES = {
   PARSE_RESUME: "parseResume",
@@ -21,16 +21,6 @@ const NODES = {
   ANALYZE_STRONG_MATCH: "analyzeStrongMatch",
   ANALYZE_NARRATIVE_GAP: "analyzeNarrativeGap",
   ANALYZE_SKEPTICAL_RECONCILIATION: "analyzeSkepticalReconciliation",
-} as const;
-
-// Scenario → verdict node mapping. Both confirmed_fit and invisible_expert
-// route to analyzeStrongMatch — the node reads atsProfile from state to
-// calibrate its output for the invisible_expert case.
-const SCENARIO_NODE_MAP = {
-  confirmed_fit: NODES.ANALYZE_STRONG_MATCH,
-  invisible_expert: NODES.ANALYZE_STRONG_MATCH,
-  narrative_gap: NODES.ANALYZE_NARRATIVE_GAP,
-  honest_verdict: NODES.ANALYZE_SKEPTICAL_RECONCILIATION,
 } as const;
 
 let sharedCheckpointer: PostgresSaver | MemorySaver | null = null;
@@ -74,30 +64,6 @@ export function buildScoringGraph(model: BaseChatModel) {
   const analyzeStrongMatch = makeAnalyzeStrongMatchNode(model);
   const analyzeNarrativeGap = makeAnalyzeNarrativeGapNode(model);
   const analyzeSkepticalReconciliation = makeAnalyzeSkepticalReconciliationNode(model);
-
-  // Stub: sets archetypeContext = null until Pass 2 archetype detection is implemented.
-  async function detectArchetype(_state: GraphStateType) {
-    return { archetypeContext: null };
-  }
-
-  // Command-based routing node: calls deriveScenario (fitScore + atsScore only),
-  // writes scenarioId to state, and dispatches to the single verdict node.
-  function routeVerdicts(state: GraphStateType) {
-    if (!state.matchResult) {
-      throw new Error("routeVerdicts: matchResult is missing — scoreMatch node did not complete successfully");
-    }
-
-    const atsScore = state.atsProfile?.atsScore ?? undefined;
-    const { scenarioId, verdictNode } = deriveScenario(
-      state.matchResult.fitScore,
-      atsScore,
-    );
-
-    return new Command({
-      update: { scenarioId },
-      goto: [verdictNode],
-    });
-  }
 
   const workflow = new StateGraph(GraphState)
     .addNode(NODES.PARSE_RESUME, parseResume)
