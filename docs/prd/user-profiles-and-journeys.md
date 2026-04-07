@@ -6,7 +6,7 @@ Scenarios are derived from two signals only: `fitScore` and `atsScore`. No other
 
 ---
 
-## Scenario 1a — The Confirmed Fit
+## Scenario 1 — The Confirmed Fit
 **fitScore >= 75, atsScore >= 75**
 
 **Who they are:** A candidate who genuinely matches the role and has a well-structured, keyword-rich resume that surfaces correctly to automated filters. They've done the work. They just want confirmation.
@@ -17,7 +17,7 @@ Scenarios are derived from two signals only: `fitScore` and `atsScore`. No other
 
 ---
 
-## Scenario 1b — The Invisible Expert
+## Scenario 2 — The Invisible Expert
 **fitScore >= 75, atsScore < 75**
 
 **Who they are:** A highly qualified candidate who perfectly matches the job's requirements but has no idea that their resume layout or terminology choices make them completely invisible to automated filters. They keep not getting interviews despite knowing they are the right person for the role.
@@ -28,7 +28,7 @@ Scenarios are derived from two signals only: `fitScore` and `atsScore`. No other
 
 ---
 
-## Scenario 2 — The Narrative Gap
+## Scenario 3 — The Narrative Gap
 **fitScore 50–74, atsScore any**
 
 **Who they are:** A professional whose career trajectory and transferable skills fit the role well, but whose resume reads as a literal history of past job titles rather than a narrative pointing toward a future role. They have the experience — it's just not framed to show it.
@@ -39,7 +39,7 @@ Scenarios are derived from two signals only: `fitScore` and `atsScore`. No other
 
 ---
 
-## Scenario 3 — The Honest Verdict
+## Scenario 4 — The Honest Verdict
 **fitScore < 50, atsScore any**
 
 **Who they are:** A candidate whose confidence may not be grounded in the evidence. The gap is real — either the skills aren't there yet, the experience is too far removed, or the transition requires deliberate work they haven't started. HITL gives them one opportunity to surface context their resume missed — if they can provide it, the score may move and they land in a different scenario. If not, the verdict stands.
@@ -68,7 +68,7 @@ Neither enrichment changes which scenario the user is in. They change how specif
 
 **Never manufacture advice.** Empty `resumeAdvice` on a strong match is correct. Padding to appear thorough erodes trust faster than saying nothing.
 
-**Honesty over comfort, but never cruelty.** Scenario 3 especially. The tool is a trusted mentor, not a rejection machine.
+**Honesty over comfort, but never cruelty.** Scenario The Honest Verdict especially. The tool is a trusted mentor, not a rejection machine.
 
 **Specificity is the product.** Generic advice — "strengthen your experience section," "highlight your skills" — is the failure mode in every scenario. The test for any output: could this have been written without reading this specific resume and this specific job description? If yes, it's generic.
 
