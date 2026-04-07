@@ -1,4 +1,5 @@
 import type { ScenarioId } from "../graphs/scoring/scenario/derive-scenario.js";
+import type { LayoutFlag } from "../chains/ats-analysis-chain.js";
 
 // ---------------------------------------------------------------------------
 // Career transition intent — structured context collected before first run
@@ -110,9 +111,9 @@ export interface MatchResponse {
   weakMatch: boolean;
   weakMatchReason?: string;
   atsProfile: {
-    atsScore: number | null;
+    atsScore: number;
     missingKeywords: string[];
-    layoutFlags: string[];
+    layoutFlags: LayoutFlag[];
     terminologyGaps: string[];
   };
   fitAdvice: Record<string, unknown> | null;

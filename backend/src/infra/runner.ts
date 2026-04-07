@@ -88,6 +88,9 @@ async function emitResult(
       emit("error", { error: "Incomplete graph result", message: "Graph completed but matchResult was not populated." });
       return;
     }
+    if (!state.atsProfile) {
+      throw new Error("runner: atsProfile missing after graph completion — atsAnalysis node did not write to state");
+    }
     // Explicit field list — resumeData and jobData are internal graph state only,
     // not surfaced to the client.
     emit("completed", {
@@ -101,7 +104,7 @@ async function emitResult(
         contextPrompt: matchResult.contextPrompt,
         weakMatch: matchResult.weakMatch,
         weakMatchReason: matchResult.weakMatchReason,
-        atsProfile: state.atsProfile ?? { atsScore: null, missingKeywords: [], layoutFlags: [], terminologyGaps: [] },
+        atsProfile: state.atsProfile,
         fitAdvice: state.fitAdvice ?? null,
         scenarioId: state.scenarioId ?? null,
         interrupted: false,
@@ -175,9 +178,12 @@ export async function runMatchGraph(options: RunMatchGraphOptions): Promise<void
     const state = await invokeGraph(options, invokeConfig);
     const snapshot = await graph.getState(config);
     const isInterrupted = snapshot.next.length > 0;
-    await emitResult(state, emit, newThreadId, runStartTime, capture, isInterrupted);
-    if (!isInterrupted) {
-      await getCheckpointer().deleteThread(newThreadId);
+    try {
+      await emitResult(state, emit, newThreadId, runStartTime, capture, isInterrupted);
+    } finally {
+      if (!isInterrupted) {
+        await getCheckpointer().deleteThread(newThreadId);
+      }
     }
   } catch (error) {
     if (abort.signal.aborted) {

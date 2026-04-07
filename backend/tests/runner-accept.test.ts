@@ -72,6 +72,12 @@ describe("runMatchGraph — kind: accept", () => {
     mockGetState.mockResolvedValue({
       values: {
         matchResult: checkpointedMatchResult,
+        atsProfile: {
+          atsScore: 84,
+          missingKeywords: [],
+          layoutFlags: [],
+          terminologyGaps: [],
+        },
       },
       next: [],
     });

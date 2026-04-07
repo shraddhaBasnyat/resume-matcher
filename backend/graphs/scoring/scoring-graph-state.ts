@@ -2,6 +2,7 @@ import { Annotation } from "@langchain/langgraph";
 import type { Resume } from "../../chains/resume-chain.js";
 import type { JobDescription } from "../../chains/job-chain.js";
 import type { MatchResult } from "../../chains/scoring-chain.js";
+import type { LayoutFlag } from "../../chains/ats-analysis-chain.js";
 import type { ArchetypeContext } from "../../archetypes/types.js";
 import type { ConfidentMatchContext, ExploringGapContext } from "../../types/api.js";
 import type { ScenarioId } from "./scenario/derive-scenario.js";
@@ -87,9 +88,9 @@ export const GraphState = Annotation.Root({
   }),
   // ATS analysis output — written by atsAnalysis node (runs in parallel with parse nodes).
   atsProfile: Annotation<{
-    atsScore: number | null;
+    atsScore: number;
     missingKeywords: string[];
-    layoutFlags: string[];
+    layoutFlags: LayoutFlag[];
     terminologyGaps: string[];
   } | undefined>({
     default: () => undefined,
