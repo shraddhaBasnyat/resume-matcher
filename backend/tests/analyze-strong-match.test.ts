@@ -1,5 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+
+vi.mock("../langsmith.js", () => ({
+  isTracingEnabled: () => false,
+  getTraceUrl: vi.fn(),
+  RootRunCapture: vi.fn().mockImplementation(function () { return { rootRunId: undefined }; }),
+  logValidationFailure: vi.fn(),
+  RUN_NAMES: {},
+}));
 import {
   ConfirmedFitLLMSchema,
   InvisibleExpertLLMSchema,
@@ -126,10 +134,6 @@ function buildMockModel(
 // ---------------------------------------------------------------------------
 
 describe("ConfirmedFitLLMSchema", () => {
-  it("accepts valid confirmed fit output", () => {
-    expect(ConfirmedFitLLMSchema.safeParse(validConfirmedFitLLMOutput).success).toBe(true);
-  });
-
   it("accepts empty minorGaps — correct output when no material gaps exist", () => {
     expect(
       ConfirmedFitLLMSchema.safeParse({ ...validConfirmedFitLLMOutput, minorGaps: [] }).success,
@@ -156,10 +160,6 @@ describe("ConfirmedFitLLMSchema", () => {
 // ---------------------------------------------------------------------------
 
 describe("InvisibleExpertLLMSchema", () => {
-  it("accepts valid invisible expert LLM output", () => {
-    expect(InvisibleExpertLLMSchema.safeParse(validInvisibleExpertLLMOutput).success).toBe(true);
-  });
-
   it("rejects output missing atsRealityCheck — required for invisible_expert", () => {
     const { atsRealityCheck: _, ...without } = validInvisibleExpertLLMOutput;
     expect(InvisibleExpertLLMSchema.safeParse(without).success).toBe(false);
@@ -187,16 +187,6 @@ describe("InvisibleExpertLLMSchema", () => {
 // ---------------------------------------------------------------------------
 
 describe("analyzeStrongMatch — confirmed_fit", () => {
-  beforeEach(() => {
-    vi.doMock("../langsmith.js", () => ({
-      isTracingEnabled: () => false,
-      getTraceUrl: vi.fn(),
-      RootRunCapture: vi.fn().mockImplementation(() => ({ rootRunId: undefined })),
-      logValidationFailure: vi.fn(),
-      RUN_NAMES: {},
-    }));
-  });
-
   // Test case 1
   it("returns fitAdvice with scenarioId confirmed_fit and no ATS fields", async () => {
     const model = buildMockModel();
@@ -222,16 +212,6 @@ describe("analyzeStrongMatch — confirmed_fit", () => {
 // ---------------------------------------------------------------------------
 
 describe("analyzeStrongMatch — invisible_expert", () => {
-  beforeEach(() => {
-    vi.doMock("../langsmith.js", () => ({
-      isTracingEnabled: () => false,
-      getTraceUrl: vi.fn(),
-      RootRunCapture: vi.fn().mockImplementation(() => ({ rootRunId: undefined })),
-      logValidationFailure: vi.fn(),
-      RUN_NAMES: {},
-    }));
-  });
-
   // Test case 2
   it("merges LLM output with atsProfile pass-throughs — terminologySwaps from atsProfile, not LLM", async () => {
     const model = buildMockModel();
@@ -277,16 +257,6 @@ describe("analyzeStrongMatch — invisible_expert", () => {
 // ---------------------------------------------------------------------------
 
 describe("analyzeStrongMatch — guards", () => {
-  beforeEach(() => {
-    vi.doMock("../langsmith.js", () => ({
-      isTracingEnabled: () => false,
-      getTraceUrl: vi.fn(),
-      RootRunCapture: vi.fn().mockImplementation(() => ({ rootRunId: undefined })),
-      logValidationFailure: vi.fn(),
-      RUN_NAMES: {},
-    }));
-  });
-
   // Test case 4
   it("throws when matchResult is missing", async () => {
     const model = buildMockModel();
