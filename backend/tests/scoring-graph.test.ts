@@ -12,7 +12,6 @@ import { NarrativeGapLLMSchema } from "../chains/analyze-narrative-gap-chain.js"
 import { HonestVerdictLLMSchema } from "../chains/analyze-skeptical-reconciliation-chain.js";
 import { buildJobChain } from "../chains/job-chain.js";
 import { buildScoringChain } from "../chains/scoring-chain.js";
-import { buildGapAnalysisChain } from "../chains/gap-analysis-chain.js";
 import { buildScoringGraph } from "../graphs/scoring/scoring-graph.js";
 
 // ---------------------------------------------------------------------------
@@ -261,89 +260,6 @@ describe("buildScoringChain", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// buildGapAnalysisChain — reads match_result + resume_data + job_data
-// ---------------------------------------------------------------------------
-
-describe("buildGapAnalysisChain", () => {
-  it("returns an updated MatchSchema shape", async () => {
-    const enrichedResult = {
-      ...validMatchResult,
-      resumeAdvice: [
-        "Rename 'Technologies' to 'Cloud & DevOps' and add Kubernetes self-study projects.",
-        "Add a bullet under Startup role: 'Deployed containerised services via Docker Compose'.",
-      ],
-    };
-    // Gap analysis chain output excludes weakMatch — chain strips it from output schema
-    // and reattaches from input. So the mock returns the LLM output shape (no weakMatch).
-    const { contextPrompt: _, ...llmEnrichedResult } = { ...enrichedResult, weakMatch: undefined };
-    const mockInvoke = vi.fn().mockResolvedValue(llmEnrichedResult);
-    const mockModel = {
-      withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
-    };
-
-    const matchResultInput = JSON.stringify({ ...validMatchResult, weakMatch: false });
-    const chain = buildGapAnalysisChain(mockModel as unknown as BaseChatModel);
-    const result = await chain.invoke({
-      resume_data: JSON.stringify(validResumeData),
-      job_data: JSON.stringify(validJobData),
-      match_result: matchResultInput,
-    });
-
-    expect(result.resumeAdvice).toHaveLength(2);
-    // contextPrompt and weakMatch are preserved from input, not regenerated
-    expect(result.contextPrompt).toBeNull();
-    expect(result.weakMatch).toBe(false);
-  });
-
-  it("preserves contextPrompt from input match_result", async () => {
-    const mockInvoke = vi.fn().mockResolvedValue({
-      ...validMatchResult,
-      contextPrompt: "this should be ignored",
-    });
-    const mockModel = {
-      withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
-    };
-
-    const inputWithContextPrompt = JSON.stringify({
-      ...validMatchResult,
-      weakMatch: false,
-      contextPrompt: "Can you describe your LangGraph production experience?",
-    });
-
-    const chain = buildGapAnalysisChain(mockModel as unknown as BaseChatModel);
-    const result = await chain.invoke({
-      resume_data: JSON.stringify(validResumeData),
-      job_data: JSON.stringify(validJobData),
-      match_result: inputWithContextPrompt,
-    });
-
-    expect(result.contextPrompt).toBe("Can you describe your LangGraph production experience?");
-  });
-
-  it("accepts all three inputs and never receives raw text", async () => {
-    const mockInvoke = vi.fn().mockResolvedValue(validMatchResult);
-    const mockModel = {
-      withStructuredOutput: vi.fn().mockReturnValue({ invoke: mockInvoke }),
-    };
-
-    const chain = buildGapAnalysisChain(mockModel as unknown as BaseChatModel);
-    await chain.invoke({
-      resume_data: JSON.stringify(validResumeData),
-      job_data: JSON.stringify(validJobData),
-      match_result: JSON.stringify({ ...validMatchResult, weakMatch: false }),
-    });
-
-    const calledMessages = mockInvoke.mock.calls[0][0];
-    const messageContent = calledMessages.messages
-      .map((m: { content: string }) => m.content)
-      .join(" ");
-    expect(messageContent).toContain('"fitScore"');
-    expect(messageContent).toContain('"skills"');
-    expect(messageContent).toContain('"title"');
-  });
-});
-
 // Routing logic is covered by derive-scenario.test.ts — no inline routing tests here.
 
 // ---------------------------------------------------------------------------
@@ -429,8 +345,10 @@ describe("buildScoringGraph — full run with mocked chains", () => {
           }),
         };
       }
-      // gap-analysis-chain uses a local (non-exported) MatchSchema — different object reference.
-      // Return validMatchResult so the chain has a valid base to attach contextPrompt/weakMatch to.
+      // Fallback — loud failure guard. If a new chain is added to the graph
+      // without a corresponding case here, withStructuredOutput returns
+      // validMatchResult which fails every LLM output schema. throw validated.error
+      // surfaces immediately as a ZodError. Missing cases never pass silently.
       return { invoke: vi.fn().mockResolvedValue(validMatchResult) };
     });
 
