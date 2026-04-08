@@ -105,8 +105,6 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     atsProfile: undefined,
     scenarioId: "honest_verdict",
     fitAdvice: undefined,
-    atsAdvice: undefined,
-    roadmapAdvice: undefined,
     ...overrides,
   } as unknown as GraphStateType;
 }
