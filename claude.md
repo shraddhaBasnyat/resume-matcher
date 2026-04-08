@@ -94,3 +94,10 @@ Chain-level Zod validation catches LLM output errors — do not add
 redundant Zod parsing at the node boundary. Node assembly correctness 
 is enforced by typing fitAdvice as FitAdvice | null in scoring-graph-state.ts 
 and using `satisfies` on node return values where assembly is complex.
+
+## Known tech debt
+
+FitAdvice is defined twice — as Zod schemas in chain files and as TypeScript 
+interfaces in api.ts. These must be kept in sync manually. The correct fix 
+is a shared FitAdviceSchema Zod discriminated union with types derived via 
+z.infer<>. Deferred — address when a verdict node schema changes.
