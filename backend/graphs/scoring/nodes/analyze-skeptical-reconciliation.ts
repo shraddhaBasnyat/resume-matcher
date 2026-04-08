@@ -23,8 +23,11 @@ export function makeAnalyzeSkepticalReconciliationNode(model: BaseChatModel) {
       );
     }
 
-    // Strip resumeAdvice — stale scoreMatch output, excluded from all verdict node prompts.
-    const { resumeAdvice: _, ...matchResultForChain } = state.matchResult;
+    const { weakMatchReason, resumeAdvice, ...matchResultForChain } = state.matchResult;
+
+    const weakMatchReasonBlock = weakMatchReason
+      ? `Score Assessment: ${weakMatchReason}\n\n`
+      : "";
 
     const humanContextBlock = state.humanContext
       ? `Additional Context from Candidate:\n${state.humanContext}\n\n`
@@ -54,6 +57,7 @@ export function makeAnalyzeSkepticalReconciliationNode(model: BaseChatModel) {
         resume_data: JSON.stringify(state.resumeData, null, 2),
         job_data: JSON.stringify(state.jobData, null, 2),
         match_result: JSON.stringify(matchResultForChain, null, 2),
+        weak_match_reason_block: weakMatchReasonBlock,
         human_context: humanContextBlock,
       },
       { runName: "analyze-skeptical-reconciliation" },
@@ -78,6 +82,7 @@ export function makeAnalyzeSkepticalReconciliationNode(model: BaseChatModel) {
     return {
       fitAdvice: {
         scenarioId: "honest_verdict" as const,
+        hitlFired: state.hitlFired,
         ...llmOutput,
       },
     };

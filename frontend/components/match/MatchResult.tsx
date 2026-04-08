@@ -54,34 +54,6 @@ export function MatchResult({
         </div>
       )}
 
-      {/* Gaps */}
-      {result.gaps.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold mb-2">Gaps</h3>
-          <ul className="list-disc list-inside space-y-1">
-            {result.gaps.map((gap: string, i: number) => (
-              <li key={i} className="text-sm text-gray-600">
-                {gap}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Resume advice */}
-      {result.resumeAdvice.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold mb-2">Resume Advice</h3>
-          <ol className="list-decimal list-inside space-y-1">
-            {result.resumeAdvice.map((advice: string, i: number) => (
-              <li key={i} className="text-sm text-gray-700">
-                {advice}
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
-
       {/* Weak match reason */}
       {result.weakMatch && result.weakMatchReason && (
         <p className="text-sm text-red-700 bg-red-50 p-3 rounded border border-red-200">

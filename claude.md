@@ -87,3 +87,23 @@ Nullable string fields must use z.string().min(1).nullable() — not
 z.string().nullable(). The latter accepts empty string silently, which 
 passes safeParse and undermines the null contract. null is valid, 
 empty string is not.
+
+## Node output validation
+
+Chain-level Zod validation catches LLM output errors — do not add 
+redundant Zod parsing at the node boundary. Node assembly correctness 
+is enforced by typing fitAdvice as FitAdvice | null in scoring-graph-state.ts 
+and using `satisfies` on node return values where assembly is complex.
+
+## Known tech debt
+
+FitAdvice is defined twice — as Zod schemas in chain files and as TypeScript 
+interfaces in api.ts. These must be kept in sync manually. The correct fix 
+is a shared FitAdviceSchema Zod discriminated union with types derived via 
+z.infer<>. Deferred — address when a verdict node schema changes.
+
+## State field ownership
+
+Before adding a node that reads or writes graph state, check the field 
+ownership table in ARCHITECTURE.md. Every field has one writer — do not 
+write to a field owned by another node without updating the table.

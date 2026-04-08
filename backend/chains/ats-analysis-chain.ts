@@ -127,8 +127,7 @@ export function buildAtsAnalysisChain(model: BaseChatModel) {
           errors: validated.error,
           rawOutput: result,
         });
-        // Throw with structured error on unrecoverable failure
-        AtsAnalysisSchema.parse({ ...result });
+        throw validated.error;
       }
 
       if (!validated.data) {

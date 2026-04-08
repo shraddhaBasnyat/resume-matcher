@@ -138,7 +138,7 @@ export function buildResumeChain(model: BaseChatModel) {
           errors: validated.error,
           rawOutput: result,
         });
-        return ResumeSchema.parse({ ...result });
+        throw validated.error;
       }
 
       return validated.data;

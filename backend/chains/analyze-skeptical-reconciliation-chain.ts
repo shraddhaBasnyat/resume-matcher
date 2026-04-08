@@ -53,7 +53,7 @@ Job Description Data:
 Match Result:
 {match_result}
 
-{human_context}Deliver an honest verdict for this candidate.`;
+{weak_match_reason_block}{human_context}Deliver an honest verdict for this candidate.`;
 
 export function buildHonestVerdictChain(model: BaseChatModel) {
   const prompt = ChatPromptTemplate.fromMessages([
@@ -69,6 +69,7 @@ export function buildHonestVerdictChain(model: BaseChatModel) {
         resume_data: string;
         job_data: string;
         match_result: string;
+        weak_match_reason_block: string;
         human_context: string;
       },
       config?: { runName?: string },
