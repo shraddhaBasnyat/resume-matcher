@@ -101,3 +101,9 @@ FitAdvice is defined twice — as Zod schemas in chain files and as TypeScript
 interfaces in api.ts. These must be kept in sync manually. The correct fix 
 is a shared FitAdviceSchema Zod discriminated union with types derived via 
 z.infer<>. Deferred — address when a verdict node schema changes.
+
+## State field ownership
+
+Before adding a node that reads or writes graph state, check the field 
+ownership table in ARCHITECTURE.md. Every field has one writer — do not 
+write to a field owned by another node without updating the table.

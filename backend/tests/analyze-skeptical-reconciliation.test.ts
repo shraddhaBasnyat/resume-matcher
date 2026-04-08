@@ -268,6 +268,22 @@ describe("analyzeSkepticalReconciliation — post-validation invariants", () => 
 });
 
 // ---------------------------------------------------------------------------
+// Test case 10 — weakMatchReason absent: chain still runs without error
+// ---------------------------------------------------------------------------
+
+describe("analyzeSkepticalReconciliation — weakMatchReason absent", () => {
+  it("runs without error when weakMatchReason is undefined (local model omission)", async () => {
+    const { weakMatchReason: _, ...matchResultWithoutReason } = validMatchResult;
+    const node = makeAnalyzeSkepticalReconciliationNode(buildMockModel());
+    const result = await node(buildBaseState({ matchResult: matchResultWithoutReason }));
+    const advice = result.fitAdvice as Record<string, unknown>;
+
+    expect(advice.scenarioId).toBe("honest_verdict");
+    expect(typeof advice.honestAssessment).toBe("string");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Test cases 5, 6, 7, 8 — guards
 // ---------------------------------------------------------------------------
 

@@ -50,6 +50,34 @@ directly to `__start__` in the StateGraph, so they execute concurrently before `
 | userTier | "base" \| "paid" | "base" | auth middleware (Pass 2), hardcoded for now |
 | atsScore | number \| undefined | undefined | atsAnalysis node (Phase 1 ATS pipeline) |
 
+## State field ownership
+
+LangGraph uses a flat shared state object with no enforced contract between 
+nodes and fields — any node can read or write any field, and the framework 
+does not surface implicit dependencies. This is a known rough edge at scale: 
+silent reads on undefined fields, write conflicts, and refactor blindness are 
+all possible as the graph grows. The table below makes dependencies explicit.
+
+| Field             | Written by                           | Read by                                        |
+|-------------------|--------------------------------------|------------------------------------------------|
+| fitScore          | scoreMatch                           | routeVerdicts, all verdict nodes               |
+| matchedSkills     | scoreMatch                           | all verdict nodes                              |
+| missingSkills     | scoreMatch                           | all verdict nodes                              |
+| narrativeAlignment| scoreMatch                           | all verdict nodes                              |
+| gaps              | scoreMatch                           | all verdict nodes                              |
+| contextPrompt     | scoreMatch                           | analyzeSkepticalReconciliation                 |
+| weakMatchReason   | scoreMatch (optional — may be absent)| analyzeSkepticalReconciliation (handles absent)|
+| weakMatch         | scoreMatch node (derived, not LLM)   | routeVerdicts                                  |
+| atsScore          | atsAnalysis                          | routeVerdicts                                  |
+| atsProfile        | atsAnalysis                          | analyzeStrongMatch, runner                     |
+| scenarioId        | routeVerdicts                        | all verdict nodes, runner                      |
+| hitlFired         | analyzeSkepticalReconciliation       | analyzeSkepticalReconciliation, fitAdvice      |
+| humanContext      | HITL resume endpoint                 | scoreMatch, analyzeSkepticalReconciliation     |
+| fitAdvice         | verdict nodes                        | runner                                         |
+
+When adding a new node: declare its reads and writes here before implementing.
+When renaming a field: update every reader listed in this table.
+
 ### Cancellation
 
 #### activeRuns Map (current)
@@ -272,3 +300,4 @@ Chrome Web Store listing → "Get early access" in extension popup
 
 ### Supabase usage table
   user_id (references auth.users), matches_this_month, reset_at
+
