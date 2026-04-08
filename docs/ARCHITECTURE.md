@@ -85,8 +85,10 @@ Production traffic: Job queue (BullMQ, Inngest) — cancellation,
 ### resumeAdvice type
 - Defined in lib/schemas/match-schema.ts as z.array(z.string()) — string[],
   not a single string. Each element is one actionable resume suggestion.
-  Previously rewritten by the gapAnalysis node; that node was removed from
-  scope per prd-match-scenarios.md — advice generation now owned by verdict nodes.
+  Previously, the gapAnalysis node rewrote resumeAdvice; that node was removed
+  from scope per prd-match-scenarios.md, so resumeAdvice is no longer rewritten
+  there. Verdict nodes own the separate fitAdvice output, while resumeAdvice
+  remains produced by the scoring chain.
 
 ## LangSmith observability
 
