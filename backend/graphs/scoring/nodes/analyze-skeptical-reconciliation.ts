@@ -23,7 +23,7 @@ export function makeAnalyzeSkepticalReconciliationNode(model: BaseChatModel) {
       );
     }
 
-    const { weakMatchReason, resumeAdvice, ...matchResultForChain } = state.matchResult;
+    const { weakMatchReason, ...matchResultForChain } = state.matchResult;
 
     const weakMatchReasonBlock = weakMatchReason
       ? `Score Assessment: ${weakMatchReason}\n\n`
