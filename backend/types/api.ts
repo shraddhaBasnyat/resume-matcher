@@ -37,7 +37,6 @@ export interface MatchResult {
   missingSkills: string[];
   narrativeAlignment: string;
   gaps: string[];
-  resumeAdvice: string[];
   contextPrompt: string | null;
   weakMatch: boolean;
   weakMatchReason?: string;

@@ -97,17 +97,65 @@ export interface CancelMatchRequest {
   runStartTime?: number;
 }
 
+// ---------------------------------------------------------------------------
+// Verdict node outputs — discriminated union by scenarioId
+// ---------------------------------------------------------------------------
+
+export interface ConfirmedFitAdvice {
+  scenarioId: "confirmed_fit";
+  confirmation: string;
+  standoutStrengths: string[];
+  minorGaps: string[];
+}
+
+export interface InvisibleExpertAdvice {
+  scenarioId: "invisible_expert";
+  confirmation: string;
+  standoutStrengths: string[];
+  minorGaps: string[];
+  atsRealityCheck: string;
+  terminologySwaps: string[];
+  keywordsToAdd: string[];
+  layoutAdvice: string[];
+}
+
+export interface NarrativeGapAdvice {
+  scenarioId: "narrative_gap";
+  narrativeBridge: string;
+  reframingSuggestions: string[];
+  transferableStrengths: string[];
+  missingSkills: string[];
+}
+
+export interface HonestVerdictAdvice {
+  scenarioId: "honest_verdict";
+  hitlFired: boolean;
+  honestAssessment: string;
+  closingSteps: string[];
+  acknowledgement: string | null;
+}
+
+export type FitAdvice =
+  | ConfirmedFitAdvice
+  | InvisibleExpertAdvice
+  | NarrativeGapAdvice
+  | HonestVerdictAdvice;
+
 export interface MatchResponse {
   fitScore: number;
-  atsScore?: number;
   matchedSkills: string[];
   missingSkills: string[];
   narrativeAlignment: string;
-  gaps: string[];
-  resumeAdvice: string[];
-  contextPrompt: string | null;
   weakMatch: boolean;
   weakMatchReason?: string;
+  atsProfile: {
+    atsScore: number | null;
+    missingKeywords: string[];
+    layoutFlags: string[];
+    terminologyGaps: string[];
+  };
+  fitAdvice: FitAdvice | null;
+  scenarioId: "confirmed_fit" | "invisible_expert" | "narrative_gap" | "honest_verdict";
   interrupted: boolean;
   threadId: string;
   _meta: { traceUrl: string | null; durationMs: number };

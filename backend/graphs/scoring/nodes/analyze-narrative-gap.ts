@@ -22,10 +22,7 @@ export function makeAnalyzeNarrativeGapNode(model: BaseChatModel) {
       );
     }
 
-    // Strip resumeAdvice before sending to the LLM — it is stale scoreMatch output scheduled
-    // for removal (PRD TODO). Passing it risks the model anchoring to it instead of building
-    // fresh reframing from narrativeAlignment.
-    const { resumeAdvice: _, ...matchResultForChain } = state.matchResult;
+    const matchResultForChain = state.matchResult;
 
     const atsContext =
       state.atsProfile && state.atsProfile.atsScore < 75

@@ -87,3 +87,10 @@ Nullable string fields must use z.string().min(1).nullable() — not
 z.string().nullable(). The latter accepts empty string silently, which 
 passes safeParse and undermines the null contract. null is valid, 
 empty string is not.
+
+## Node output validation
+
+Chain-level Zod validation catches LLM output errors — do not add 
+redundant Zod parsing at the node boundary. Node assembly correctness 
+is enforced by typing fitAdvice as FitAdvice | null in scoring-graph-state.ts 
+and using `satisfies` on node return values where assembly is complex.

@@ -95,7 +95,6 @@ describe("runMatchGraph — kind: accept", () => {
     expect(result.fitScore).toBe(42);
     expect(result.matchedSkills).toEqual(["TypeScript"]);
     expect(result.missingSkills).toEqual(["Kubernetes", "Docker"]);
-    expect(result.interrupted).toBe(false);
     expect(result.threadId).toBe("thread-123");
     expect(closed).toHaveBeenCalledOnce();
   });

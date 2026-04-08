@@ -416,7 +416,6 @@ describe("buildScoringGraph — full run with mocked chains", () => {
     expect(Array.isArray(match.missingSkills)).toBe(true);
     expect(typeof match.narrativeAlignment).toBe("string");
     expect(Array.isArray(match.gaps)).toBe(true);
-    expect(Array.isArray(match.resumeAdvice)).toBe(true);
     expect(typeof match.weakMatch).toBe("boolean");
     // contextPrompt is present (null or string)
     expect("contextPrompt" in match).toBe(true);

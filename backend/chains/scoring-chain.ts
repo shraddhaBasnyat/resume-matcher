@@ -5,7 +5,7 @@ import type { MatchResult } from "../types/api.js";
 import { RootRunCapture, logValidationFailure } from "../langsmith.js";
 
 // The LLM output schema — weakMatch is excluded because it is derived
-// deterministically in the scoreMatch node (fitScore < 60), not by the model.
+// deterministically in the scoreMatch node (fitScore < 50), not by the model.
 // contextPrompt is included: the model generates a specific follow-up question
 // when it sees a plausible path to a better score, or null when the gap is real.
 export const MatchSchema = z.object({
@@ -14,15 +14,11 @@ export const MatchSchema = z.object({
   missingSkills: z.array(z.string()).describe("Required skills the candidate lacks"),
   narrativeAlignment: z.string().describe("How well the candidate's career narrative aligns with the role"),
   gaps: z.array(z.string()).describe("Specific gaps between the candidate's profile and the job requirements"),
-  // TODO: Remove resumeAdvice from scoreMatch output — advice generation moves to verdict nodes.
-  // scoreMatch should output only: fitScore, matchedSkills, missingSkills, narrativeAlignment, gaps, contextPrompt, weakMatchReason.
-  resumeAdvice: z
-    .array(z.string())
-    .describe("Actionable suggestions for how to rewrite resume sections to better target this job. Empty array is correct when fitScore >= 75 — do not pad."),
   contextPrompt: z
     .string()
+    .min(1)
     .nullable()
-    .describe("A specific question to ask the candidate for information that would materially change the score. Set to null when the gap is real and no context would help, or when the score is already high."),
+    .describe("A specific question that would surface information capable of materially changing the score. Only set when fitScore < 50 and context could plausibly move the score. Null in all other cases."),
   weakMatchReason: z
     .string()
     .optional()
@@ -40,8 +36,7 @@ Rules:
 - missingSkills: skills in requiredSkills that the candidate lacks.
 - narrativeAlignment: one paragraph on how the candidate's career story aligns with this role.
 - gaps: specific mismatches in experience level, domain, or skills.
-- resumeAdvice: 3-5 actionable suggestions to strengthen the resume for this role. Empty array is correct when fitScore >= 75 — do not manufacture advice.
-- contextPrompt: if fitScore < 50 and you see a plausible path to a better score given more information, write a specific question asking for that information. Set to null if the gap is real and no context would help, or if fitScore >= 50.
+- contextPrompt: only when fitScore < 50. Write a specific question that would surface information capable of materially changing the score. Set to null in all other cases — including when fitScore >= 50, or when fitScore < 50 but the gap is real and no context would help.
 - weakMatchReason: required when fitScore < 50 — explain specifically what is missing. Direct and honest.
 - If humanContext is provided, weigh it alongside the resume when scoring.`;
 
@@ -89,7 +84,7 @@ export function buildScoringChain(model: BaseChatModel) {
           errors: validated.error,
           rawOutput: result,
         });
-        return MatchSchema.parse({ ...result });
+        throw validated.error;
       }
 
       return validated.data;
