@@ -9,6 +9,7 @@ import {
   InvisibleExpertLLMSchema,
 } from "../chains/analyze-strong-match-chain.js";
 import { NarrativeGapLLMSchema } from "../chains/analyze-narrative-gap-chain.js";
+import { HonestVerdictLLMSchema } from "../chains/analyze-skeptical-reconciliation-chain.js";
 import { buildJobChain } from "../chains/job-chain.js";
 import { buildScoringChain } from "../chains/scoring-chain.js";
 import { buildGapAnalysisChain } from "../chains/gap-analysis-chain.js";
@@ -415,6 +416,19 @@ describe("buildScoringGraph — full run with mocked chains", () => {
           }),
         };
       }
+      if (schema === HonestVerdictLLMSchema) {
+        return {
+          invoke: vi.fn().mockResolvedValue({
+            honestAssessment:
+              "The gap is real — three of the five required skills are absent and the experience level is too junior for this role.",
+            closingSteps: [
+              "Gain hands-on experience with Kubernetes in a production context.",
+              "Build and ship at least one cloud-infrastructure project end-to-end.",
+            ],
+            acknowledgement: null,
+          }),
+        };
+      }
       // gap-analysis-chain uses a local (non-exported) MatchSchema — different object reference.
       // Return validMatchResult so the chain has a valid base to attach contextPrompt/weakMatch to.
       return { invoke: vi.fn().mockResolvedValue(validMatchResult) };
@@ -527,11 +541,18 @@ describe("buildScoringGraph — full run with mocked chains", () => {
     expect(snapshot.values.matchResult?.fitScore).toBe(45);
   });
 
-  // TODO: when analyzeSkepticalReconciliation is fully implemented, update this test to assert
-  // that contextPrompt: null routes to no interrupt (graph completes immediately with fitAdvice).
-  // Current stub always interrupts regardless of contextPrompt — this test verifies the stub
-  // routes to honest_verdict and fires an interrupt.
-  it("scenario 5 — low fit routes to honest_verdict and interrupts (stub always interrupts)", async () => {
+  // contextPrompt: null → no interrupt — graph completes immediately with fitAdvice.
+  it("scenario 5 — low fit with contextPrompt null completes without interrupt and writes fitAdvice", async () => {
+    const validHonestVerdictOutput = {
+      honestAssessment:
+        "The gap is real — three of the five required skills are absent and the experience level is too junior for this role.",
+      closingSteps: [
+        "Gain hands-on experience with Kubernetes in a production context.",
+        "Build and ship at least one cloud-infrastructure project end-to-end.",
+      ],
+      acknowledgement: null,
+    };
+
     const scenario5Model = {
       bind: vi.fn().mockReturnThis(),
       withStructuredOutput: vi.fn().mockImplementation((schema) => {
@@ -539,6 +560,7 @@ describe("buildScoringGraph — full run with mocked chains", () => {
         if (schema === JobSchema) return { invoke: vi.fn().mockResolvedValue(validJobData) };
         if (schema === MatchSchema) return { invoke: vi.fn().mockResolvedValue(weakMatchResult) }; // contextPrompt: null
         if (schema === AtsAnalysisSchema) return { invoke: vi.fn().mockResolvedValue({ keywordPts: 40, layoutPts: 28, terminologyPts: 16, missingKeywords: [], layoutFlags: [], terminologyGaps: [] }) };
+        if (schema === HonestVerdictLLMSchema) return { invoke: vi.fn().mockResolvedValue(validHonestVerdictOutput) };
         return { invoke: vi.fn().mockResolvedValue({}) };
       }),
     };
@@ -546,15 +568,15 @@ describe("buildScoringGraph — full run with mocked chains", () => {
     const compiledGraph = buildScoringGraph(scenario5Model as unknown as BaseChatModel);
     const threadId = "test-thread-scenario-5";
 
-    await compiledGraph.invoke(
+    const state = await compiledGraph.invoke(
       { resumeText: "resume text", jobText: "job text", intent: "confident_match", intentContext: { basis: ["direct_experience"] }, userTier: "base" },
       { configurable: { thread_id: threadId } }
     );
 
     const snapshot = await compiledGraph.getState({ configurable: { thread_id: threadId } });
-    // Stub always interrupts — update to toHaveLength(0) when the node is implemented
-    expect(snapshot.next.length).toBeGreaterThan(0);
-    expect(snapshot.values.scenarioId).toBe("honest_verdict");
+    expect(snapshot.next).toHaveLength(0); // graph completed — no interrupt
+    expect(state.scenarioId).toBe("honest_verdict");
+    expect(state.fitAdvice).toMatchObject({ scenarioId: "honest_verdict", ...validHonestVerdictOutput });
   });
 
   // Test case 6 — integration: invisible_expert full graph run

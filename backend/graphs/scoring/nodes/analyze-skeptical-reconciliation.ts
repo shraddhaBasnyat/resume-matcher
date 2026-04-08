@@ -1,8 +1,11 @@
 import { interrupt, Command } from "@langchain/langgraph";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { buildHonestVerdictChain } from "../../../chains/analyze-skeptical-reconciliation-chain.js";
 import type { GraphStateType } from "../scoring-graph-state.js";
 
-export function makeAnalyzeSkepticalReconciliationNode(_model: BaseChatModel) {
+export function makeAnalyzeSkepticalReconciliationNode(model: BaseChatModel) {
+  const chain = buildHonestVerdictChain(model);
+
   return async function analyzeSkepticalReconciliation(state: GraphStateType) {
     if (!state.matchResult) {
       throw new Error("analyzeSkepticalReconciliation: matchResult is missing from graph state");
@@ -13,22 +16,54 @@ export function makeAnalyzeSkepticalReconciliationNode(_model: BaseChatModel) {
     if (!state.jobData) {
       throw new Error("analyzeSkepticalReconciliation: jobData is missing from graph state");
     }
+    if (state.scenarioId !== "honest_verdict") {
+      throw new Error(
+        `analyzeSkepticalReconciliation: expected scenarioId "honest_verdict", ` +
+          `got "${state.scenarioId}" — check routing in routeVerdicts`,
+      );
+    }
+
+    // Strip resumeAdvice — stale scoreMatch output, excluded from all verdict node prompts.
+    const { resumeAdvice: _, ...matchResultForChain } = state.matchResult;
+
+    const humanContextBlock = state.humanContext
+      ? `Additional Context from Candidate:\n${state.humanContext}\n\n`
+      : "";
 
     if (!state.hitlFired) {
-      // Always interrupt on first pass — this node is only reached when fitScore < WEAK_FIT_THRESHOLD.
-      // Generate the contextPrompt question here, not in scoreMatch.
-      // TODO: replace hardcoded string when we implement this nodes chain
-      const humanContext = interrupt(
-        "Your fit score is low. Please describe any relevant experience your resume doesn't capture."
-      );
-      return new Command({
-        update: { humanContext: humanContext as string, hitlFired: true },
-        goto: "scoreMatch",
-      });
+      const { contextPrompt } = state.matchResult;
+
+      if (contextPrompt != null) {
+        // scoreMatch saw a plausible path to a better score — ask the candidate.
+        const humanContext = interrupt(contextPrompt);
+        return new Command({
+          update: { humanContext: humanContext as string, hitlFired: true },
+          goto: "scoreMatch",
+        });
+      }
+
+      // contextPrompt is null — scoreMatch judged no context would help. Gap is real.
+      // Run the verdict chain immediately without waiting for human input.
     }
-    
-    // Second pass (honest_verdict, hitlFired true) — human context already incorporated into rescore.
-    // TODO: implement chain
-    return { fitAdvice: {} };
+
+    // Reached on two paths:
+    // 1. First pass, contextPrompt null — gap is real, no HITL.
+    // 2. Second pass, hitlFired true — rescore ran with humanContext, fitScore still < 50.
+    const llmOutput = await chain.invoke(
+      {
+        resume_data: JSON.stringify(state.resumeData, null, 2),
+        job_data: JSON.stringify(state.jobData, null, 2),
+        match_result: JSON.stringify(matchResultForChain, null, 2),
+        human_context: humanContextBlock,
+      },
+      { runName: "analyze-skeptical-reconciliation" },
+    );
+
+    return {
+      fitAdvice: {
+        scenarioId: "honest_verdict" as const,
+        ...llmOutput,
+      },
+    };
   };
 }
