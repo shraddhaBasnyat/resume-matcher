@@ -103,7 +103,7 @@ async function emitResult(
         weakMatchReason: matchResult.weakMatchReason,
         atsProfile: state.atsProfile,
         fitAdvice: state.fitAdvice ?? null,
-        scenarioId: state.scenarioId ?? null,
+        scenarioId: state.scenarioId,
         threadId,
         _meta: {
           traceUrl,

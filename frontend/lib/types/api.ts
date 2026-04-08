@@ -151,12 +151,11 @@ export interface MatchResponse {
   atsProfile: {
     atsScore: number | null;
     missingKeywords: string[];
-    layoutFlags: string[];
+    layoutFlags: string[]; // LayoutFlag values from backend — string[] is intentional, frontend renders but does not switch on these values
     terminologyGaps: string[];
   };
   fitAdvice: FitAdvice | null;
   scenarioId: "confirmed_fit" | "invisible_expert" | "narrative_gap" | "honest_verdict";
-  interrupted: boolean;
   threadId: string;
   _meta: { traceUrl: string | null; durationMs: number };
 }
