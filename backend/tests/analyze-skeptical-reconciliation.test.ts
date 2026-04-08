@@ -244,6 +244,30 @@ describe("analyzeSkepticalReconciliation — validation failure", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Post-validation invariant checks — prompt/model failure guards
+// ---------------------------------------------------------------------------
+
+describe("analyzeSkepticalReconciliation — post-validation invariants", () => {
+  it("throws when humanContext is populated but LLM returns acknowledgement null", async () => {
+    const node = makeAnalyzeSkepticalReconciliationNode(
+      buildMockModel({ ...validLLMOutput, acknowledgement: null }),
+    );
+    await expect(
+      node(buildBaseState({ humanContext: "I have done freelance backend work." })),
+    ).rejects.toThrow("human context was provided but LLM returned null acknowledgement");
+  });
+
+  it("throws when humanContext is empty but LLM returns non-null acknowledgement", async () => {
+    const node = makeAnalyzeSkepticalReconciliationNode(
+      buildMockModel(validLLMOutputWithAck),
+    );
+    await expect(
+      node(buildBaseState({ humanContext: "" })),
+    ).rejects.toThrow("no human context but LLM returned non-null acknowledgement");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Test cases 5, 6, 7, 8 — guards
 // ---------------------------------------------------------------------------
 
