@@ -105,14 +105,6 @@ export const GraphState = Annotation.Root({
     default: () => undefined,
     reducer: (_prev, next) => next,
   }),
-  atsAdvice: Annotation<Record<string, unknown> | undefined>({
-    default: () => undefined,
-    reducer: (_prev, next) => next,
-  }),
-  roadmapAdvice: Annotation<Record<string, unknown> | undefined>({
-    default: () => undefined,
-    reducer: (_prev, next) => next,
-  }),
 });
 
 export type GraphStateType = typeof GraphState.State;

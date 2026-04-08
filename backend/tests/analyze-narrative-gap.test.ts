@@ -86,8 +86,6 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     atsProfile: undefined,
     scenarioId: "narrative_gap",
     fitAdvice: undefined,
-    atsAdvice: undefined,
-    roadmapAdvice: undefined,
     ...overrides,
   } as unknown as GraphStateType;
 }

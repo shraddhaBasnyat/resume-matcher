@@ -80,3 +80,10 @@ integration tests confirmed this — ZodError appeared cleanly once the spread w
 - analyzeStrongMatch, analyzeNarrativeGap, analyzeSkepticalReconciliation: no temperature override.
   Verdict nodes produce prose and advice. Temperature 0 produces flat output that fails the
   specificity test. No .bind() call — no bind mock needed in tests for these nodes.
+
+## Schema conventions
+
+Nullable string fields must use z.string().min(1).nullable() — not 
+z.string().nullable(). The latter accepts empty string silently, which 
+passes safeParse and undermines the null contract. null is valid, 
+empty string is not.
