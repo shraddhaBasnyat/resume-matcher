@@ -6,6 +6,7 @@ import {
   NodeProgress,
   MatchResponse,
   INITIAL_PROGRESS,
+  normalizeNodeName,
 } from "@/lib/match-constants";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
@@ -121,14 +122,14 @@ export function useMatchRunner(): UseMatchRunnerReturn {
         case "node_start":
           setProgress((prev) => ({
             ...prev,
-            [payload.node as string]: { status: "running" },
+            [normalizeNodeName(payload.node as string)]: { status: "running" },
           }));
           break;
 
         case "node_done":
           setProgress((prev) => ({
             ...prev,
-            [payload.node as string]: {
+            [normalizeNodeName(payload.node as string)]: {
               status: "done",
               durationMs: payload.durationMs as number,
             },

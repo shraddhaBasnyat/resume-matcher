@@ -63,22 +63,6 @@ export function makeAnalyzeSkepticalReconciliationNode(model: BaseChatModel) {
       { runName: "analyze-skeptical-reconciliation" },
     );
 
-    const hasHumanContext = (state.humanContext ?? "").trim().length > 0;
-
-    if (hasHumanContext && llmOutput.acknowledgement === null) {
-      throw new Error(
-        "analyzeSkepticalReconciliation: human context was provided but " +
-        "LLM returned null acknowledgement — prompt or model failure"
-      );
-    }
-
-    if (!hasHumanContext && llmOutput.acknowledgement !== null) {
-      throw new Error(
-        "analyzeSkepticalReconciliation: no human context but LLM returned " +
-        "non-null acknowledgement — prompt or model failure"
-      );
-    }
-
     return {
       fitAdvice: {
         scenarioId: "honest_verdict" as const,

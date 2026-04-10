@@ -141,13 +141,19 @@ export type FitAdvice =
   | NarrativeGapAdvice
   | HonestVerdictAdvice;
 
+export type ScenarioId =
+  | "confirmed_fit"
+  | "invisible_expert"
+  | "narrative_gap"
+  | "honest_verdict";
+
 export interface MatchResponse {
   fitScore: number;
   matchedSkills: string[];
   missingSkills: string[];
   narrativeAlignment: string;
   weakMatch: boolean;
-  weakMatchReason?: string;
+  weakMatchReason: string | null;
   atsProfile: {
     atsScore: number | null;
     missingKeywords: string[];
@@ -155,7 +161,7 @@ export interface MatchResponse {
     terminologyGaps: string[];
   };
   fitAdvice: FitAdvice | null;
-  scenarioId: "confirmed_fit" | "invisible_expert" | "narrative_gap" | "honest_verdict";
+  scenarioId: ScenarioId | null;
   threadId: string;
   _meta: { traceUrl: string | null; durationMs: number };
 }

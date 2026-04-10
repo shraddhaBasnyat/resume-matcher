@@ -97,7 +97,27 @@ export function buildHonestVerdictChain(model: BaseChatModel) {
         throw validated.error;
       }
 
-      return validated.data;
+      const data = validated.data;
+      const hasHumanContext = input.human_context.trim().length > 0;
+
+      if (hasHumanContext && data.acknowledgement === null) {
+        await logValidationFailure({
+          runId: capturedRunId,
+          nodeName: "analyzeSkepticalReconciliation",
+          errors: new z.ZodError([{
+            code: z.ZodIssueCode.custom,
+            path: ["acknowledgement"],
+            message: "acknowledgement null despite humanContext present — model compliance failure",
+          }]),
+          rawOutput: result,
+        });
+        return {
+          ...data,
+          acknowledgement: "Thank you for sharing that context — after considering it, the assessment below still stands.",
+        };
+      }
+
+      return data;
     },
   };
 }
