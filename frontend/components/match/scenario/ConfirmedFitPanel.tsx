@@ -1,19 +1,12 @@
-import { ConfirmedFitAdvice, MatchResponse } from "@/lib/types/api";
-import { AtsPanel } from "@/components/match/AtsPanel";
+import { ConfirmedFitAdvice } from "@/lib/types/api";
 
 interface ConfirmedFitPanelProps {
   fitScore: number;
   fitAdvice: ConfirmedFitAdvice;
-  atsProfile: MatchResponse["atsProfile"];
   scoreColor: (score: number) => string;
 }
 
-export function ConfirmedFitPanel({ fitScore, fitAdvice, atsProfile, scoreColor }: ConfirmedFitPanelProps) {
-  const showAts =
-    atsProfile.atsScore !== null ||
-    atsProfile.missingKeywords.length > 0 ||
-    atsProfile.terminologyGaps.length > 0 ||
-    atsProfile.layoutFlags.length > 0;
+export function ConfirmedFitPanel({ fitScore, fitAdvice, scoreColor }: ConfirmedFitPanelProps) {
 
   return (
     <div className="space-y-6">
@@ -52,7 +45,6 @@ export function ConfirmedFitPanel({ fitScore, fitAdvice, atsProfile, scoreColor 
         </div>
       )}
 
-      {showAts && <AtsPanel atsProfile={atsProfile} />}
     </div>
   );
 }

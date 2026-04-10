@@ -9,6 +9,7 @@ import { ConfirmedFitPanel } from "@/components/match/scenario/ConfirmedFitPanel
 import { InvisibleExpertPanel } from "@/components/match/scenario/InvisibleExpertPanel";
 import { NarrativeGapPanel } from "@/components/match/scenario/NarrativeGapPanel";
 import { HonestVerdictPanel } from "@/components/match/scenario/HonestVerdictPanel";
+import { AtsPanel } from "@/components/match/AtsPanel";
 
 interface MatchResultProps {
   result: MatchResponse;
@@ -71,7 +72,6 @@ export function MatchResult({ result, scoreColor }: MatchResultProps) {
           <ConfirmedFitPanel
             fitScore={result.fitScore}
             fitAdvice={advice as ConfirmedFitAdvice}
-            atsProfile={result.atsProfile}
             scoreColor={scoreColor}
           />
         );
@@ -109,6 +109,8 @@ export function MatchResult({ result, scoreColor }: MatchResultProps) {
   return (
     <div className="space-y-6">
       {panel}
+
+      <AtsPanel atsProfile={result.atsProfile} />
 
       {result._meta.traceUrl && (
         <a

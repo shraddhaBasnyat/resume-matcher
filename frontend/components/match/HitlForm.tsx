@@ -1,5 +1,6 @@
 interface HitlFormProps {
   interruptedScore: number | null;
+  contextPrompt: string | null;
   humanContext: string;
   onHumanContextChange: (v: string) => void;
   onRescore: (e: React.FormEvent) => void;
@@ -8,6 +9,7 @@ interface HitlFormProps {
 
 export function HitlForm({
   interruptedScore,
+  contextPrompt,
   humanContext,
   onHumanContextChange,
   onRescore,
@@ -16,8 +18,7 @@ export function HitlForm({
   return (
     <div className="p-4 border border-yellow-400 bg-yellow-50 rounded space-y-3">
       <p className="text-sm font-medium text-yellow-800">
-        Score too low ({interruptedScore != null ? interruptedScore : "—"}/100). Add context
-        about your experience that your resume does not show:
+        {contextPrompt ?? `Score too low (${interruptedScore != null ? interruptedScore : "—"}/100). Add context about your experience that your resume does not show:`}
       </p>
       <form onSubmit={onRescore} className="space-y-2">
         <textarea

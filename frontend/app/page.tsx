@@ -16,6 +16,7 @@ export default function Home() {
     fileInputRef,
     humanContext,
     interruptedScore,
+    interruptedContextPrompt,
     result,
     matchError,
     progress,
@@ -103,6 +104,7 @@ export default function Home() {
       {appState === "interrupted" && (
         <HitlForm
           interruptedScore={interruptedScore}
+          contextPrompt={interruptedContextPrompt}
           humanContext={humanContext}
           onHumanContextChange={setHumanContext}
           onRescore={handleRescore}
