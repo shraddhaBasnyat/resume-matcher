@@ -3,7 +3,7 @@
 import { Menu } from "@base-ui/react/menu";
 import { CreditCard, Footprints, LogOut, Settings, User } from "lucide-react";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const NAV_ITEMS = [
   { label: "Profile",  Icon: User,       shortcut: "⇧⌘P" },
@@ -29,7 +29,6 @@ export function Header() {
       <Menu.Root>
         <Menu.Trigger className="bg-transparent border-0 p-0 cursor-pointer rounded-full">
           <Avatar>
-            <AvatarImage src="https://i.pravatar.cc/40" alt="User avatar" />
             <AvatarFallback>JI</AvatarFallback>
           </Avatar>
         </Menu.Trigger>
