@@ -16,16 +16,6 @@ function Avatar({ className, ...props }: AvatarPrimitive.Root.Props) {
   );
 }
 
-function AvatarImage({ className, ...props }: AvatarPrimitive.Image.Props) {
-  return (
-    <AvatarPrimitive.Image
-      data-slot="avatar-image"
-      className={cn("aspect-square h-full w-full object-cover", className)}
-      {...props}
-    />
-  );
-}
-
 function AvatarFallback({ className, style, ...props }: AvatarPrimitive.Fallback.Props) {
   return (
     <AvatarPrimitive.Fallback
@@ -44,4 +34,4 @@ function AvatarFallback({ className, style, ...props }: AvatarPrimitive.Fallback
   );
 }
 
-export { Avatar, AvatarImage, AvatarFallback };
+export { Avatar, AvatarFallback };
