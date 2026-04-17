@@ -1,6 +1,6 @@
 "use client";
 
-import { Header } from "@/components/match-v2/Header";
+import { Header } from "@/components/layout/Header";
 
 export default function V2Page() {
   return (
