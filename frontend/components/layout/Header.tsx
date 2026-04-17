@@ -17,7 +17,7 @@ export function Header() {
 
       {/* Left — logo mark + wordmark */}
       <div className="flex items-center gap-2">
-        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary">
+        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary shrink-0">
           <Footprints size={18} className="text-primary-foreground" />
         </div>
         <span className="font-brand font-bold text-sm text-primary">
