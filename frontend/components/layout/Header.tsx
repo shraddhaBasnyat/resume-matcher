@@ -5,48 +5,6 @@ import { CreditCard, Footprints, LogOut, Settings, User } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-const popupStyle: React.CSSProperties = {
-  width: 224,
-  background: "var(--card)",
-  border: "1px solid var(--border)",
-  borderRadius: 6,
-  boxShadow:
-    "0px 4px 6px -1px rgba(0,0,0,0.1), 0px 2px 4px -2px rgba(0,0,0,0.1)",
-  outline: "none",
-};
-
-const rowStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  padding: "6px 8px",
-  cursor: "pointer",
-  textDecoration: "none",
-  width: "100%",
-  background: "transparent",
-  border: "none",
-  outline: "none",
-};
-
-const labelStyle: React.CSSProperties = {
-  fontWeight: 400,
-  fontSize: 14,
-  color: "var(--foreground)",
-  flex: 1,
-};
-
-const shortcutStyle: React.CSSProperties = {
-  fontWeight: 400,
-  fontSize: 12,
-  color: "var(--foreground)",
-  opacity: 0.5,
-};
-
-const dividerStyle: React.CSSProperties = {
-  borderTop: "1px solid var(--muted)",
-  margin: 0,
-};
-
 const NAV_ITEMS = [
   { label: "Profile",  Icon: User,       shortcut: "⇧⌘P" },
   { label: "Billing",  Icon: CreditCard, shortcut: "⌘B"  },
@@ -55,47 +13,21 @@ const NAV_ITEMS = [
 
 export function Header() {
   return (
-    <header
-      className="flex items-center justify-between w-full"
-      style={{
-        height: 88,
-        paddingLeft: 24,
-        paddingRight: 24,
-        background: "var(--background)",
-        borderBottom: "1px solid var(--success)",
-      }}
-    >
+    <header className="flex items-center justify-between w-full h-[88px] px-6 bg-background border-b border-success">
+
       {/* Left — logo mark + wordmark */}
       <div className="flex items-center gap-2">
-        <div
-          className="flex items-center justify-center"
-          style={{ width: 32, height: 32, borderRadius: 9999, background: "var(--primary)" }}
-        >
-          <Footprints size={18} style={{ color: "var(--primary-foreground)" }} />
+        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary">
+          <Footprints size={18} className="text-primary-foreground" />
         </div>
-        <span
-          style={{
-            fontFamily: "var(--font-brand)",
-            fontWeight: 700,
-            fontSize: 14,
-            color: "var(--primary)",
-          }}
-        >
+        <span className="font-brand font-bold text-sm text-primary">
           JobInit
         </span>
       </div>
 
       {/* Right — avatar with dropdown */}
       <Menu.Root>
-        <Menu.Trigger
-          style={{
-            background: "none",
-            border: "none",
-            padding: 0,
-            cursor: "pointer",
-            borderRadius: 9999,
-          }}
-        >
+        <Menu.Trigger className="bg-transparent border-0 p-0 cursor-pointer rounded-full">
           <Avatar>
             <AvatarImage src="https://i.pravatar.cc/40" alt="User avatar" />
             <AvatarFallback>JI</AvatarFallback>
@@ -103,44 +35,46 @@ export function Header() {
         </Menu.Trigger>
 
         <Menu.Portal>
-          {/* sideOffset=24: avatar bottom edge is ~64px from top in an 88px header,
-              +24 lands the popup at exactly 88px from the viewport top */}
           <Menu.Positioner side="bottom" align="end" sideOffset={24}>
-            <Menu.Popup style={popupStyle}>
+            <Menu.Popup
+              className="w-[224px] bg-card border border-border rounded-[6px] outline-none"
+              style={{
+                boxShadow: "0px 4px 6px -1px rgba(0,0,0,0.1), 0px 2px 4px -2px rgba(0,0,0,0.1)",
+              }}
+            >
 
               {/* Section 1 — account label */}
               <Menu.Group>
-                <Menu.GroupLabel
-                  style={{
-                    padding: "6px 8px",
-                    fontWeight: 600,
-                    fontSize: 14,
-                    color: "var(--foreground)",
-                    display: "block",
-                  }}
-                >
+                <Menu.GroupLabel className="block py-1.5 px-2 text-sm font-semibold text-foreground">
                   My Account
                 </Menu.GroupLabel>
               </Menu.Group>
 
-              <hr style={dividerStyle} />
+              <hr className="border-t border-muted m-0" />
 
               {/* Section 2 — nav items */}
               {NAV_ITEMS.map(({ label, Icon, shortcut }) => (
-                <Menu.LinkItem key={label} href="" style={rowStyle}>
-                  <Icon size={16} style={{ color: "var(--foreground)", flexShrink: 0 }} />
-                  <span style={labelStyle}>{label}</span>
-                  <span style={shortcutStyle}>{shortcut}</span>
+                <Menu.LinkItem
+                  key={label}
+                  href=""
+                  className="flex items-center gap-2 py-1.5 px-2 no-underline w-full bg-transparent border-0 outline-none cursor-pointer"
+                >
+                  <Icon size={16} className="text-foreground shrink-0" />
+                  <span className="text-foreground text-sm font-normal flex-1">{label}</span>
+                  <span className="text-foreground text-xs font-normal opacity-50">{shortcut}</span>
                 </Menu.LinkItem>
               ))}
 
-              <hr style={dividerStyle} />
+              <hr className="border-t border-muted m-0" />
 
               {/* Section 3 — log out */}
-              <Menu.LinkItem href="" style={rowStyle}>
-                <LogOut size={16} style={{ color: "var(--foreground)", flexShrink: 0 }} />
-                <span style={labelStyle}>Log out</span>
-                <span style={shortcutStyle}>⇧⌘Q</span>
+              <Menu.LinkItem
+                href=""
+                className="flex items-center gap-2 py-1.5 px-2 no-underline w-full bg-transparent border-0 outline-none cursor-pointer"
+              >
+                <LogOut size={16} className="text-foreground shrink-0" />
+                <span className="text-foreground text-sm font-normal flex-1">Log out</span>
+                <span className="text-foreground text-xs font-normal opacity-50">⇧⌘Q</span>
               </Menu.LinkItem>
 
             </Menu.Popup>
