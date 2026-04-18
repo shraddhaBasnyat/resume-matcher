@@ -2,37 +2,31 @@
 
 @layer base {
   :root {
-    --background:              #FDFCF5;
-    --foreground:              #2D1635;
-    --muted:                   #F2F2D9;
-    --muted-foreground:        #6D5A73;
-    --card:                    #FFFFFF;
-    --card-foreground:         #2D1635;
-    --popover:                 #FFFFFF;
-    --popover-foreground:      #2D1635;
-    --border:                  #E5E5CA;
-    --input:                   #E5E5CA;
-    --primary:                 #723480;
-    --primary-foreground:      #FDFCF5;
-    --secondary:               #DBD4FF;
-    --secondary-foreground:    #2D1635;
-    --accent:                  #E6E1FF;
-    --accent-foreground:       #2D1635;
-    --destructive:             #943D3D;
-    --destructive-foreground:  #FDFCF5;
-    --success:                 #808034;
-    --success-foreground:      #FDFCF5;
-    --primary-rgb:             114, 52, 128;
-    --border-rgb:              229, 229, 202;
-    --muted-rgb:               242, 242, 217;
-    --success-rgb:             128, 128, 52;
-    --muted-foreground-rgb:    109, 90, 115;
+    --background:              60 67% 97%;
+    --foreground:              283 48% 14%;
+    --muted:                   60 56% 90%;
+    --muted-foreground:        289 12% 40%;
+    --card:                    0 0% 100%;
+    --card-foreground:         283 48% 14%;
+    --popover:                 0 0% 100%;
+    --popover-foreground:      283 48% 14%;
+    --border:                  60 33% 84%;
+    --input:                   60 33% 84%;
+    --primary:                 289 42% 35%;
+    --primary-foreground:      60 67% 97%;
+    --secondary:               249 100% 91%;
+    --secondary-foreground:    283 48% 14%;
+    --accent:                  249 100% 94%;
+    --accent-foreground:       283 48% 14%;
+    --destructive:             0 42% 41%;
+    --destructive-foreground:  60 67% 97%;
+    --success:                 60 42% 35%;
+    --success-foreground:      60 67% 97%;
+    --ring:                    289 42% 35%;
     --shadow-card:             0px 4px 4px rgba(0, 0, 0, 0.10);
-    --ring:                    #723480;
     --radius:                  0.5rem;
     --radius-md:               0.375rem;
     --radius-sm:               0.25rem;
-    --font-brand:              'JetBrains Mono', ui-monospace, monospace;
   }
 }
 
