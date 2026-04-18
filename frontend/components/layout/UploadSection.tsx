@@ -5,7 +5,7 @@ import { FileText, Sparkles, Upload, FileCheck, ChevronUp, ChevronDown } from "l
 import { Button } from "@/components/ui/button";
 
 interface UploadSectionProps {
-  appState: "idle" | "running" | "interrupted" | "completed";
+  _appState: "idle" | "running" | "interrupted" | "completed";
   resumeText: string | null;
   jobDescription: string;
   parseLoading: boolean;
@@ -18,7 +18,7 @@ interface UploadSectionProps {
 }
 
 export default function UploadSection({
-  appState,
+  _appState,
   resumeText,
   jobDescription,
   parseLoading,
