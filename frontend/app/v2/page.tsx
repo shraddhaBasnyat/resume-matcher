@@ -23,7 +23,6 @@ export default function V2Page() {
       <Header />
       <div style={{ padding: "8px 24px" }}>
         <UploadSection
-          _appState={appState}
           resumeText={resumeText}
           jobDescription={jobDescription}
           parseLoading={parseLoading}
