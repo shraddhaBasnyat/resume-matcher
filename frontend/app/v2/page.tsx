@@ -6,7 +6,6 @@ import { useMatchRunner } from "@/hooks/useMatchRunner";
 
 export default function V2Page() {
   const {
-    appState,
     resumeText,
     jobDescription,
     parseLoading,
