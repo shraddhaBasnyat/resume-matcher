@@ -13,7 +13,7 @@ const NAV_ITEMS = [
 
 export function Header() {
   return (
-    <header className="flex items-center justify-between w-full h-[88px] px-6 bg-background border-b border-success">
+    <header className="sticky top-0 z-50 flex items-center justify-between w-full h-[88px] px-6 bg-background border-b border-success">
 
       {/* Left — logo mark + wordmark */}
       <div className="flex items-center gap-2">
