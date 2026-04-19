@@ -19,6 +19,8 @@ components/
   ui/           ← Base UI primitives (button, avatar, tabs, progress — no Radix, no shadcn default)
   layout/       ← Header, UploadSection (global chrome, shared across all tabs)
   resume-init/  ← ResumeInit tab results components
+    accordion-config.ts  ← permanent: maps backend keys → { question, subtitle }
+    dummy-data.ts        ← TEMPORARY: delete when real SSE data wired up
   company-init/ ← Future (locked/waitlist)
   arc-init/     ← Future (locked/waitlist)
 ```
@@ -149,9 +151,9 @@ shadow-card
 - Owns `activeTab` state; accepts `className` prop
 - `bg-background border border-border/50 shadow-card`
 - Renders `ResultsHeader` + content area `p-6`
-- resume-init slot renders `<ResultsTop>` + `<FitAdviceAccordion>`
+- resume-init slot renders `<ResultsTop>` + `<div className="mt-6"><FitAdviceAccordion /></div>` + `<ScenarioSummary>`
 - Other tabs: "Coming soon" placeholder
-- TEST_NODES hardcoded with `// TODO: replace with useMatchRunner SSE state`
+- All data sourced from `dummy-data.ts` with `// TODO` — replace with `useMatchRunner` completed event
 
 ### Stepper (`components/resume-init/Stepper.tsx`)
 - Container: `flex flex-col w-[218px] border-r border-success pt-6 pb-6 pl-6 pr-4`
@@ -176,7 +178,7 @@ shadow-card
 ### ResultsTop (`components/resume-init/ResultsTop.tsx`)
 - `flex flex-row justify-center items-center gap-[72px] mx-auto`
   + `style={{ width: "940px", height: "314px" }}`
-- Renders `<Stepper nodes={nodes} />` + `<BattleCard isLoading={true} />`
+- Props: `{ nodes, isLoading, score?, headline?, bulletPoints? }` — all threaded to BattleCard
 - `mx-auto` centers within the `p-6` content area of MainResultsStage
 
 ### FitAdviceAccordion (`components/resume-init/FitAdviceAccordion.tsx`)
@@ -184,8 +186,10 @@ shadow-card
   (uses `bg-white` not `bg-background` — spec calls for pure white here)
 - Props:
   ```ts
-  { isLoading: boolean; items?: { question: string; bulletPoints: string[] }[] }
+  { isLoading: boolean; items?: { key: string; bulletPoints: string[] }[] }
   ```
+- Each item's `key` is looked up in `ACCORDION_CONFIG` (from `accordion-config.ts`) to get
+  `question` (title) and `subtitle`. Fallback: `key` as title, `"N items found"` as subtitle.
 - **Skeleton** (`isLoading`): 4 static rows, each with muted circle + 2 grey bars + ChevronDown
 - **Accordion** (`!isLoading`): `@base-ui/react/accordion`
   ```ts
@@ -194,7 +198,7 @@ shadow-card
   - `Accordion.Root defaultValue={[]} multiple={false}` — starts collapsed, single-open
   - `Accordion.Item value={i}` → `Accordion.Header` → `Accordion.Trigger` → `Accordion.Panel`
   - Trigger: `bg-transparent group` — `group` enables Tailwind group-data pattern for chevron
-  - Summary line: `${item.bulletPoints.length} items found`
+  - Summary line: `${item.bulletPoints.length} ${config.subtitle}`
   - Panel: `<ul>` with `<li>` per bullet point (not a paragraph)
 - **CRITICAL — chevron rotation**: `data-panel-open` is set on `Accordion.Trigger`, not child 
   elements. Use Tailwind `group` on the trigger + `group-data-[panel-open]:rotate-180` on ChevronDown:
@@ -204,6 +208,12 @@ shadow-card
   </Accordion.Trigger>
   ```
   `data-[panel-open]:rotate-180` directly on the chevron will NOT work.
+
+### ScenarioSummary (`components/resume-init/ScenarioSummary.tsx`)
+- Props: `{ scenario: string; text: string }`
+- Left `border-l-4 border-primary` accent block, `bg-white px-6 py-5`
+- Bold scenario label (`font-semibold text-sm text-foreground`) above body paragraph
+- Generic name — works for all 4 scenarios (confirmed_fit, invisible_expert, narrative_gap, honest_verdict)
 
 ## Key Patterns
 
@@ -264,13 +274,13 @@ Use `bg-muted` for lighter bars, `bg-muted-foreground/10` for very subtle bars o
 | ArcInit | "Strategic Roadmap: Own the Career Path" | ~100% |
 CompanyInit and ArcInit are locked — show waitlist email capture only.
 
-## What's Next (Resume-Init results section)
-- ScoreCard (score circle + headline + 3 narrative paragraphs) — replaces BattleCard stub
-- Wire Stepper + BattleCard + FitAdviceAccordion to live SSE data from `useMatchRunner`
-  (all currently using TEST_NODES with `// TODO` comment)
-- 4 result Accordions (FitAdviceAccordion) with real scenario-driven content
-- Skeleton loading state for all results until `completed` SSE event fires
-- Tabs: CompanyInit + ArcInit show waitlist email capture when clicked
+## What's Next
+- Build locked screens for CompanyInit and ArcInit tabs (waitlist email capture)
+- Wire real SSE data from `useMatchRunner` `completed` event — replace all `dummy-data.ts` 
+  imports in `MainResultsStage` with live state from the hook
+- Delete `dummy-data.ts` once real data is connected
+- Skeleton loading state: `isLoading={true}` on ResultsTop/FitAdviceAccordion until 
+  `completed` event fires; `isLoading={false}` once it does
 
 ## Do Not Touch
 - `frontend/app/page.tsx` (legacy)
