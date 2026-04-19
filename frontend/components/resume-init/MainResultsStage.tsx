@@ -4,6 +4,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { ResultsHeader, type TabId } from "@/components/resume-init/ResultsHeader";
 import { ResultsTop } from "@/components/resume-init/ResultsTop";
+import { FitAdviceAccordion } from "@/components/resume-init/FitAdviceAccordion";
 
 // TODO: replace with useMatchRunner SSE state
 const TEST_NODES = [
@@ -25,7 +26,10 @@ export function MainResultsStage({ className }: MainResultsStageProps) {
       <ResultsHeader activeTab={activeTab} onTabChange={setActiveTab} />
       <div className="p-6">
         {activeTab === "resume-init" && (
-          <ResultsTop nodes={TEST_NODES} />
+          <>
+            <ResultsTop nodes={TEST_NODES} />
+            <FitAdviceAccordion isLoading={true} />
+          </>
         )}
         {activeTab !== "resume-init" && (
           <p className="text-sm text-muted-foreground">Coming soon</p>
