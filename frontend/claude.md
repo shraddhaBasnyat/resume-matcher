@@ -14,12 +14,14 @@ UI at `/` which must not be touched.
 - **Legacy components**: `frontend/components/match/` — do not touch
 
 ## Folder Structure (v2)
+```
 components/
-ui/           ← Base UI primitives (button, avatar — no Radix, no shadcn default)
-layout/       ← Header, UploadSection (global chrome, shared across all tabs)
-resume-init/  ← ResumeInit tab results components
-company-init/ ← Future (locked/waitlist)
-arc-init/     ← Future (locked/waitlist)
+  ui/           ← Base UI primitives (button, avatar, tabs, progress — no Radix, no shadcn default)
+  layout/       ← Header, UploadSection (global chrome, shared across all tabs)
+  resume-init/  ← ResumeInit tab results components
+  company-init/ ← Future (locked/waitlist)
+  arc-init/     ← Future (locked/waitlist)
+```
 
 ## UI Framework Rules
 - **Base UI**: `@base-ui/react` (NOT Radix). Import pattern: 
@@ -27,7 +29,8 @@ arc-init/     ← Future (locked/waitlist)
 - **Tailwind**: Used for layout/structure. Colors always via CSS variables.
 - **No inline styles for colors** — use Tailwind classes with CSS variable tokens
 - **Inline styles only for**: structural one-offs (`minHeight`, specific px values not 
-  in Tailwind scale), and `boxShadow: var(--shadow-card)`
+  in Tailwind scale), and `boxShadow: "0px 4px 4px rgba(...)"` when it's a design-specific 
+  shadow that doesn't map to a token
 - **Icons**: Lucide React throughout
 
 ## Design System — HSL Tokens
@@ -64,9 +67,11 @@ Tailwind config maps them as `hsl(var(--token) / <alpha-value>)` for opacity mod
 ```
 
 ### Tailwind Color Classes Available
+```
 bg-background, bg-foreground
-bg-primary, bg-primary/10, text-primary, text-primary-foreground
-bg-muted, bg-muted/30, text-muted-foreground
+bg-primary, bg-primary/10, bg-primary/40, text-primary, text-primary-foreground
+bg-muted, bg-muted/30, bg-muted/50, text-muted-foreground
+bg-muted-foreground/10 (used for skeleton bars in BattleCard)
 bg-card, text-card-foreground
 bg-border, border-border, border-border/50
 bg-secondary, text-secondary-foreground
@@ -74,12 +79,14 @@ bg-accent, text-accent-foreground
 bg-destructive, text-destructive-foreground
 bg-success, text-success, text-success-foreground
 shadow-card
+```
 
 ### Typography
 - **Body font**: Inter (loaded in layout.tsx via next/font/google)
 - **Brand font**: JetBrains Mono — loaded as `--font-brand` CSS variable via 
   `JetBrains_Mono({ variable: "--font-brand" })` in layout.tsx
-- **Usage**: `className="font-brand font-bold"` for the JobInit wordmark
+- **Usage**: `className="font-brand font-bold"` for the JobInit wordmark; 
+  `font-brand font-medium` for tab labels and progress labels
 - **Tailwind config**: `fontFamily: { brand: ["var(--font-brand)"] }`
 
 ## Components Built
@@ -102,32 +109,121 @@ shadow-card
   - 3 states: empty, loading (`parseLoading`), uploaded (filename + char count)
   - `// TODO: add remove/replace file action`
 - JD-Card: same card styling, textarea `bg-muted/30 border border-border/50 rounded-md`
-- Button: "Analyze Match", `disabled={!canMatch}`, calls `handleMatch()`
+- Button: "Analyze Match" wrapped in `<form onSubmit={handleMatch}>` — hook returns 
+  `(e: React.FormEvent) => Promise<void>`, not `() => void`
+- `canMatch` disables the submit button; `disabled={!canMatch}` on the button
 - Filename tracked in local useState — `useMatchRunner` doesn't expose it
+- `appState` is NOT a prop — UploadSection has no awareness of match run state
 
 ### Avatar (`components/ui/avatar.tsx`)
 - Built on `@base-ui/react/avatar`
 - Initials only — `AvatarImage` removed entirely, never use image
 - When auth added: populate initials from real user name, still no image
 
+### Tabs (`components/ui/tabs.tsx`)
+- Thin wrappers around `@base-ui/react/tabs`
+- Exports: `Tabs` (Root), `TabsList` (List), `TabsTrigger` (Tab), `TabsContent` (Panel)
+- **CRITICAL**: Base UI sets `data-active` on the active tab — NOT `data-selected`
+  Active selector: `data-[active]:bg-card data-[active]:shadow-sm data-[active]:text-foreground`
+- **CRITICAL**: Do NOT use `pointer-events-none` on locked/disabled tabs — it blocks clicks 
+  on ALL tabs including the unlocked one. Use `disabled` prop + `opacity-60 cursor-not-allowed` only.
+
+### ProgressBar (`components/ui/progress.tsx`)
+- Wraps `@base-ui/react/progress`
+- `Progress.Indicator` width driven by `style={{ width: \`${value}%\` }}` — NOT a CSS var
+- Track: `bg-secondary`, fill: `bg-primary`
+
+### ResultsHeader (`components/resume-init/ResultsHeader.tsx`)
+- Exports `TabId = "resume-init" | "company-init" | "arc-init"`
+- Height 66px, `border-b border-border/50`, flex row, `px-4`
+- Left: tab pill switcher (`bg-muted rounded-[6px]` list, `font-brand font-medium text-xs` triggers)
+- Right: `w-[414px]` progress section — `progressLabel` text + `ProgressBar`
+- TABS config drives both the switcher and progress display:
+  ```ts
+  { id: "resume-init",  label: "ResumeInit",   locked: false, progress: 33,  progressLabel: "Technical Alignment: Get the Interview" }
+  { id: "company-init", label: "CompanyInit",  locked: true,  progress: 66,  progressLabel: "Tactical Intelligence: Win the Offer" }
+  { id: "arc-init",     label: "ArcInit",      locked: true,  progress: 100, progressLabel: "Strategic Roadmap: Own the Career Path" }
+  ```
+
+### MainResultsStage (`components/resume-init/MainResultsStage.tsx`)
+- Owns `activeTab` state; accepts `className` prop
+- `bg-background border border-border/50 shadow-card`
+- Renders `ResultsHeader` + content area `p-6`
+- resume-init slot renders `<ResultsTop>` + `<FitAdviceAccordion>`
+- Other tabs: "Coming soon" placeholder
+- TEST_NODES hardcoded with `// TODO: replace with useMatchRunner SSE state`
+
+### Stepper (`components/resume-init/Stepper.tsx`)
+- Container: `flex flex-col w-[218px] border-r border-success pt-6 pb-6 pl-6 pr-4`
+- 3 node statuses with distinct visuals:
+  - **done**: `CircleCheck` icon (`text-success`) + green connector + `text-success` label + duration in seconds
+  - **active**: `w-6 h-6 bg-primary rounded-full` with `LoaderCircle` inside + muted connector + `font-bold text-primary` label
+  - **idle**: `w-6 h-6 bg-muted border border-border rounded-full` + muted connector + `text-success` label (olive, per spec)
+- Last node has no connector div (checked via `isLast = index === nodes.length - 1`)
+- `durationMs` formatted as `((ms ?? 0) / 1000).toFixed(1) + "s"`
+
+### BattleCard (`components/resume-init/BattleCard.tsx`)
+- Container: `flex flex-row items-center py-8 px-6 gap-4 bg-muted border border-border rounded-[24px]`
+  + `style={{ width: "650px", height: "314px", boxShadow: "0px 4px 4px rgba(229, 229, 202, 0.5)" }}`
+  (card shadow uses warm beige rgba — not the standard shadow-card token)
+- **Skeleton** (`isLoading`): `bg-muted-foreground/10` circle + `bg-primary/40` title bar + 
+  3 groups of 2 `bg-muted-foreground/10` bars (`SKELETON_GROUPS = [0,1,2]`)
+- **Content**: score circle `w-[100px] h-[100px] rounded-full bg-primary overflow-hidden` +
+  `font-semibold text-5xl leading-none text-primary-foreground` score number
+  + headline + paragraphs column
+- `overflow-hidden` on score circle is required — without it, large text clips outside the circle
+
+### ResultsTop (`components/resume-init/ResultsTop.tsx`)
+- `flex flex-row justify-center items-center gap-[72px] mx-auto`
+  + `style={{ width: "940px", height: "314px" }}`
+- Renders `<Stepper nodes={nodes} />` + `<BattleCard isLoading={true} />`
+- `mx-auto` centers within the `p-6` content area of MainResultsStage
+
+### FitAdviceAccordion (`components/resume-init/FitAdviceAccordion.tsx`)
+- Container: `flex flex-col p-6 bg-white w-full`
+  (uses `bg-white` not `bg-background` — spec calls for pure white here)
+- Props:
+  ```ts
+  { isLoading: boolean; items?: { question: string; bulletPoints: string[] }[] }
+  ```
+- **Skeleton** (`isLoading`): 4 static rows, each with muted circle + 2 grey bars + ChevronDown
+- **Accordion** (`!isLoading`): `@base-ui/react/accordion`
+  ```ts
+  import { Accordion } from "@base-ui/react/accordion"
+  ```
+  - `Accordion.Root defaultValue={[]} multiple={false}` — starts collapsed, single-open
+  - `Accordion.Item value={i}` → `Accordion.Header` → `Accordion.Trigger` → `Accordion.Panel`
+  - Trigger: `bg-transparent group` — `group` enables Tailwind group-data pattern for chevron
+  - Summary line: `${item.bulletPoints.length} items found`
+  - Panel: `<ul>` with `<li>` per bullet point (not a paragraph)
+- **CRITICAL — chevron rotation**: `data-panel-open` is set on `Accordion.Trigger`, not child 
+  elements. Use Tailwind `group` on the trigger + `group-data-[panel-open]:rotate-180` on ChevronDown:
+  ```tsx
+  <Accordion.Trigger className="... group">
+    <ChevronDown className="transition-transform group-data-[panel-open]:rotate-180" />
+  </Accordion.Trigger>
+  ```
+  `data-[panel-open]:rotate-180` directly on the chevron will NOT work.
+
 ## Key Patterns
 
 ### Page Structure (v2/page.tsx)
 ```tsx
-<div className="min-h-screen bg-muted/30">
+<div className="min-h-screen bg-muted/50">
   <Header />                    {/* sticky, outside padding */}
   <div style={{ padding: "8px 24px" }}>
     <UploadSection ... />
-    {/* results section coming next */}
+    <MainResultsStage className="mt-2" />
   </div>
 </div>
 ```
 
 ### Props from useMatchRunner needed for UploadSection
 ```ts
-appState, resumeText, jobDescription, parseLoading, parseError,
+resumeText, jobDescription, parseLoading, parseError,
 fileInputRef, canMatch, setJobDescription, handleFileUpload, handleMatch
 ```
+Note: `handleMatch` is `(e: React.FormEvent) => Promise<void>` — wrap button in `<form onSubmit={handleMatch}>`.
 
 ### Icon wrapper pattern (used in card headers)
 ```tsx
@@ -135,6 +231,12 @@ fileInputRef, canMatch, setJobDescription, handleFileUpload, handleMatch
   <FileText size={24} className="text-primary" />
 </div>
 ```
+
+### Skeleton bar pattern
+```tsx
+<div className="w-[250px] h-[16px] bg-muted rounded-[6px]" />
+```
+Use `bg-muted` for lighter bars, `bg-muted-foreground/10` for very subtle bars on muted backgrounds.
 
 ## SSE Events (from backend)
 | Event | Payload |
@@ -163,12 +265,12 @@ fileInputRef, canMatch, setJobDescription, handleFileUpload, handleMatch
 CompanyInit and ArcInit are locked — show waitlist email capture only.
 
 ## What's Next (Resume-Init results section)
-- Stepper (4 nodes driven by SSE: Parsing Resume, Parsing Job, Scoring Match, Analyzing Gap)
-- ScoreCard (score circle + headline + 3 narrative paragraphs)
-- 4 result Accordions (content varies by scenario)
-- Tabs component (ResumeInit active, CompanyInit + ArcInit locked)
-- Skeleton loading state for all results until graph completes
-- All results populate simultaneously when `completed` SSE event fires
+- ScoreCard (score circle + headline + 3 narrative paragraphs) — replaces BattleCard stub
+- Wire Stepper + BattleCard + FitAdviceAccordion to live SSE data from `useMatchRunner`
+  (all currently using TEST_NODES with `// TODO` comment)
+- 4 result Accordions (FitAdviceAccordion) with real scenario-driven content
+- Skeleton loading state for all results until `completed` SSE event fires
+- Tabs: CompanyInit + ArcInit show waitlist email capture when clicked
 
 ## Do Not Touch
 - `frontend/app/page.tsx` (legacy)
@@ -179,10 +281,22 @@ CompanyInit and ArcInit are locked — show waitlist email capture only.
 
 Figma renders transparency on a gray canvas, not white. Any Figma color using low opacity
 (e.g. rgba(242, 242, 217, 0.3)) will appear more saturated/visible in Figma than in the
-browser, where it blends with the white <body> instead.
+browser, where it blends with the white `<body>` instead.
 
 Rule of thumb: double the opacity value when translating from Figma to browser.
 Example: 30% opacity in Figma → use 50-60% in the browser.
 
-Current implementation: page wrapper uses bg-muted/50 (not bg-muted/30 as in Figma).
-Body background stays white (default) — do not add background-color to body in globals.css.
+Current implementation: page wrapper uses `bg-muted/50` (not `bg-muted/30` as in Figma).
+Body background stays white (default) — do not add `background-color` to body in globals.css.
+
+## Base UI Gotchas
+
+- **Tabs active state**: attribute is `data-active`, not `data-selected`. Selector: `data-[active]:...`
+- **Accordion chevron**: `data-panel-open` lives on `Accordion.Trigger`. Use `group` + 
+  `group-data-[panel-open]:...` on children — direct `data-[panel-open]:...` on a child won't fire.
+- **Accordion default**: `multiple` defaults `false` (single-open). Pass `defaultValue={[]}` for 
+  all-collapsed start. No `type="single"` prop exists.
+- **Disabled tabs**: `pointer-events-none` blocks clicks on ALL tabs in the list, not just 
+  the disabled one. Use `disabled` prop + `opacity-60 cursor-not-allowed` only.
+- **ProgressBar indicator**: width must be set via `style={{ width: \`${value}%\` }}` — 
+  the `--progress-value` CSS variable approach does not work with this version.
