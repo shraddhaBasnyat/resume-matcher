@@ -129,6 +129,7 @@ shadow-card
   Active selector: `data-[active]:bg-card data-[active]:shadow-sm data-[active]:text-foreground`
 - **CRITICAL**: Do NOT use `pointer-events-none` on locked/disabled tabs — it blocks clicks 
   on ALL tabs including the unlocked one. Use `disabled` prop + `opacity-60 cursor-not-allowed` only.
+- CompanyInit and ArcInit tabs are no longer disabled — all three tabs are fully clickable
 
 ### ProgressBar (`components/ui/progress.tsx`)
 - Wraps `@base-ui/react/progress`
@@ -149,10 +150,9 @@ shadow-card
 
 ### MainResultsStage (`components/resume-init/MainResultsStage.tsx`)
 - Owns `activeTab` state; accepts `className` prop
-- `bg-background border border-border/50 shadow-card`
-- Renders `ResultsHeader` + content area `p-6`
-- resume-init slot renders `<ResultsTop>` + `<div className="mt-6"><FitAdviceAccordion /></div>` + `<ScenarioSummary>`
-- Other tabs: "Coming soon" placeholder
+- Outer container: `bg-background border border-border/50 shadow-card flex flex-col min-h-[600px]`
+- resume-init slot: wrapped in `<div className="p-6">`, renders `<ResultsTop>` + `<FitAdviceAccordion>` + `<ScenarioSummary>`
+- company-init / arc-init slots: each wrapped in `<div className="flex flex-col flex-1">` so the paywall fills remaining height below the header
 - All data sourced from `dummy-data.ts` with `// TODO` — replace with `useMatchRunner` completed event
 
 ### Stepper (`components/resume-init/Stepper.tsx`)
@@ -215,6 +215,35 @@ shadow-card
 - Bold scenario label (`font-semibold text-sm text-foreground`) above body paragraph
 - Generic name — works for all 4 scenarios (confirmed_fit, invisible_expert, narrative_gap, honest_verdict)
 
+### Field (`components/ui/field.tsx`)
+- Thin wrapper around `@base-ui/react/field`
+- Exports: `Field` (Root), `FieldLabel` (Label), `FieldDescription` (Description)
+- Import pattern: `import { Field, FieldLabel, FieldDescription } from "@/components/ui/field"`
+
+### Input (`components/ui/input.tsx`)
+- Plain styled HTML `<input>` wrapper (Base UI has no Input primitive)
+- Base classes: `flex-1 h-10 px-3 border border-border rounded-md text-base text-muted-foreground placeholder:text-muted-foreground bg-background`
+- Import pattern: `import { Input } from "@/components/ui/input"`
+
+### PaywallGateResult (`components/paywall-gate/PaywallGateResult.tsx`)
+- Shared paywall/waitlist component used by both locked tabs
+- Props: `{ headline: string }`
+- Container: `flex flex-col justify-center items-center p-12 gap-4 flex-1 w-full bg-card`
+- Lock icon: `w-16 h-16 rounded-[25px] bg-primary` container + `<Lock size={48} className="text-primary-foreground" />`
+- Headline: `text-sm font-medium text-foreground text-center w-[612px]`
+- Input block: `flex flex-col gap-1.5 w-[384px]` wrapping a `<Field>`:
+  - Input row `flex flex-row items-center gap-2 w-[384px] h-10`: `<Input placeholder="Email" />` + "Join Waitlist" button (`w-[100px] h-10 bg-primary text-primary-foreground text-sm font-medium rounded-md`)
+  - `<FieldDescription>Enter your email address</FieldDescription>`
+- No form state or submit handler — static UI only, wire up later
+
+### CompanyInitResult (`components/company-init/CompanyInitResult.tsx`)
+- Thin wrapper: renders `<PaywallGateResult>` with CompanyInit headline
+- Headline: "Deep-dive company analysis and negotiation strategy are currently locked for early testers."
+
+### ArcInitResult (`components/arc-init/ArcInitResult.tsx`)
+- Thin wrapper: renders `<PaywallGateResult>` with ArcInit headline
+- Headline: "Don't just land the role—own your trajectory and lock in your path to seniority."
+
 ## Key Patterns
 
 ### Page Structure (v2/page.tsx)
@@ -272,10 +301,9 @@ Use `bg-muted` for lighter bars, `bg-muted-foreground/10` for very subtle bars o
 | ResumeInit | "Technical Alignment: Get the Interview" | ~33% |
 | CompanyInit | "Tactical Intelligence: Win the Offer" | ~66% |
 | ArcInit | "Strategic Roadmap: Own the Career Path" | ~100% |
-CompanyInit and ArcInit are locked — show waitlist email capture only.
+CompanyInit and ArcInit show a paywall/waitlist gate (PaywallGateResult). All three tabs are clickable.
 
 ## What's Next
-- Build locked screens for CompanyInit and ArcInit tabs (waitlist email capture)
 - Wire real SSE data from `useMatchRunner` `completed` event — replace all `dummy-data.ts` 
   imports in `MainResultsStage` with live state from the hook
 - Delete `dummy-data.ts` once real data is connected
@@ -307,6 +335,6 @@ Body background stays white (default) — do not add `background-color` to body 
 - **Accordion default**: `multiple` defaults `false` (single-open). Pass `defaultValue={[]}` for 
   all-collapsed start. No `type="single"` prop exists.
 - **Disabled tabs**: `pointer-events-none` blocks clicks on ALL tabs in the list, not just 
-  the disabled one. Use `disabled` prop + `opacity-60 cursor-not-allowed` only.
+  the disabled one. If disabling: use `disabled` prop + `opacity-60 cursor-not-allowed` only — never `pointer-events-none`.
 - **ProgressBar indicator**: width must be set via `style={{ width: \`${value}%\` }}` — 
   the `--progress-value` CSS variable approach does not work with this version.
