@@ -2,12 +2,13 @@
 
 import { Accordion } from "@base-ui/react/accordion";
 import { ChevronDown } from "lucide-react";
+import { ACCORDION_CONFIG } from "@/components/resume-init/accordion-config";
 
 interface FitAdviceAccordionProps {
   isLoading: boolean;
   items?: {
-    question: string;
-    bulletPoints: string[]; // count used for summary line, array rendered as list in panel
+    key: string;
+    bulletPoints: string[];
   }[];
 }
 
@@ -39,9 +40,11 @@ export function FitAdviceAccordion({ isLoading, items }: FitAdviceAccordionProps
                   <div className="flex flex-row items-center gap-4">
                     <div className="w-12 h-12 rounded-full bg-primary shrink-0" />
                     <div className="flex flex-col gap-2 text-left">
-                      <span className="text-sm text-foreground font-normal">{item.question}</span>
                       <span className="text-sm text-foreground font-normal">
-                        {item.bulletPoints.length} items found
+                        {ACCORDION_CONFIG[item.key]?.question ?? item.key}
+                      </span>
+                      <span className="text-sm text-foreground font-normal">
+                        {item.bulletPoints.length} {ACCORDION_CONFIG[item.key]?.subtitle ?? "items found"}
                       </span>
                     </div>
                   </div>

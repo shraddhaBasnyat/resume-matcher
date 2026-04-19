@@ -2,7 +2,7 @@
 
 import { CircleCheck, LoaderCircle } from "lucide-react";
 
-interface StepperNode {
+export interface StepperNode {
   id: string;
   label: string;
   status: "idle" | "active" | "done";
