@@ -54,8 +54,8 @@ export function ResultsHeader({ activeTab, onTabChange }: ResultsHeaderProps) {
               className={cn(
                 "font-brand font-medium text-xs px-3 py-1 rounded-[4px] transition-colors",
                 "text-muted-foreground",
-                "data-[selected]:bg-card data-[selected]:shadow-sm data-[selected]:text-foreground",
-                tab.locked && "opacity-60 cursor-not-allowed pointer-events-none"
+                "data-[active]:bg-card data-[active]:shadow-sm data-[active]:text-foreground",
+                tab.locked && "opacity-60 cursor-not-allowed"
               )}
             >
               {tab.label}

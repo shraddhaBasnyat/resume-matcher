@@ -2,6 +2,7 @@
 
 import { Header } from "@/components/layout/Header";
 import UploadSection from "@/components/layout/UploadSection";
+import { MainResultsStage } from "@/components/resume-init/MainResultsStage";
 import { useMatchRunner } from "@/hooks/useMatchRunner";
 
 export default function V2Page() {
@@ -32,6 +33,7 @@ export default function V2Page() {
           handleFileUpload={handleFileUpload}
           handleMatch={handleMatch}
         />
+        <MainResultsStage className="mt-2" />
       </div>
     </div>
   );
