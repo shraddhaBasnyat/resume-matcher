@@ -174,3 +174,15 @@ CompanyInit and ArcInit are locked — show waitlist email capture only.
 - `frontend/app/page.tsx` (legacy)
 - `frontend/components/match/` (legacy)
 - HITL feature (HitlForm, handleRescore, handleAccept) — ignore for now
+
+## Browser vs Figma Color Rendering
+
+Figma renders transparency on a gray canvas, not white. Any Figma color using low opacity
+(e.g. rgba(242, 242, 217, 0.3)) will appear more saturated/visible in Figma than in the
+browser, where it blends with the white <body> instead.
+
+Rule of thumb: double the opacity value when translating from Figma to browser.
+Example: 30% opacity in Figma → use 50-60% in the browser.
+
+Current implementation: page wrapper uses bg-muted/50 (not bg-muted/30 as in Figma).
+Body background stays white (default) — do not add background-color to body in globals.css.
