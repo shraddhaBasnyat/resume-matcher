@@ -5,14 +5,14 @@ import { RootRunCapture, logValidationFailure } from "../langsmith.js";
 
 export const HonestVerdictLLMSchema = z.object({
   honestAssessment: z
-    .string()
+    .array(z.string().min(1))
     .describe(
-      "One paragraph explaining specifically why the gap is real. Build from weakMatchReason and " +
-        "narrativeAlignment in the match result. Direct and specific — not cruel, not generic. " +
+      "Bullet points explaining specifically why the gap is real. Build from fitAnalysis.weakMatchReason and " +
+        "fitAnalysis.experienceGaps. Direct and specific — not cruel, not generic. " +
         "Specificity test: could this have been written without reading this resume and this job description? If yes, rewrite it.",
     ),
   closingSteps: z
-    .array(z.string())
+    .array(z.string().min(1))
     .describe(
       "Specific steps to close the gap between this candidate's background and this role. " +
         "Each item must be tied to an actual gap identified in this match. Not generic career advice. " +
@@ -20,14 +20,23 @@ export const HonestVerdictLLMSchema = z.object({
         "after what they shared and what closing it would genuinely require.",
     ),
   acknowledgement: z
+    .array(z.string().min(1))
+    .nullable()
+    .describe(
+      "If human context was provided: bullet points acknowledging what the candidate shared and why " +
+        "the score still stands after considering it. Collaborative tone — they tried to help, meet them with respect. " +
+        "Do not repeat the human context back to them. " +
+        "If no human context was provided, set to null.",
+    ),
+  contextPrompt: z
     .string()
     .min(1)
     .nullable()
     .describe(
-      "If human context was provided: one sentence acknowledging what the candidate shared and why " +
-        "the score still stands after considering it. Collaborative tone — they tried to help, meet them with respect. " +
-        "Do not repeat the human context back to them. " +
-        "If no human context was provided, set to null.",
+      "On first pass only (no human context yet): a specific question to ask the candidate that could change the assessment. " +
+        "Must be genuinely answerable context that would affect the score — not rhetorical. " +
+        "Set to null if the gap is so fundamental that no context would change the verdict, " +
+        "or if human context has already been provided.",
     ),
 });
 
@@ -38,22 +47,20 @@ const SYSTEM = `You are a career advisor delivering an honest verdict to a candi
 The gap between this candidate and this role is real. Your job is to explain it clearly and specifically so they can make an informed decision. Tone: trusted mentor delivering difficult news — direct, not cruel, not dismissive.
 
 Rules:
-- honestAssessment: one paragraph. Build from weakMatchReason and narrativeAlignment in the match result. Explain why the gap exists — what experience or skills are missing and why that matters for this specific role. Do not pad with encouraging language. Specificity test: could this have been written without reading this resume and this job description? If yes, rewrite it.
+- honestAssessment: bullet points. Build from fitAnalysis.weakMatchReason and fitAnalysis.experienceGaps. Explain why the gap exists — what experience or skills are missing and why that matters for this specific role. Do not pad with encouraging language. Specificity test: could this have been written without reading this resume and this job description? If yes, rewrite it.
 - closingSteps: specific steps to close the gap. Each step must be tied to an actual gap identified in this match — not generic advice. If human context was provided (see below), closingSteps should reflect that you considered it: not generic next steps, but why this specific gap persists after what they shared and what closing it would genuinely require.
-- acknowledgement: if human context was provided, write one sentence acknowledging what the candidate shared and why the score still stands after considering it. Tone: collaborative — they tried to help, meet them with respect. Do not repeat the human context back to them. If no human context was provided, set acknowledgement to null.
+- acknowledgement: if human context was provided, write bullet points acknowledging what the candidate shared and why the score still stands after considering it. Tone: collaborative — they tried to help, meet them with respect. Do not repeat the human context back to them. If no human context was provided, set acknowledgement to null.
+- contextPrompt: if NO human context has been provided yet, and there is a specific question you could ask that might change the assessment — set this to that question. It must be genuinely answerable and must be capable of changing the verdict. If the gap is so fundamental that no context would change it, set contextPrompt to null. If human context is already present, always set contextPrompt to null.
 
 Do not manufacture hope. Do not pad. Clarity over comfort.`;
 
-const HUMAN = `Resume Data:
-{resume_data}
+const HUMAN = `Fit Analysis:
+{fit_analysis}
 
-Job Description Data:
-{job_data}
+Weak Match Reason:
+{weak_match_reason}
 
-Match Result:
-{match_result}
-
-{weak_match_reason_block}{human_context}Deliver an honest verdict for this candidate.`;
+{human_context}Deliver an honest verdict for this candidate.`;
 
 export function buildHonestVerdictChain(model: BaseChatModel) {
   const prompt = ChatPromptTemplate.fromMessages([
@@ -66,10 +73,8 @@ export function buildHonestVerdictChain(model: BaseChatModel) {
   return {
     invoke: async (
       input: {
-        resume_data: string;
-        job_data: string;
-        match_result: string;
-        weak_match_reason_block: string;
+        fit_analysis: string;
+        weak_match_reason: string;
         human_context: string;
       },
       config?: { runName?: string },
@@ -97,27 +102,7 @@ export function buildHonestVerdictChain(model: BaseChatModel) {
         throw validated.error;
       }
 
-      const data = validated.data;
-      const hasHumanContext = input.human_context.trim().length > 0;
-
-      if (hasHumanContext && data.acknowledgement === null) {
-        await logValidationFailure({
-          runId: capturedRunId,
-          nodeName: "analyzeSkepticalReconciliation",
-          errors: new z.ZodError([{
-            code: z.ZodIssueCode.custom,
-            path: ["acknowledgement"],
-            message: "acknowledgement null despite humanContext present — model compliance failure",
-          }]),
-          rawOutput: result,
-        });
-        return {
-          ...data,
-          acknowledgement: "Thank you for sharing that context — after considering it, the assessment below still stands.",
-        };
-      }
-
-      return data;
+      return validated.data;
     },
   };
 }
