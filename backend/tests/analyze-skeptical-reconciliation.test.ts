@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ZodError } from "zod";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { HonestVerdictLLMSchema } from "../chains/analyze-skeptical-reconciliation-chain.js";
@@ -10,7 +10,10 @@ import * as langgraph from "@langchain/langgraph";
 vi.mock("../langsmith.js", () => ({
   isTracingEnabled: () => false,
   getTraceUrl: vi.fn(),
-  RootRunCapture: vi.fn().mockImplementation(function () { return { rootRunId: undefined }; }),
+  RootRunCapture: function RootRunCapture(
+    this: Record<string, unknown>,
+    _callback: (id: string) => void,
+  ) {},
   logValidationFailure: vi.fn(),
   RUN_NAMES: {},
 }));
@@ -27,65 +30,38 @@ vi.mock("@langchain/langgraph", () => ({
 // ---------------------------------------------------------------------------
 
 const validLLMOutput = {
-  honestAssessment:
-    "The gap is real — you have three years of frontend work but this role requires five or more years of backend systems experience, including distributed architecture ownership that does not appear anywhere in your history.",
+  honestAssessment: [
+    "The gap is real — you have three years of frontend work but this role requires five or more years of backend systems experience.",
+    "Distributed architecture ownership does not appear anywhere in your history.",
+  ],
   closingSteps: [
     "Build and ship a production backend service end-to-end — API design, data layer, deployment.",
     "Take on infrastructure ownership in your current role: own a service from incident to postmortem.",
   ],
   acknowledgement: null,
+  contextPrompt: null,
+};
+
+const validLLMOutputWithContextPrompt = {
+  ...validLLMOutput,
+  contextPrompt: "Can you describe any production backend systems you have shipped?",
 };
 
 const validLLMOutputWithAck = {
   ...validLLMOutput,
-  acknowledgement:
+  acknowledgement: [
     "Your freelance backend projects show initiative, but the scope and scale fall short of what this role requires at a senior level.",
+  ],
 };
 
-const validMatchResult = {
-  fitScore: 38,
-  matchedSkills: ["JavaScript", "React"],
-  missingSkills: ["distributed systems", "backend architecture", "Kubernetes"],
-  narrativeAlignment:
-    "Candidate has strong frontend experience but has not owned backend systems at the scale this role requires.",
-  gaps: [
+const validFitAnalysis = {
+  careerTrajectory: "Frontend development over 3 years at a web agency",
+  keyStrengths: ["JavaScript", "React", "CSS"],
+  experienceGaps: [
     "No backend architecture ownership",
     "No distributed systems experience",
     "Experience level is junior relative to role requirements",
   ],
-  resumeAdvice: ["Add backend projects", "Highlight any API work"],
-  contextPrompt: null,
-  weakMatch: true,
-  weakMatchReason:
-    "Three of five required skills are absent and the candidate's experience level is too junior for a senior backend role.",
-};
-
-const validResumeData = {
-  name: "Jordan Lee",
-  email: "jordan@example.com",
-  phone: "555-0199",
-  skills: ["JavaScript", "React", "CSS"],
-  experience: [{ company: "WebAgency", role: "Frontend Developer", years: 3 }],
-  education: [{ degree: "B.Sc. CS", institution: "State U" }],
-  careerNarrative: {
-    trajectory: "Frontend development",
-    dominantTheme: "UI engineering",
-    inferredStrengths: ["component design", "CSS layout"],
-    careerMotivation: "Building polished user interfaces",
-    resumeStoryGaps: ["No backend systems experience"],
-  },
-  sourceRole: "frontend_swe",
-};
-
-const validJobData = {
-  title: "Senior Backend Engineer",
-  company: "Infra Corp",
-  requiredSkills: ["distributed systems", "backend architecture", "Kubernetes", "Go", "PostgreSQL"],
-  niceToHaveSkills: ["Rust"],
-  keywords: ["microservices", "SRE", "incident response"],
-  experienceYears: 5,
-  seniorityLevel: "senior" as const,
-  targetRole: "backend_swe",
 };
 
 function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): GraphStateType {
@@ -93,13 +69,19 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     resumeText: "Jordan Lee resume text",
     jobText: "Senior Backend Engineer at Infra Corp",
     humanContext: "",
-    resumeData: validResumeData,
-    jobData: validJobData,
-    matchResult: validMatchResult,
+    fitScore: 38,
+    headline: "Frontend Developer without backend systems depth",
+    battleCardBullets: ["3 years of React", "Strong CSS fundamentals"],
+    scenarioSummary: "Frontend background does not map to this senior backend role.",
+    sourceRole: "frontend_swe",
+    targetRole: "backend_swe",
+    fitAnalysis: validFitAnalysis,
+    weakMatch: true,
+    weakMatchReason:
+      "Three of five required skills are absent and the candidate's experience level is too junior for a senior backend role.",
     threadId: undefined,
     intent: undefined,
     intentContext: undefined,
-    archetypeContext: null,
     hitlFired: false,
     userTier: "base",
     atsProfile: undefined,
@@ -121,8 +103,12 @@ function buildMockModel(llmReturn: Record<string, unknown> = validLLMOutput) {
   } as unknown as BaseChatModel;
 }
 
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
 // ---------------------------------------------------------------------------
-// Test case 1 — contextPrompt null: LLM runs, fitAdvice written, acknowledgement null
+// Test case 1 — contextPrompt null: chain runs, fitAdvice written, no interrupt
 // ---------------------------------------------------------------------------
 
 describe("analyzeSkepticalReconciliation — contextPrompt null path", () => {
@@ -132,18 +118,20 @@ describe("analyzeSkepticalReconciliation — contextPrompt null path", () => {
     const advice = result.fitAdvice as Record<string, unknown>;
 
     expect(advice.scenarioId).toBe("honest_verdict");
-    expect(typeof advice.honestAssessment).toBe("string");
+    expect(Array.isArray(advice.honestAssessment)).toBe(true);
     expect(Array.isArray(advice.closingSteps)).toBe(true);
     expect(advice.acknowledgement).toBeNull();
+    // contextPrompt must not be written to fitAdvice
+    expect(advice.contextPrompt).toBeUndefined();
   });
 });
 
 // ---------------------------------------------------------------------------
-// Test case 2 — hitlFired true: LLM runs with humanContext, acknowledgement non-null
+// Test case 2 — hitlFired true: chain runs with humanContext, acknowledgement non-null
 // ---------------------------------------------------------------------------
 
 describe("analyzeSkepticalReconciliation — hitlFired path", () => {
-  it("LLM runs when hitlFired is true and acknowledgement is a non-null string", async () => {
+  it("LLM runs when hitlFired is true and acknowledgement is a non-null array", async () => {
     const node = makeAnalyzeSkepticalReconciliationNode(buildMockModel(validLLMOutputWithAck));
     const result = await node(
       buildBaseState({
@@ -154,50 +142,50 @@ describe("analyzeSkepticalReconciliation — hitlFired path", () => {
     const advice = result.fitAdvice as Record<string, unknown>;
 
     expect(advice.scenarioId).toBe("honest_verdict");
-    expect(typeof advice.acknowledgement).toBe("string");
-    expect((advice.acknowledgement as string).length).toBeGreaterThan(0);
+    expect(Array.isArray(advice.acknowledgement)).toBe(true);
+    expect((advice.acknowledgement as string[]).length).toBeGreaterThan(0);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Test case 9 — contextPrompt non-null: interrupt fires, Command returned, LLM not called
+// Test case — contextPrompt non-null: interrupt fires, Command returned with self-loop goto
 // ---------------------------------------------------------------------------
 
 describe("analyzeSkepticalReconciliation — interrupt path", () => {
-  it("interrupt fires with contextPrompt, Command has goto scoreMatch, fitAdvice not written", async () => {
-    const chainInvoke = vi.fn();
-    const model = {
-      bind: vi.fn().mockReturnThis(),
-      withStructuredOutput: vi.fn().mockImplementation((schema: unknown) => {
-        if (schema === HonestVerdictLLMSchema) {
-          return { invoke: chainInvoke };
-        }
-        return { invoke: vi.fn().mockResolvedValue({}) };
-      }),
-    } as unknown as BaseChatModel;
-
-    const contextPrompt = "Can you describe any production backend systems you have shipped?";
-    const node = makeAnalyzeSkepticalReconciliationNode(model);
-    const result = await node(
-      buildBaseState({ matchResult: { ...validMatchResult, contextPrompt } }),
+  it("interrupt fires when chain returns non-null contextPrompt, Command goto is analyzeSkepticalReconciliation", async () => {
+    const node = makeAnalyzeSkepticalReconciliationNode(
+      buildMockModel(validLLMOutputWithContextPrompt),
     );
+    const result = await node(buildBaseState());
 
-    expect(langgraph.interrupt).toHaveBeenCalledWith(contextPrompt);
+    expect(langgraph.interrupt).toHaveBeenCalledWith(
+      validLLMOutputWithContextPrompt.contextPrompt,
+    );
     expect(result).toMatchObject({
       update: { humanContext: "user-provided context", hitlFired: true },
-      goto: "scoreMatch",
+      goto: "analyzeSkepticalReconciliation",
     });
+    // fitAdvice must not be written when interrupt fires
     expect((result as Record<string, unknown>).fitAdvice).toBeUndefined();
-    expect(chainInvoke).not.toHaveBeenCalled();
+  });
+
+  it("no interrupt when hitlFired is already true, even if chain returns contextPrompt", async () => {
+    const node = makeAnalyzeSkepticalReconciliationNode(
+      buildMockModel(validLLMOutputWithContextPrompt),
+    );
+    const result = await node(buildBaseState({ hitlFired: true }));
+    const advice = result.fitAdvice as Record<string, unknown>;
+
+    expect(langgraph.interrupt).not.toHaveBeenCalled();
+    expect(advice.scenarioId).toBe("honest_verdict");
   });
 });
 
 // ---------------------------------------------------------------------------
-// Test cases 3 & 4 — validation failure
+// Validation failure
 // ---------------------------------------------------------------------------
 
 describe("analyzeSkepticalReconciliation — validation failure", () => {
-  // Test case 3
   it("rejects with ZodError and calls logValidationFailure when LLM returns invalid shape", async () => {
     const invalidOutput = { honestAssessment: 42, closingSteps: "not an array" };
 
@@ -223,8 +211,7 @@ describe("analyzeSkepticalReconciliation — validation failure", () => {
     );
   });
 
-  // Test case 4 — validates the .min(1) fix: empty string is not a valid acknowledgement
-  it("rejects with ZodError when LLM returns acknowledgement as empty string", async () => {
+  it("rejects with ZodError when acknowledgement is an empty string — must be array or null", async () => {
     const invalidOutput = { ...validLLMOutput, acknowledgement: "" };
 
     const model = {
@@ -237,82 +224,24 @@ describe("analyzeSkepticalReconciliation — validation failure", () => {
       }),
     } as unknown as BaseChatModel;
 
-    const node = makeAnalyzeSkepticalReconciliationNode(model);
-
-    await expect(node(buildBaseState())).rejects.toBeInstanceOf(ZodError);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Post-validation invariant checks — prompt/model failure guards
-// ---------------------------------------------------------------------------
-
-describe("analyzeSkepticalReconciliation — post-validation invariants", () => {
-  it("throws when humanContext is populated but LLM returns acknowledgement null", async () => {
-    const node = makeAnalyzeSkepticalReconciliationNode(
-      buildMockModel({ ...validLLMOutput, acknowledgement: null }),
-    );
     await expect(
-      node(buildBaseState({ humanContext: "I have done freelance backend work." })),
-    ).rejects.toThrow("human context was provided but LLM returned null acknowledgement");
-  });
-
-  it("throws when humanContext is empty but LLM returns non-null acknowledgement", async () => {
-    const node = makeAnalyzeSkepticalReconciliationNode(
-      buildMockModel(validLLMOutputWithAck),
-    );
-    await expect(
-      node(buildBaseState({ humanContext: "" })),
-    ).rejects.toThrow("no human context but LLM returned non-null acknowledgement");
+      makeAnalyzeSkepticalReconciliationNode(model)(buildBaseState()),
+    ).rejects.toBeInstanceOf(ZodError);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Test case 10 — weakMatchReason absent: chain still runs without error
-// ---------------------------------------------------------------------------
-
-describe("analyzeSkepticalReconciliation — weakMatchReason absent", () => {
-  it("runs without error when weakMatchReason is undefined (local model omission)", async () => {
-    const { weakMatchReason: _, ...matchResultWithoutReason } = validMatchResult;
-    const node = makeAnalyzeSkepticalReconciliationNode(buildMockModel());
-    const result = await node(buildBaseState({ matchResult: matchResultWithoutReason }));
-    const advice = result.fitAdvice as Record<string, unknown>;
-
-    expect(advice.scenarioId).toBe("honest_verdict");
-    expect(typeof advice.honestAssessment).toBe("string");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Test cases 5, 6, 7, 8 — guards
+// Guards
 // ---------------------------------------------------------------------------
 
 describe("analyzeSkepticalReconciliation — guards", () => {
-  // Test case 5
-  it("throws when matchResult is missing", async () => {
+  it("throws when fitAnalysis is missing", async () => {
     const node = makeAnalyzeSkepticalReconciliationNode(buildMockModel());
     await expect(
-      node(buildBaseState({ matchResult: undefined })),
-    ).rejects.toThrow("matchResult is missing");
+      node(buildBaseState({ fitAnalysis: undefined })),
+    ).rejects.toThrow("fitAnalysis is missing");
   });
 
-  // Test case 6
-  it("throws when resumeData is missing", async () => {
-    const node = makeAnalyzeSkepticalReconciliationNode(buildMockModel());
-    await expect(
-      node(buildBaseState({ resumeData: undefined })),
-    ).rejects.toThrow("resumeData is missing");
-  });
-
-  // Test case 7
-  it("throws when jobData is missing", async () => {
-    const node = makeAnalyzeSkepticalReconciliationNode(buildMockModel());
-    await expect(
-      node(buildBaseState({ jobData: undefined })),
-    ).rejects.toThrow("jobData is missing");
-  });
-
-  // Test case 8
   it("throws when scenarioId is not honest_verdict", async () => {
     const node = makeAnalyzeSkepticalReconciliationNode(buildMockModel());
     await expect(

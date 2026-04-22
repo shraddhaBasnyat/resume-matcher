@@ -1,89 +1,47 @@
 import { describe, it, expect, vi } from "vitest";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { InvisibleExpertLLMSchema } from "../chains/analyze-strong-match-chain.js";
+import { makeAnalyzeStrongMatchNode } from "../graphs/scoring/nodes/analyze-strong-match.js";
+import type { GraphStateType } from "../graphs/scoring/scoring-graph-state.js";
 
 vi.mock("../langsmith.js", () => ({
   isTracingEnabled: () => false,
   getTraceUrl: vi.fn(),
-  RootRunCapture: vi.fn().mockImplementation(function () { return { rootRunId: undefined }; }),
+  RootRunCapture: function RootRunCapture(
+    this: Record<string, unknown>,
+    _callback: (id: string) => void,
+  ) {},
   logValidationFailure: vi.fn(),
   RUN_NAMES: {},
 }));
-import {
-  ConfirmedFitLLMSchema,
-  InvisibleExpertLLMSchema,
-} from "../chains/analyze-strong-match-chain.js";
-import { makeAnalyzeStrongMatchNode } from "../graphs/scoring/nodes/analyze-strong-match.js";
-import type { GraphStateType } from "../graphs/scoring/scoring-graph-state.js";
 
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
 
-const validConfirmedFitLLMOutput = {
-  confirmation:
-    "You are an excellent match for this role. Your five years of Python and production FastAPI services directly address the core requirements.",
-  standoutStrengths: [
-    "5 years of Python in production systems",
-    "FastAPI service design and deployment",
-    "PostgreSQL schema ownership",
-  ],
-  minorGaps: [],
-};
-
 const validInvisibleExpertLLMOutput = {
-  confirmation:
-    "You are a strong match for this role — your backend engineering background and ML work align closely with what they are looking for.",
   standoutStrengths: ["Deep ML background", "Python expertise at scale"],
-  minorGaps: [],
-  atsRealityCheck:
-    "Your resume uses 'ML' throughout but the job posting requires 'machine learning' verbatim. " +
-    "Automated systems do exact-match scans — 'ML' does not register. Swapping three instances resolves this.",
+  atsRealityCheck: [
+    "Resume uses 'ML' but the job posting requires 'machine learning' verbatim.",
+    "Missing keyword 'TensorFlow' despite being referenced in project descriptions.",
+  ],
+  terminologySwaps: ['Replace "ML" with "machine learning"'],
+  keywordsToAdd: ["TensorFlow", "production ML systems"],
 };
 
-const validMatchResult = {
-  fitScore: 82,
-  matchedSkills: ["Python", "FastAPI", "PostgreSQL"],
-  missingSkills: [],
-  narrativeAlignment: "Strong backend engineering background aligns with this role.",
-  gaps: [],
-  resumeAdvice: [],
-  contextPrompt: null,
-  weakMatch: false,
-};
-
-const validResumeData = {
-  name: "Jane Doe",
-  email: "jane@example.com",
-  phone: "555-1234",
-  skills: ["Python", "FastAPI", "PostgreSQL"],
-  experience: [{ company: "StartupCo", role: "Backend Engineer", years: 5 }],
-  education: [{ degree: "B.Sc. CS", institution: "State U" }],
-  careerNarrative: {
-    trajectory: "Backend engineering",
-    dominantTheme: "API and data systems",
-    inferredStrengths: ["distributed systems", "data pipelines"],
-    careerMotivation: "Building reliable backend infrastructure",
-    resumeStoryGaps: [],
-  },
-  sourceRole: "backend_swe",
-};
-
-const validJobData = {
-  title: "Backend Engineer",
-  company: "Acme Corp",
-  requiredSkills: ["Python", "FastAPI"],
-  niceToHaveSkills: ["PostgreSQL"],
-  keywords: ["machine learning", "TensorFlow"],
-  experienceYears: 4,
-  seniorityLevel: "senior" as const,
-  targetRole: "backend_swe",
+const validFitAnalysis = {
+  careerTrajectory: "Backend engineer progressing to ML-focused roles over 5 years",
+  keyStrengths: ["Python", "FastAPI", "ML infrastructure"],
+  experienceGaps: [],
 };
 
 const validAtsProfile = {
   atsScore: 55,
-  missingKeywords: ["machine learning", "TensorFlow"],
-  layoutFlags: [] as [],
-  terminologyGaps: ["resume uses 'ML'; job posting requires 'machine learning'"],
+  machineParsing: ["// TODO: replace with programmatic resume parsing analysis"],
+  machineRanking: [
+    "resume uses 'ML'; job posting requires 'machine learning'",
+    "missing keyword: 'TensorFlow'",
+  ],
 };
 
 function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): GraphStateType {
@@ -91,13 +49,18 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     resumeText: "Jane Doe resume text",
     jobText: "Backend Engineer at Acme",
     humanContext: "",
-    resumeData: validResumeData,
-    jobData: validJobData,
-    matchResult: validMatchResult,
+    fitScore: 82,
+    headline: "Backend Engineer with strong ML background",
+    battleCardBullets: ["5 years of Python", "FastAPI service design"],
+    scenarioSummary: "Strong backend background maps to this role.",
+    sourceRole: "backend_swe",
+    targetRole: "backend_swe",
+    fitAnalysis: validFitAnalysis,
+    weakMatch: false,
+    weakMatchReason: null,
     threadId: undefined,
     intent: undefined,
     intentContext: undefined,
-    archetypeContext: null,
     hitlFired: false,
     userTier: "base",
     atsProfile: undefined,
@@ -107,74 +70,46 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
   } as unknown as GraphStateType;
 }
 
-function buildMockModel(
-  confirmedFitReturn = validConfirmedFitLLMOutput,
-  invisibleExpertReturn = validInvisibleExpertLLMOutput,
-) {
-  const mockBound = {
+function buildMockModel() {
+  return {
+    bind: vi.fn().mockReturnThis(),
     withStructuredOutput: vi.fn().mockImplementation((schema: unknown) => {
-      if (schema === ConfirmedFitLLMSchema) {
-        return { invoke: vi.fn().mockResolvedValue(confirmedFitReturn) };
-      }
       if (schema === InvisibleExpertLLMSchema) {
-        return { invoke: vi.fn().mockResolvedValue(invisibleExpertReturn) };
+        return { invoke: vi.fn().mockResolvedValue(validInvisibleExpertLLMOutput) };
       }
       return { invoke: vi.fn().mockResolvedValue({}) };
     }),
-  };
-  return {
-    bind: vi.fn().mockReturnValue(mockBound),
   } as unknown as BaseChatModel;
 }
-
-// ---------------------------------------------------------------------------
-// Schema validation — ConfirmedFitLLMSchema
-// ---------------------------------------------------------------------------
-
-describe("ConfirmedFitLLMSchema", () => {
-  it("accepts empty minorGaps — correct output when no material gaps exist", () => {
-    expect(
-      ConfirmedFitLLMSchema.safeParse({ ...validConfirmedFitLLMOutput, minorGaps: [] }).success,
-    ).toBe(true);
-  });
-
-  it("rejects missing confirmation", () => {
-    const { confirmation: _, ...without } = validConfirmedFitLLMOutput;
-    expect(ConfirmedFitLLMSchema.safeParse(without).success).toBe(false);
-  });
-
-  it("rejects non-array standoutStrengths", () => {
-    expect(
-      ConfirmedFitLLMSchema.safeParse({
-        ...validConfirmedFitLLMOutput,
-        standoutStrengths: "strong Python skills",
-      }).success,
-    ).toBe(false);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Schema validation — InvisibleExpertLLMSchema
 // ---------------------------------------------------------------------------
 
 describe("InvisibleExpertLLMSchema", () => {
-  it("rejects output missing atsRealityCheck — required for invisible_expert", () => {
+  it("accepts valid invisible_expert output", () => {
+    expect(InvisibleExpertLLMSchema.safeParse(validInvisibleExpertLLMOutput).success).toBe(true);
+  });
+
+  it("rejects output missing atsRealityCheck", () => {
     const { atsRealityCheck: _, ...without } = validInvisibleExpertLLMOutput;
     expect(InvisibleExpertLLMSchema.safeParse(without).success).toBe(false);
   });
 
-  it("accepts empty minorGaps", () => {
-    expect(
-      InvisibleExpertLLMSchema.safeParse({ ...validInvisibleExpertLLMOutput, minorGaps: [] })
-        .success,
-    ).toBe(true);
-  });
-
-  it("rejects non-string atsRealityCheck", () => {
+  it("rejects atsRealityCheck as a string — must be array", () => {
     expect(
       InvisibleExpertLLMSchema.safeParse({
         ...validInvisibleExpertLLMOutput,
-        atsRealityCheck: ["array", "not", "string"],
+        atsRealityCheck: "single string not array",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects non-array standoutStrengths", () => {
+    expect(
+      InvisibleExpertLLMSchema.safeParse({
+        ...validInvisibleExpertLLMOutput,
+        standoutStrengths: "strong Python skills",
       }).success,
     ).toBe(false);
   });
@@ -185,8 +120,7 @@ describe("InvisibleExpertLLMSchema", () => {
 // ---------------------------------------------------------------------------
 
 describe("analyzeStrongMatch — confirmed_fit", () => {
-  // Test case 1
-  it("returns fitAdvice with scenarioId confirmed_fit and no ATS fields", async () => {
+  it("returns empty fitAdvice array immediately — no LLM call", async () => {
     const model = buildMockModel();
     const node = makeAnalyzeStrongMatchNode(model);
 
@@ -194,15 +128,16 @@ describe("analyzeStrongMatch — confirmed_fit", () => {
     const advice = result.fitAdvice as Record<string, unknown>;
 
     expect(advice.scenarioId).toBe("confirmed_fit");
-    expect(advice.confirmation).toBe(validConfirmedFitLLMOutput.confirmation);
-    expect(advice.standoutStrengths).toEqual(validConfirmedFitLLMOutput.standoutStrengths);
-    expect(advice.minorGaps).toEqual(validConfirmedFitLLMOutput.minorGaps);
-    // ATS fields must not appear on confirmed_fit
+    expect(Array.isArray(advice.fitAdvice)).toBe(true);
+    expect((advice.fitAdvice as unknown[]).length).toBe(0);
+
+    // No ATS fields on confirmed_fit
+    expect(advice.standoutStrengths).toBeUndefined();
+    expect(advice.atsRealityCheck).toBeUndefined();
     expect(advice.terminologySwaps).toBeUndefined();
     expect(advice.keywordsToAdd).toBeUndefined();
-    expect(advice.layoutAdvice).toBeUndefined();
-    expect(advice.atsRealityCheck).toBeUndefined();
   });
+
 });
 
 // ---------------------------------------------------------------------------
@@ -210,8 +145,7 @@ describe("analyzeStrongMatch — confirmed_fit", () => {
 // ---------------------------------------------------------------------------
 
 describe("analyzeStrongMatch — invisible_expert", () => {
-  // Test case 2
-  it("merges LLM output with atsProfile pass-throughs — terminologySwaps from atsProfile, not LLM", async () => {
+  it("returns LLM output fields in fitAdvice", async () => {
     const model = buildMockModel();
     const node = makeAnalyzeStrongMatchNode(model);
 
@@ -224,29 +158,27 @@ describe("analyzeStrongMatch — invisible_expert", () => {
     const advice = result.fitAdvice as Record<string, unknown>;
 
     expect(advice.scenarioId).toBe("invisible_expert");
-    // LLM-generated fields
-    expect(advice.confirmation).toBe(validInvisibleExpertLLMOutput.confirmation);
-    expect(advice.atsRealityCheck).toBe(validInvisibleExpertLLMOutput.atsRealityCheck);
-    expect(advice.standoutStrengths).toEqual(validInvisibleExpertLLMOutput.standoutStrengths);
-    // Pass-through fields — must come from atsProfile, not from the LLM schema
-    expect(advice.terminologySwaps).toEqual(validAtsProfile.terminologyGaps);
-    expect(advice.keywordsToAdd).toEqual(validAtsProfile.missingKeywords);
-    expect(advice.layoutAdvice).toEqual(validAtsProfile.layoutFlags);
+    expect(Array.isArray(advice.standoutStrengths)).toBe(true);
+    // atsRealityCheck is string[] from LLM
+    expect(Array.isArray(advice.atsRealityCheck)).toBe(true);
+    expect(Array.isArray(advice.terminologySwaps)).toBe(true);
+    expect(Array.isArray(advice.keywordsToAdd)).toBe(true);
   });
 
-  it("layoutAdvice is an empty array when atsProfile has no layoutFlags", async () => {
+  it("terminologySwaps and keywordsToAdd come from LLM output", async () => {
     const model = buildMockModel();
     const node = makeAnalyzeStrongMatchNode(model);
 
     const result = await node(
       buildBaseState({
         scenarioId: "invisible_expert",
-        atsProfile: { ...validAtsProfile, layoutFlags: [] },
+        atsProfile: validAtsProfile,
       }),
     );
     const advice = result.fitAdvice as Record<string, unknown>;
 
-    expect(advice.layoutAdvice).toEqual([]);
+    expect(advice.terminologySwaps).toEqual(validInvisibleExpertLLMOutput.terminologySwaps);
+    expect(advice.keywordsToAdd).toEqual(validInvisibleExpertLLMOutput.keywordsToAdd);
   });
 });
 
@@ -255,36 +187,7 @@ describe("analyzeStrongMatch — invisible_expert", () => {
 // ---------------------------------------------------------------------------
 
 describe("analyzeStrongMatch — guards", () => {
-  // Test case 4
-  it("throws when matchResult is missing", async () => {
-    const model = buildMockModel();
-    const node = makeAnalyzeStrongMatchNode(model);
-
-    await expect(
-      node(buildBaseState({ scenarioId: "confirmed_fit", matchResult: undefined })),
-    ).rejects.toThrow("matchResult is missing");
-  });
-
-  it("throws when resumeData is missing", async () => {
-    const model = buildMockModel();
-    const node = makeAnalyzeStrongMatchNode(model);
-
-    await expect(
-      node(buildBaseState({ scenarioId: "confirmed_fit", resumeData: undefined })),
-    ).rejects.toThrow("resumeData is missing");
-  });
-
-  it("throws when jobData is missing", async () => {
-    const model = buildMockModel();
-    const node = makeAnalyzeStrongMatchNode(model);
-
-    await expect(
-      node(buildBaseState({ scenarioId: "confirmed_fit", jobData: undefined })),
-    ).rejects.toThrow("jobData is missing");
-  });
-
-  // Test case 3
-  it("throws when scenarioId is narrative_gap — wrong node was called", async () => {
+  it("throws when scenarioId is narrative_gap", async () => {
     const model = buildMockModel();
     const node = makeAnalyzeStrongMatchNode(model);
 
@@ -311,7 +214,6 @@ describe("analyzeStrongMatch — guards", () => {
     ).rejects.toThrow('expected scenarioId "confirmed_fit" or "invisible_expert"');
   });
 
-  // Test case 5
   it("throws when scenarioId is invisible_expert but atsProfile is missing", async () => {
     const model = buildMockModel();
     const node = makeAnalyzeStrongMatchNode(model);
@@ -319,5 +221,20 @@ describe("analyzeStrongMatch — guards", () => {
     await expect(
       node(buildBaseState({ scenarioId: "invisible_expert", atsProfile: undefined })),
     ).rejects.toThrow("atsProfile is missing");
+  });
+
+  it("throws when scenarioId is invisible_expert but fitAnalysis is missing", async () => {
+    const model = buildMockModel();
+    const node = makeAnalyzeStrongMatchNode(model);
+
+    await expect(
+      node(
+        buildBaseState({
+          scenarioId: "invisible_expert",
+          atsProfile: validAtsProfile,
+          fitAnalysis: undefined,
+        }),
+      ),
+    ).rejects.toThrow("fitAnalysis is missing");
   });
 });
