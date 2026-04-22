@@ -2,21 +2,16 @@ import { StateGraph, MemorySaver } from "@langchain/langgraph";
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { GraphState } from "./scoring-graph-state.js";
-import { makeParseResumeNode } from "./nodes/parse-resume.js";
-import { makeParseJobNode } from "./nodes/parse-job.js";
-import { makeScoreMatchNode } from "./nodes/score-match.js";
+import { makeAnalyzeFitNode } from "./nodes/analyze-fit.js";
 import { makeAtsAnalysisNode } from "./nodes/ats-analysis.js";
 import { makeAnalyzeStrongMatchNode } from "./nodes/analyze-strong-match.js";
 import { makeAnalyzeNarrativeGapNode } from "./nodes/analyze-narrative-gap.js";
 import { makeAnalyzeSkepticalReconciliationNode } from "./nodes/analyze-skeptical-reconciliation.js";
-import { detectArchetype, routeVerdicts } from "./edges.js";
+import { routeVerdicts } from "./edges.js";
 
 const NODES = {
-  PARSE_RESUME: "parseResume",
-  PARSE_JOB: "parseJob",
   ATS_ANALYSIS: "atsAnalysis",
-  SCORE_MATCH: "scoreMatch",
-  DETECT_ARCHETYPE: "detectArchetype",
+  ANALYZE_FIT: "analyzeFit",
   ROUTE_VERDICTS: "routeVerdicts",
   ANALYZE_STRONG_MATCH: "analyzeStrongMatch",
   ANALYZE_NARRATIVE_GAP: "analyzeNarrativeGap",
@@ -57,20 +52,15 @@ export function getCheckpointer(): PostgresSaver | MemorySaver {
 }
 
 export function buildScoringGraph(model: BaseChatModel) {
-  const parseResume = makeParseResumeNode(model);
-  const parseJob = makeParseJobNode(model);
+  const analyzeFit = makeAnalyzeFitNode(model);
   const atsAnalysis = makeAtsAnalysisNode(model);
-  const scoreMatch = makeScoreMatchNode(model);
   const analyzeStrongMatch = makeAnalyzeStrongMatchNode(model);
   const analyzeNarrativeGap = makeAnalyzeNarrativeGapNode(model);
   const analyzeSkepticalReconciliation = makeAnalyzeSkepticalReconciliationNode(model);
 
   const workflow = new StateGraph(GraphState)
-    .addNode(NODES.PARSE_RESUME, parseResume)
-    .addNode(NODES.PARSE_JOB, parseJob)
     .addNode(NODES.ATS_ANALYSIS, atsAnalysis)
-    .addNode(NODES.SCORE_MATCH, scoreMatch)
-    .addNode(NODES.DETECT_ARCHETYPE, detectArchetype)
+    .addNode(NODES.ANALYZE_FIT, analyzeFit)
     .addNode(NODES.ROUTE_VERDICTS, routeVerdicts, {
       ends: [
         NODES.ANALYZE_STRONG_MATCH,
@@ -82,18 +72,13 @@ export function buildScoringGraph(model: BaseChatModel) {
     .addNode(NODES.ANALYZE_STRONG_MATCH, analyzeStrongMatch)
     .addNode(NODES.ANALYZE_NARRATIVE_GAP, analyzeNarrativeGap)
     .addNode(NODES.ANALYZE_SKEPTICAL_RECONCILIATION, analyzeSkepticalReconciliation, {
-      ends: [NODES.SCORE_MATCH, "__end__"],
+      ends: [NODES.ANALYZE_SKEPTICAL_RECONCILIATION, "__end__"],
     })
-    // Three-way fan-in to scoreMatch — all three must complete before scoreMatch fires
-    .addEdge("__start__", NODES.PARSE_RESUME)
-    .addEdge("__start__", NODES.PARSE_JOB)
+    // Two-way fan-in: atsAnalysis + analyzeFit both must complete before routeVerdicts fires
     .addEdge("__start__", NODES.ATS_ANALYSIS)
-    .addEdge(NODES.PARSE_RESUME, NODES.SCORE_MATCH)
-    .addEdge(NODES.PARSE_JOB, NODES.SCORE_MATCH)
-    .addEdge(NODES.ATS_ANALYSIS, NODES.SCORE_MATCH)
-    // Linear spine
-    .addEdge(NODES.SCORE_MATCH, NODES.DETECT_ARCHETYPE)
-    .addEdge(NODES.DETECT_ARCHETYPE, NODES.ROUTE_VERDICTS)
+    .addEdge("__start__", NODES.ANALYZE_FIT)
+    .addEdge(NODES.ATS_ANALYSIS, NODES.ROUTE_VERDICTS)
+    .addEdge(NODES.ANALYZE_FIT, NODES.ROUTE_VERDICTS)
     // Verdict nodes terminate at END independently
     .addEdge(NODES.ANALYZE_STRONG_MATCH, "__end__")
     .addEdge(NODES.ANALYZE_NARRATIVE_GAP, "__end__")

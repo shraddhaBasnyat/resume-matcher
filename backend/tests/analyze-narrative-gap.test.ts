@@ -9,7 +9,10 @@ import * as langsmith from "../langsmith.js";
 vi.mock("../langsmith.js", () => ({
   isTracingEnabled: () => false,
   getTraceUrl: vi.fn(),
-  RootRunCapture: vi.fn().mockImplementation(function () { return { rootRunId: undefined }; }),
+  RootRunCapture: function RootRunCapture(
+    this: Record<string, unknown>,
+    _callback: (id: string) => void,
+  ) {},
   logValidationFailure: vi.fn(),
   RUN_NAMES: {},
 }));
@@ -19,8 +22,6 @@ vi.mock("../langsmith.js", () => ({
 // ---------------------------------------------------------------------------
 
 const validLLMOutput = {
-  narrativeBridge:
-    "Your five years building data pipelines at a logistics company maps directly to the ML platform engineering role — the infrastructure problems are identical, only the payloads differ.",
   reframingSuggestions: [
     "Retitle 'Data Engineer' to 'ML Infrastructure Engineer' and lead with the model serving work, not the ETL.",
     "The Kafka consumer you built for inventory events is the same pattern as a feature store consumer — name it that way.",
@@ -29,44 +30,10 @@ const validLLMOutput = {
   missingSkills: [],
 };
 
-const validMatchResult = {
-  fitScore: 62,
-  matchedSkills: ["Python", "Kafka", "SQL"],
-  missingSkills: [],
-  narrativeAlignment:
-    "Candidate has built data pipelines at scale. The infrastructure work closely mirrors ML platform engineering.",
-  gaps: ["No direct ML model deployment experience listed"],
-  resumeAdvice: ["Add a section on model serving", "Highlight the Kafka consumer work"],
-  contextPrompt: null,
-  weakMatch: false,
-};
-
-const validResumeData = {
-  name: "Alex Smith",
-  email: "alex@example.com",
-  phone: "555-0100",
-  skills: ["Python", "Kafka", "SQL", "Spark"],
-  experience: [{ company: "Logisticsco", role: "Data Engineer", years: 5 }],
-  education: [{ degree: "B.Sc. CS", institution: "State U" }],
-  careerNarrative: {
-    trajectory: "Data engineering",
-    dominantTheme: "Large-scale data pipelines",
-    inferredStrengths: ["distributed systems", "data reliability"],
-    careerMotivation: "Building infrastructure that ML teams can depend on",
-    resumeStoryGaps: ["ML framing absent despite relevant infrastructure work"],
-  },
-  sourceRole: "data_engineer",
-};
-
-const validJobData = {
-  title: "ML Platform Engineer",
-  company: "Acme AI",
-  requiredSkills: ["Python", "Kafka", "model serving"],
-  niceToHaveSkills: ["Spark"],
-  keywords: ["feature store", "MLOps", "model deployment"],
-  experienceYears: 4,
-  seniorityLevel: "mid" as const,
-  targetRole: "ml_platform_swe",
+const validFitAnalysis = {
+  careerTrajectory: "Data engineering IC progressing over 5 years at a logistics company",
+  keyStrengths: ["Python at scale", "Kafka", "SQL", "distributed data systems"],
+  experienceGaps: ["No direct ML model deployment experience listed"],
 };
 
 function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): GraphStateType {
@@ -74,13 +41,18 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     resumeText: "Alex Smith resume text",
     jobText: "ML Platform Engineer at Acme AI",
     humanContext: "",
-    resumeData: validResumeData,
-    jobData: validJobData,
-    matchResult: validMatchResult,
+    fitScore: 62,
+    headline: "Data Engineer with strong infrastructure background",
+    battleCardBullets: ["5 years of Python", "Kafka consumer ownership"],
+    scenarioSummary: "Strong pipeline background maps to ML platform work.",
+    sourceRole: "data_engineer",
+    targetRole: "ml_platform_swe",
+    fitAnalysis: validFitAnalysis,
+    weakMatch: false,
+    weakMatchReason: null,
     threadId: undefined,
     intent: undefined,
     intentContext: undefined,
-    archetypeContext: null,
     hitlFired: false,
     userTier: "base",
     atsProfile: undefined,
@@ -107,20 +79,17 @@ function buildMockModel() {
 // ---------------------------------------------------------------------------
 
 describe("analyzeNarrativeGap — output shape", () => {
-  // Test case 1
   it("returns fitAdvice with scenarioId narrative_gap and all required fields", async () => {
     const node = makeAnalyzeNarrativeGapNode(buildMockModel());
     const result = await node(buildBaseState());
     const advice = result.fitAdvice as Record<string, unknown>;
 
     expect(advice.scenarioId).toBe("narrative_gap");
-    expect(typeof advice.narrativeBridge).toBe("string");
     expect(Array.isArray(advice.reframingSuggestions)).toBe(true);
     expect(Array.isArray(advice.transferableStrengths)).toBe(true);
     expect(Array.isArray(advice.missingSkills)).toBe(true);
   });
 
-  // Test case 2
   it("reframingSuggestions is non-empty", async () => {
     const node = makeAnalyzeNarrativeGapNode(buildMockModel());
     const result = await node(buildBaseState());
@@ -129,7 +98,6 @@ describe("analyzeNarrativeGap — output shape", () => {
     expect((advice.reframingSuggestions as string[]).length).toBeGreaterThan(0);
   });
 
-  // Test case 3
   it("missingSkills as empty array passes through correctly", async () => {
     const node = makeAnalyzeNarrativeGapNode(buildMockModel());
     const result = await node(buildBaseState());
@@ -144,31 +112,13 @@ describe("analyzeNarrativeGap — output shape", () => {
 // ---------------------------------------------------------------------------
 
 describe("analyzeNarrativeGap — guards", () => {
-  // Test case 4
-  it("throws when matchResult is missing", async () => {
+  it("throws when fitAnalysis is missing", async () => {
     const node = makeAnalyzeNarrativeGapNode(buildMockModel());
     await expect(
-      node(buildBaseState({ matchResult: undefined })),
-    ).rejects.toThrow("matchResult is missing");
+      node(buildBaseState({ fitAnalysis: undefined })),
+    ).rejects.toThrow("fitAnalysis is missing");
   });
 
-  // Test case 5
-  it("throws when resumeData is missing", async () => {
-    const node = makeAnalyzeNarrativeGapNode(buildMockModel());
-    await expect(
-      node(buildBaseState({ resumeData: undefined })),
-    ).rejects.toThrow("resumeData is missing");
-  });
-
-  // Test case 6
-  it("throws when jobData is missing", async () => {
-    const node = makeAnalyzeNarrativeGapNode(buildMockModel());
-    await expect(
-      node(buildBaseState({ jobData: undefined })),
-    ).rejects.toThrow("jobData is missing");
-  });
-
-  // Test case 7
   it("throws when scenarioId is not narrative_gap", async () => {
     const node = makeAnalyzeNarrativeGapNode(buildMockModel());
     await expect(
@@ -177,7 +127,7 @@ describe("analyzeNarrativeGap — guards", () => {
   });
 
   it("throws ZodError and calls logValidationFailure when LLM returns invalid shape", async () => {
-    const invalidOutput = { narrativeBridge: 42, reframingSuggestions: "not an array" };
+    const invalidOutput = { reframingSuggestions: "not an array", transferableStrengths: 42 };
 
     const model = {
       bind: vi.fn().mockReturnThis(),

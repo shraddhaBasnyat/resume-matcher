@@ -1,10 +1,11 @@
 import { Command } from "@langchain/langgraph";
-import { isTracingEnabled, getTraceUrl, RootRunCapture, RUN_NAMES } from "../../langsmith.js";
+import { isTracingEnabled, RootRunCapture, RUN_NAMES } from "../../langsmith.js";
 import { activeRuns } from "../../active-runs.js";
 import { NodeProgressEmitter } from "./emitter.js";
 import { graph } from "../../graphs/scoring/scoring-graph-instance.js";
 import { getCheckpointer } from "../../graphs/scoring/scoring-graph.js";
 import type { ConfidentMatchContext, ExploringGapContext } from "../../types/api.js";
+import { PublicMatchResponseSchema } from "../../types/public-response.js";
 
 type SharedOptions = {
   humanContext?: string;
@@ -65,52 +66,94 @@ async function invokeGraph(options: FreshRunOptions | ResumeRunOptions, invokeCo
   );
 }
 
+function mapFitAdvice(
+  fitAdvice: Record<string, unknown> | undefined,
+): { key: string; bulletPoints: string[] }[] {
+  if (!fitAdvice) return [];
+  switch (fitAdvice.scenarioId as string) {
+    case "confirmed_fit":
+      return [];
+    case "invisible_expert":
+      return [
+        { key: "standout_strengths", bulletPoints: (fitAdvice.standoutStrengths as string[]) ?? [] },
+        { key: "ats_reality_check",  bulletPoints: (fitAdvice.atsRealityCheck  as string[]) ?? [] },
+        { key: "terminology_swaps",  bulletPoints: (fitAdvice.terminologySwaps  as string[]) ?? [] },
+        { key: "keywords_to_add",    bulletPoints: (fitAdvice.keywordsToAdd    as string[]) ?? [] },
+      ];
+    case "narrative_gap":
+      return [
+        { key: "transferable_strengths", bulletPoints: (fitAdvice.transferableStrengths as string[]) ?? [] },
+        { key: "reframing_suggestions",  bulletPoints: (fitAdvice.reframingSuggestions  as string[]) ?? [] },
+        { key: "missing_skills",         bulletPoints: (fitAdvice.missingSkills         as string[]) ?? [] },
+      ];
+    case "honest_verdict": {
+      const ack = fitAdvice.acknowledgement as string[] | null;
+      return [
+        { key: "honest_assessment", bulletPoints: (fitAdvice.honestAssessment as string[]) ?? [] },
+        { key: "closing_steps",     bulletPoints: (fitAdvice.closingSteps     as string[]) ?? [] },
+        ...(ack ? [{ key: "acknowledgement", bulletPoints: ack }] : []),
+      ];
+    }
+    default:
+      return [];
+  }
+}
+
+function buildPublicResponse(
+  state: Awaited<ReturnType<typeof graph.invoke>>,
+  threadId: string,
+  durationMs: number,
+) {
+  return {
+    scenarioId: state.scenarioId!,
+    fitScore: state.fitScore!,
+    battleCard: {
+      headline: state.headline!,
+      bulletPoints: state.battleCardBullets ?? [],
+    },
+    fitAdvice: mapFitAdvice(state.fitAdvice),
+    atsProfile: {
+      atsScore: state.atsProfile?.atsScore ?? null,
+      machineParsing: state.atsProfile?.machineParsing ?? [],
+      machineRanking: state.atsProfile?.machineRanking ?? [],
+    },
+    scenarioSummary: { text: state.scenarioSummary ?? "" },
+    threadId,
+    _meta: { durationMs },
+  };
+}
+
 async function emitResult(
   state: Awaited<ReturnType<typeof graph.invoke>>,
   emit: (eventName: string, data: object) => void,
   threadId: string,
   runStartTime: number,
-  capture: RootRunCapture | null,
   isInterrupted: boolean
 ) {
-  const traceUrl =
-    isTracingEnabled() && capture?.rootRunId ? getTraceUrl(capture.rootRunId) : null;
-
   if (isInterrupted) {
     emit("interrupted", {
-      fitScore: state.matchResult?.fitScore ?? null,
-      contextPrompt: state.matchResult?.contextPrompt ?? null,
+      fitScore: state.fitScore ?? null,
       threadId,
     });
   } else {
-    const { matchResult } = state;
-    if (!matchResult) {
-      emit("error", { error: "Incomplete graph result", message: "Graph completed but matchResult was not populated." });
+    if (state.fitScore === undefined || !state.scenarioId) {
+      emit("error", { error: "Incomplete graph result", message: "Graph completed but fitScore or scenarioId was not populated." });
       return;
     }
     if (!state.atsProfile) {
       throw new Error("runner: atsProfile missing after graph completion — atsAnalysis node did not write to state");
     }
-    // Explicit field list — resumeData and jobData are internal graph state only,
-    // not surfaced to the client.
-    emit("completed", {
-      result: {
-        fitScore: matchResult.fitScore,
-        matchedSkills: matchResult.matchedSkills,
-        missingSkills: matchResult.missingSkills,
-        narrativeAlignment: matchResult.narrativeAlignment,
-        weakMatch: matchResult.weakMatch,
-        weakMatchReason: matchResult.weakMatchReason,
-        atsProfile: state.atsProfile,
-        fitAdvice: state.fitAdvice ?? null,
-        scenarioId: state.scenarioId,
-        threadId,
-        _meta: {
-          traceUrl,
-          durationMs: Date.now() - runStartTime,
-        },
-      },
-    });
+    const durationMs = Date.now() - runStartTime;
+    const response = buildPublicResponse(state, threadId, durationMs);
+    const validated = PublicMatchResponseSchema.safeParse(response);
+    if (!validated.success) {
+      emit("error", {
+        error: "Invalid response shape",
+        message: "Graph output did not match PublicMatchResponseSchema.",
+      });
+      return;
+    }
+    emit("completed", { result: validated.data });
   }
 }
 
@@ -148,7 +191,6 @@ export async function runMatchGraph(options: RunMatchGraphOptions): Promise<void
         emit,
         options.threadId,
         runStartTime,
-        null,
         false
       );
       await getCheckpointer().deleteThread(options.threadId);
@@ -175,7 +217,7 @@ export async function runMatchGraph(options: RunMatchGraphOptions): Promise<void
     const snapshot = await graph.getState(config);
     const isInterrupted = snapshot.next.length > 0;
     try {
-      await emitResult(state, emit, newThreadId, runStartTime, capture, isInterrupted);
+      await emitResult(state, emit, newThreadId, runStartTime, isInterrupted);
     } finally {
       if (!isInterrupted) {
         await getCheckpointer().deleteThread(newThreadId);

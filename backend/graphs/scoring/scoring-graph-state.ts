@@ -1,39 +1,13 @@
 import { Annotation } from "@langchain/langgraph";
-import type { Resume } from "../../chains/resume-chain.js";
-import type { JobDescription } from "../../chains/job-chain.js";
-import type { MatchResult } from "../../chains/scoring-chain.js";
-import type { LayoutFlag } from "../../chains/ats-analysis-chain.js";
-import type { ArchetypeContext } from "../../archetypes/types.js";
 import type { ConfidentMatchContext, ExploringGapContext } from "../../types/api.js";
 import type { ScenarioId } from "./scenario/derive-scenario.js";
 
-/**
- * GRAPH STATE
- *
- * Single source of truth for the LangGraph pipeline.
- * All nodes read from and write to this state object.
- *
- * REDUCERS
- * Currently all keys use overwrite reducers (last write wins).
- * If nodes were broken into smaller units (e.g. extractSkills,
- * extractExperience as separate nodes), consider merge reducers:
- *   value: (old, next) => ({ ...old, ...next })
- * This would make partial failures more resilient — if one node
- * fails, previously written keys are preserved.
- *
- * KNOWN LIMITATIONS (as of LangGraph 0.x)
- * 1. No access control — any node can read/write any key.
- *    Convention: type each node with Pick<GraphState, "keyName">
- *    to let TypeScript enforce boundaries at dev time.
- *
- * 2. No visible subscriptions — unlike Redux selectors, there is
- *    no built-in way to see which nodes "own" which keys.
- *    See NODE DATA FLOW comment in lib/graph/scoring-graph.ts.
- *
- * 3. MemorySaver is ephemeral — paused graphs (HITL interrupt)
- *    are lost on server restart. For production, swap with
- *    a persistent checkpointer (PostgresSaver, RedisSaver).
- */
+type FitAnalysis = {
+  careerTrajectory: string;
+  keyStrengths: string[];
+  experienceGaps: string[];
+};
+
 export const GraphState = Annotation.Root({
   // Raw text inputs — transient for the life of the graph run only.
   // Never included in API responses.
@@ -43,16 +17,40 @@ export const GraphState = Annotation.Root({
     default: () => "",
     reducer: (prev, next) => prev ? `${prev}\n${next}` : next,
   }),
-  // Structured outputs written by each parse node
-  resumeData: Annotation<Resume | undefined>({
+  // Fit analysis outputs — written by analyzeFit node
+  fitScore: Annotation<number | undefined>({
     default: () => undefined,
     reducer: (_prev, next) => next,
   }),
-  jobData: Annotation<JobDescription | undefined>({
+  headline: Annotation<string | undefined>({
     default: () => undefined,
     reducer: (_prev, next) => next,
   }),
-  matchResult: Annotation<MatchResult | undefined>({
+  battleCardBullets: Annotation<string[] | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  scenarioSummary: Annotation<string | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  sourceRole: Annotation<string | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  targetRole: Annotation<string | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  fitAnalysis: Annotation<FitAnalysis | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  weakMatch: Annotation<boolean | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  weakMatchReason: Annotation<string | null | undefined>({
     default: () => undefined,
     reducer: (_prev, next) => next,
   }),
@@ -70,33 +68,27 @@ export const GraphState = Annotation.Root({
     default: () => undefined,
     reducer: (_prev, next) => next,
   }),
-  // Archetype detection result — set by detectArchetype node (Pass 2)
-  archetypeContext: Annotation<ArchetypeContext | null>({
-    default: () => null,
-    reducer: (_prev, next) => next,
-  }),
-  // HITL loop guard — set to true by awaitHuman node before interrupting.
-  // Prevents a second interrupt on the rescore pass.
+  // HITL loop guard — set to true before interrupting.
+  // Prevents a second interrupt on the resume pass.
   hitlFired: Annotation<boolean>({
     default: () => false,
     reducer: (_prev, next) => next,
   }),
-  // User tier — set from auth middleware (Pass 2). Hardcoded to "base" until then.
+  // User tier — hardcoded to "base" until auth middleware is wired.
   userTier: Annotation<"base" | "paid">({
     default: () => "base",
     reducer: (_prev, next) => next,
   }),
-  // ATS analysis output — written by atsAnalysis node (runs in parallel with parse nodes).
+  // ATS analysis output — written by atsAnalysis node (runs in parallel with analyzeFit).
   atsProfile: Annotation<{
     atsScore: number;
-    missingKeywords: string[];
-    layoutFlags: LayoutFlag[];
-    terminologyGaps: string[];
+    machineParsing: string[];
+    machineRanking: string[];
   } | undefined>({
     default: () => undefined,
     reducer: (_prev, next) => next,
   }),
-  // Scenario routing outputs — written by routeVerdicts and branch nodes.
+  // Scenario routing outputs — written by routeVerdicts and verdict nodes.
   scenarioId: Annotation<ScenarioId | undefined>({
     default: () => undefined,
     reducer: (_prev, next) => next,

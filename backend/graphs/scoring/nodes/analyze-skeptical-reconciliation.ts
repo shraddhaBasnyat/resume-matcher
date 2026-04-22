@@ -7,67 +7,44 @@ export function makeAnalyzeSkepticalReconciliationNode(model: BaseChatModel) {
   const chain = buildHonestVerdictChain(model);
 
   return async function analyzeSkepticalReconciliation(state: GraphStateType) {
-    if (!state.matchResult) {
-      throw new Error("analyzeSkepticalReconciliation: matchResult is missing from graph state");
-    }
-    if (!state.resumeData) {
-      throw new Error("analyzeSkepticalReconciliation: resumeData is missing from graph state");
-    }
-    if (!state.jobData) {
-      throw new Error("analyzeSkepticalReconciliation: jobData is missing from graph state");
-    }
     if (state.scenarioId !== "honest_verdict") {
       throw new Error(
         `analyzeSkepticalReconciliation: expected scenarioId "honest_verdict", ` +
           `got "${state.scenarioId}" — check routing in routeVerdicts`,
       );
     }
-
-    const { weakMatchReason, ...matchResultForChain } = state.matchResult;
-
-    const weakMatchReasonBlock = weakMatchReason
-      ? `Score Assessment: ${weakMatchReason}\n\n`
-      : "";
+    if (!state.fitAnalysis) {
+      throw new Error("analyzeSkepticalReconciliation: fitAnalysis is missing from graph state");
+    }
 
     const humanContextBlock = state.humanContext
       ? `Additional Context from Candidate:\n${state.humanContext}\n\n`
       : "";
 
-    if (!state.hitlFired) {
-      const { contextPrompt } = state.matchResult;
-
-      if (contextPrompt != null) {
-        // scoreMatch saw a plausible path to a better score — ask the candidate.
-        const humanContext = interrupt(contextPrompt);
-        return new Command({
-          update: { humanContext: humanContext as string, hitlFired: true },
-          goto: "scoreMatch",
-        });
-      }
-
-      // contextPrompt is null — scoreMatch judged no context would help. Gap is real.
-      // Run the verdict chain immediately without waiting for human input.
-    }
-
-    // Reached on two paths:
-    // 1. First pass, contextPrompt null — gap is real, no HITL.
-    // 2. Second pass, hitlFired true — rescore ran with humanContext, fitScore still < 50.
     const llmOutput = await chain.invoke(
       {
-        resume_data: JSON.stringify(state.resumeData, null, 2),
-        job_data: JSON.stringify(state.jobData, null, 2),
-        match_result: JSON.stringify(matchResultForChain, null, 2),
-        weak_match_reason_block: weakMatchReasonBlock,
+        fit_analysis: JSON.stringify(state.fitAnalysis, null, 2),
+        weak_match_reason: state.weakMatchReason ?? "Not provided",
         human_context: humanContextBlock,
       },
       { runName: "analyze-skeptical-reconciliation" },
     );
 
+    if (!state.hitlFired && llmOutput.contextPrompt != null) {
+      const humanContext = interrupt(llmOutput.contextPrompt);
+      return new Command({
+        update: { humanContext: humanContext as string, hitlFired: true },
+        goto: "analyzeSkepticalReconciliation",
+      });
+    }
+
+    const { contextPrompt: _cp, ...fitAdviceFields } = llmOutput;
+
     return {
       fitAdvice: {
         scenarioId: "honest_verdict" as const,
         hitlFired: state.hitlFired,
-        ...llmOutput,
+        ...fitAdviceFields,
       },
     };
   };
