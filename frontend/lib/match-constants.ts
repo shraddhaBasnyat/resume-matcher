@@ -5,7 +5,7 @@ export type StepStatus = "waiting" | "running" | "done";
 
 const VERDICT_NODES = new Set([
   "analyzeStrongMatch",
-  "analyzeNarrativeGap", 
+  "analyzeNarrativeGap",
   "analyzeSkepticalReconciliation",
 ]);
 
@@ -20,16 +20,13 @@ export interface NodeProgress {
 export type { MatchResponse };
 
 export const STEPS: { key: string; label: string }[] = [
-  { key: "parseResume", label: "Parsing resume" },
-  { key: "parseJob", label: "Parsing job" },
-  { key: "scoreMatch", label: "Scoring match" },
-  { key: "analyzeMatch", label: "Analysing your fit" },
+  { key: "atsAnalysis",  label: "ATS check" },
+  { key: "analyzeFit",   label: "Analysing fit" },
+  { key: "analyzeMatch", label: "Building your report" },
 ];
 
 export const INITIAL_PROGRESS: Record<string, NodeProgress> = {
-  parseResume: { status: "waiting" },
-  parseJob: { status: "waiting" },
-  scoreMatch: { status: "waiting" },
+  atsAnalysis:  { status: "waiting" },
+  analyzeFit:   { status: "waiting" },
   analyzeMatch: { status: "waiting" },
 };
-

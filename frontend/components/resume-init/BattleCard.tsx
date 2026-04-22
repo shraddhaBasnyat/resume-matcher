@@ -13,7 +13,7 @@ export function BattleCard({ isLoading, score, headline, paragraphs }: BattleCar
   return (
     <div
       className="flex flex-row items-center py-8 px-6 gap-4 bg-muted border border-border rounded-[24px]"
-      style={{ width: "650px", height: "314px", boxShadow: "0px 4px 4px rgba(229, 229, 202, 0.5)" }}
+      style={{ width: "650px", minHeight: "314px", boxShadow: "0px 4px 4px rgba(229, 229, 202, 0.5)" }}
     >
       {isLoading ? (
         <>

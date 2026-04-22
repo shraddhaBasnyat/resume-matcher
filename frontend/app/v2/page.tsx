@@ -7,6 +7,9 @@ import { useMatchRunner } from "@/hooks/useMatchRunner";
 
 export default function V2Page() {
   const {
+    appState,
+    result,
+    progress,
     resumeText,
     jobDescription,
     parseLoading,
@@ -33,7 +36,7 @@ export default function V2Page() {
           handleFileUpload={handleFileUpload}
           handleMatch={handleMatch}
         />
-        <MainResultsStage className="mt-2" />
+        <MainResultsStage className="mt-2" appState={appState} result={result} progress={progress} />
       </div>
     </div>
   );

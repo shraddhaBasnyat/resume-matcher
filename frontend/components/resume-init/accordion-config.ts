@@ -1,6 +1,15 @@
 export const ACCORDION_CONFIG: Record<string, { question: string; subtitle: string }> = {
-  transferable_strengths: { question: "What Transfers Directly?",      subtitle: "transferable strengths" },
-  reframing_suggestions:  { question: "How to reframe the narrative?", subtitle: "Reframing Suggestions" },
-  upskill_gaps:           { question: "How to bridge gaps?",           subtitle: "Upskill suggestions" },
-  ats_profile:            { question: "What's the ATS profile?",       subtitle: "Missing Keywords and Terminology Gaps" },
+  // invisible_expert
+  standout_strengths: { question: "What makes you stand out?",         subtitle: "strengths" },
+  ats_reality_check:  { question: "Why aren't you getting interviews?", subtitle: "signals" },
+  terminology_swaps:  { question: "How should you reword your resume?", subtitle: "swaps" },
+  keywords_to_add:    { question: "What keywords should you add?",      subtitle: "keywords" },
+  // narrative_gap
+  transferable_strengths: { question: "What experience transfers directly?", subtitle: "strengths" },
+  reframing_suggestions:  { question: "How should you retell your story?",   subtitle: "suggestions" },
+  missing_skills:         { question: "What gaps are genuinely there?",      subtitle: "gaps" },
+  // honest_verdict
+  honest_assessment: { question: "Why is the gap real?",          subtitle: "reasons" },
+  closing_steps:     { question: "What would it actually take?",  subtitle: "steps" },
+  acknowledgement:   { question: "What did your context change?", subtitle: "updates" },
 };

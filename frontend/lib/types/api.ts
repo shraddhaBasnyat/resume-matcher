@@ -24,58 +24,7 @@ export interface ExploringGapContext {
 }
 
 // ---------------------------------------------------------------------------
-// Core domain types
-// ---------------------------------------------------------------------------
-
-export interface MatchResult {
-  fitScore: number;
-  atsScore?: number;
-  matchedSkills: string[];
-  missingSkills: string[];
-  narrativeAlignment: string;
-  gaps: string[];
-  resumeAdvice: string[];
-  contextPrompt: string | null;
-  weakMatch: boolean;
-  weakMatchReason?: string;
-}
-
-export interface CareerNarrative {
-  trajectory: string;
-  dominantTheme: string;
-  inferredStrengths: string[];
-  careerMotivation: string;
-  resumeStoryGaps: string[];
-}
-
-export interface Resume {
-  name: string;
-  email: string;
-  phone: string;
-  summary?: string;
-  location?: string;
-  skills: string[];
-  experience: { company: string; role: string; years: number }[];
-  education: { degree: string; institution: string }[];
-  totalYearsExperience?: number;
-  keywords?: string[];
-  careerNarrative: CareerNarrative;
-  sourceRole: string;
-}
-
-export interface Job {
-  title: string;
-  company?: string;
-  requiredSkills: string[];
-  niceToHaveSkills: string[];
-  keywords: string[];
-  experienceYears?: number;
-  seniorityLevel?: "junior" | "mid" | "senior" | "lead" | "manager";
-  targetRole: string;
-}
-
-// ---------------------------------------------------------------------------
-// API request / response types
+// API request types
 // ---------------------------------------------------------------------------
 
 export interface RunMatchRequest {
@@ -98,48 +47,8 @@ export interface CancelMatchRequest {
 }
 
 // ---------------------------------------------------------------------------
-// Verdict node outputs — discriminated union by scenarioId
+// Public response types — mirrors PublicMatchResponseSchema on the backend
 // ---------------------------------------------------------------------------
-
-export interface ConfirmedFitAdvice {
-  scenarioId: "confirmed_fit";
-  confirmation: string;
-  standoutStrengths: string[];
-  minorGaps: string[];
-}
-
-export interface InvisibleExpertAdvice {
-  scenarioId: "invisible_expert";
-  confirmation: string;
-  standoutStrengths: string[];
-  minorGaps: string[];
-  atsRealityCheck: string;
-  terminologySwaps: string[];
-  keywordsToAdd: string[];
-  layoutAdvice: string[];
-}
-
-export interface NarrativeGapAdvice {
-  scenarioId: "narrative_gap";
-  narrativeBridge: string;
-  reframingSuggestions: string[];
-  transferableStrengths: string[];
-  missingSkills: string[];
-}
-
-export interface HonestVerdictAdvice {
-  scenarioId: "honest_verdict";
-  hitlFired: boolean;
-  honestAssessment: string;
-  closingSteps: string[];
-  acknowledgement: string | null;
-}
-
-export type FitAdvice =
-  | ConfirmedFitAdvice
-  | InvisibleExpertAdvice
-  | NarrativeGapAdvice
-  | HonestVerdictAdvice;
 
 export type ScenarioId =
   | "confirmed_fit"
@@ -148,20 +57,19 @@ export type ScenarioId =
   | "honest_verdict";
 
 export interface MatchResponse {
+  scenarioId: ScenarioId;
   fitScore: number;
-  matchedSkills: string[];
-  missingSkills: string[];
-  narrativeAlignment: string;
-  weakMatch: boolean;
-  weakMatchReason: string | null;
+  battleCard: {
+    headline: string;
+    bulletPoints: string[];
+  };
+  fitAdvice: { key: string; bulletPoints: string[] }[];
   atsProfile: {
     atsScore: number | null;
-    missingKeywords: string[];
-    layoutFlags: string[]; // LayoutFlag values from backend — string[] is intentional, frontend renders but does not switch on these values
-    terminologyGaps: string[];
+    machineParsing: string[];
+    machineRanking: string[];
   };
-  fitAdvice: FitAdvice | null;
-  scenarioId: ScenarioId | null;
+  scenarioSummary: { text: string };
   threadId: string;
-  _meta: { traceUrl: string | null; durationMs: number };
+  _meta: { durationMs: number };
 }
