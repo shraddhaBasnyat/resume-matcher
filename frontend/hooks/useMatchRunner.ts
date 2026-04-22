@@ -194,7 +194,12 @@ export function useMatchRunner(): UseMatchRunnerReturn {
         setAppState("idle");
       }
     } finally {
-      readerRef.current = null;
+      // Guard: only clear the ref if it still points to this reader.
+      // A newer run may have already replaced it; stomping on that ref would
+      // break cancellation for the new run.
+      if (readerRef.current === reader) {
+        readerRef.current = null;
+      }
     }
   }, []);
 
@@ -205,6 +210,15 @@ export function useMatchRunner(): UseMatchRunnerReturn {
   async function handleMatch(e: React.FormEvent) {
     e.preventDefault();
     if (!resumeText || !jobDescription.trim()) return;
+
+    // Close any lingering reader from a previous run before opening a new connection.
+    // Without this, the old SSE connection stays open, the backend sees it drop mid-flight
+    // on the second request and throws an AbortError on the new stream.
+    const prevReader = readerRef.current;
+    if (prevReader) {
+      readerRef.current = null;
+      prevReader.cancel().catch(() => {});
+    }
 
     setAppState("running");
     setResult(null);
