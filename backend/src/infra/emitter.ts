@@ -3,11 +3,8 @@ import type { Serialized } from "@langchain/core/load/serializable";
 
 /** Node names that should trigger progress events in the SSE stream. */
 const GRAPH_NODES = new Set([
-  "parseResume",
-  "parseJob",
   "atsAnalysis",
-  "scoreMatch",
-  "detectArchetype",
+  "analyzeFit",
   "routeVerdicts",
   "analyzeStrongMatch",
   "analyzeNarrativeGap",
