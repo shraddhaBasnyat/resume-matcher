@@ -81,7 +81,7 @@ export default function UploadSection({
       ? "border-2 border-border"
       : "border-2 border-dashed border-border";
   return (
-    <div className="sticky top-[88px] z-40 w-full bg-muted">
+    <div className="sticky top-[88px] z-10 w-full bg-muted">
       <div className="flex flex-row gap-6 py-2">
         {/* Cards — dimmed and non-interactive while running */}
         <div className={`flex flex-row gap-6 flex-1 min-w-0${isRunning ? " opacity-40 pointer-events-none" : ""}`}>

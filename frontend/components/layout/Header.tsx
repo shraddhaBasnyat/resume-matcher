@@ -34,7 +34,7 @@ export function Header() {
         </Menu.Trigger>
 
         <Menu.Portal>
-          <Menu.Positioner side="bottom" align="end" sideOffset={24}>
+          <Menu.Positioner side="bottom" align="end" sideOffset={24} className="z-50">
             <Menu.Popup
               className="w-[224px] bg-card border border-border rounded-[6px] outline-none"
               style={{
