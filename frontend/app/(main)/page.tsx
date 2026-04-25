@@ -25,7 +25,7 @@ export default function V2Page() {
   } = useMatchRunner();
 
   return (
-    <div className="min-h-screen bg-muted/50">
+    <div className="min-h-screen bg-muted">
       <Header />
       <div style={{ padding: "8px 24px" }}>
         <UploadSection
