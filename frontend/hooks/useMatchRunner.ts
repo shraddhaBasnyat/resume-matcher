@@ -33,6 +33,7 @@ export interface UseMatchRunnerReturn {
   handleRescore: (e: React.FormEvent) => Promise<void>;
   handleAccept: () => Promise<void>;
   handleCancel: () => Promise<void>;
+  handleClearResume: () => void;
   scoreColor: (score: number) => string;
 }
 
@@ -361,6 +362,15 @@ export function useMatchRunner(): UseMatchRunnerReturn {
   }
 
   // ---------------------------------------------------------------------------
+  // Clear resume
+  // ---------------------------------------------------------------------------
+
+  function handleClearResume() {
+    setResumeText(null);
+    setParseError(null);
+  }
+
+  // ---------------------------------------------------------------------------
   // Derived UI flags
   // ---------------------------------------------------------------------------
 
@@ -400,6 +410,7 @@ export function useMatchRunner(): UseMatchRunnerReturn {
     handleRescore,
     handleAccept,
     handleCancel,
+    handleClearResume,
     scoreColor,
   };
 }

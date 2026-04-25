@@ -16,9 +16,12 @@ export default function V2Page() {
     parseError,
     fileInputRef,
     canMatch,
+    isInputsDisabled,
     setJobDescription,
     handleFileUpload,
     handleMatch,
+    handleCancel,
+    handleClearResume,
   } = useMatchRunner();
 
   return (
@@ -32,9 +35,12 @@ export default function V2Page() {
           parseError={parseError}
           fileInputRef={fileInputRef}
           canMatch={canMatch}
+          isInputsDisabled={isInputsDisabled}
           setJobDescription={setJobDescription}
           handleFileUpload={handleFileUpload}
           handleMatch={handleMatch}
+          handleCancel={handleCancel}
+          handleClearResume={handleClearResume}
         />
         <MainResultsStage className="mt-2" appState={appState} result={result} progress={progress} />
       </div>

@@ -1,8 +1,24 @@
 "use client";
 
 import { useState, RefObject } from "react";
-import { FileText, Sparkles, Upload, FileCheck, ChevronUp, ChevronDown } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import {
+  FileText,
+  Sparkles,
+  Upload,
+  FileCheck,
+  Pencil,
+  Trash2,
+  X,
+  LoaderCircle,
+} from "lucide-react";
+import {
+  Dialog,
+  DialogPortal,
+  DialogBackdrop,
+  DialogPopup,
+  DialogTitle,
+  DialogClose,
+} from "@/components/ui/dialog";
 
 interface UploadSectionProps {
   resumeText: string | null;
@@ -11,9 +27,12 @@ interface UploadSectionProps {
   parseError: string | null;
   fileInputRef: RefObject<HTMLInputElement>;
   canMatch: boolean;
+  isInputsDisabled: boolean;
   setJobDescription: (value: string) => void;
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleMatch: (e: React.FormEvent) => Promise<void>;
+  handleCancel: () => Promise<void>;
+  handleClearResume: () => void;
 }
 
 export default function UploadSection({
@@ -23,118 +42,229 @@ export default function UploadSection({
   parseError,
   fileInputRef,
   canMatch,
+  isInputsDisabled,
   setJobDescription,
   handleFileUpload,
   handleMatch,
+  handleCancel,
+  handleClearResume,
 }: UploadSectionProps) {
   const [fileName, setFileName] = useState<string | null>(null);
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isJDOpen, setIsJDOpen] = useState(false);
+
+  const isRunning = isInputsDisabled;
+  const isUploaded =
+    !isInputsDisabled &&
+    resumeText !== null &&
+    jobDescription.trim() !== "";
+  // empty = !isRunning && (no resume OR no JD)
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     setFileName(e.target.files?.[0]?.name ?? null);
     handleFileUpload(e);
   }
 
-  if (!isExpanded) {
-    return (
-      <div
-        className="w-full border-b border-border flex flex-row items-center justify-between px-0 py-4 cursor-pointer"
-        onClick={() => setIsExpanded(true)}
-      >
-        <span className="text-base font-medium text-foreground">Upload Section</span>
-        <ChevronDown size={16} className="text-foreground" />
-      </div>
-    );
+  function onClearResume() {
+    setFileName(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    handleClearResume();
   }
 
+  const cardBase =
+    "bg-background rounded-none flex flex-row items-center h-[100px] px-4 gap-3";
+  const cardBorder =
+    isRunning || isUploaded
+      ? "border-2 border-border"
+      : "border-2 border-dashed border-border";
   return (
-    <div className="w-full border-b border-border flex flex-col items-center gap-6 py-4">
-      {/* Cards row */}
-      <div className="flex flex-row gap-6 w-full">
+    <div className="sticky top-[88px] z-40 w-full">
+      <div className="flex flex-row gap-6 py-4">
+        {/* Cards — dimmed and non-interactive while running */}
+        <div className={`flex flex-row gap-6 flex-1 min-w-0${isRunning ? " opacity-40 pointer-events-none" : ""}`}>
         {/* Resume Card */}
-        <div className="flex-1 min-w-0 bg-background border border-border/50 shadow-card rounded-none flex flex-col p-0">
-          <div className="flex flex-col items-center gap-3 p-6">
-            <div className="flex flex-row items-center gap-2">
-              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                <FileText size={24} className="text-primary" />
-              </div>
-              <span className="text-sm font-semibold text-foreground">Resume (PDF)</span>
+        <div className="flex-1 min-w-0">
+          <div
+            className={`${cardBase} ${cardBorder} cursor-pointer`}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {/* Left icon */}
+            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
+              <FileText size={20} className="text-primary" />
             </div>
 
-            <div
-              className="w-[214px] h-[168px] bg-white border-2 border-dashed border-border rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer"
-              onClick={() => fileInputRef.current?.click()}
-            >
+            {/* Middle content */}
+            <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+              <span className="text-sm font-semibold text-foreground">
+                Resume (PDF)
+              </span>
               {parseLoading ? (
-                <span className="text-sm text-muted-foreground">Extracting text…</span>
+                <span className="text-xs text-muted-foreground">Extracting text…</span>
               ) : resumeText ? (
-                <div className="flex flex-col items-center gap-1">
-                  <FileCheck size={24} className="text-success" />
-                  <span className="text-sm font-medium text-foreground">{fileName ?? "resume.pdf"}</span>
-                  <span className="text-xs text-muted-foreground">{resumeText?.length ?? 0} characters extracted</span>
-                  {/* TODO: add remove/replace file action here */}
+                <div className="flex items-center gap-1.5">
+                  <FileCheck size={14} className="text-success shrink-0" />
+                  <span className="text-xs text-foreground truncate">
+                    {fileName ?? "resume.pdf"}
+                  </span>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    · {resumeText.length} chars
+                  </span>
                 </div>
               ) : (
-                <div className="flex flex-col items-center gap-2">
-                  <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center">
-                    <Upload size={24} className="text-muted-foreground" />
-                  </div>
-                  <span className="text-base font-medium text-foreground">Drop your PDF here</span>
-                  <span className="text-sm text-muted-foreground">or click to browse</span>
+                <div className="flex items-center gap-1.5">
+                  <Upload size={14} className="text-muted-foreground shrink-0" />
+                  <span className="text-xs text-muted-foreground">
+                    Click to browse or drop PDF
+                  </span>
                 </div>
+              )}
+              {parseError && (
+                <span className="text-xs text-destructive">{parseError}</span>
               )}
             </div>
 
-            <input
-              type="file"
-              accept="application/pdf"
-              ref={fileInputRef}
-              onChange={onFileChange}
-              className="hidden"
-            />
-
-            {parseError && <p className="text-sm text-destructive">{parseError}</p>}
+            {/* Right action */}
+            {resumeText && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onClearResume(); }}
+                className="w-12 h-12 rounded-full bg-muted flex items-center justify-center cursor-pointer shrink-0"
+                aria-label="Remove resume"
+              >
+                <Trash2 size={18} className="text-muted-foreground" />
+              </button>
+            )}
           </div>
         </div>
 
+        <input
+          type="file"
+          accept="application/pdf"
+          ref={fileInputRef}
+          onChange={onFileChange}
+          className="hidden"
+        />
+
         {/* JD Card */}
-        <div className="flex-1 min-w-0 bg-background border border-border/50 shadow-card rounded-none flex flex-col p-0">
-          <div className="flex flex-col gap-3 p-6">
-            <div className="flex flex-row items-center gap-2">
-              <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                <Sparkles size={24} className="text-primary" />
+        <div className="flex-1 min-w-0">
+          <div
+            className={`${cardBase} ${cardBorder} cursor-pointer`}
+            onClick={() => setIsJDOpen(true)}
+          >
+            {/* Left icon */}
+            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
+              <Sparkles size={20} className="text-primary" />
+            </div>
+
+            {/* Middle content */}
+            <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+              <span className="text-sm font-semibold text-foreground">
+                Job Description
+              </span>
+              {jobDescription.trim() ? (
+                <span className="text-xs text-foreground truncate">
+                  {jobDescription}
+                </span>
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  Click to add job description…
+                </span>
+              )}
+            </div>
+
+            {/* Right action */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isUploaded) {
+                  setJobDescription("");
+                } else {
+                  setIsJDOpen(true);
+                }
+              }}
+              className="w-12 h-12 rounded-full bg-muted flex items-center justify-center cursor-pointer shrink-0"
+              aria-label={isUploaded ? "Clear job description" : "Add job description"}
+            >
+              {isUploaded ? (
+                <Trash2 size={18} className="text-muted-foreground" />
+              ) : (
+                <Pencil size={18} className="text-muted-foreground" />
+              )}
+            </button>
+          </div>
+        </div>
+        </div>{/* end cards wrapper */}
+
+        {/* Action column */}
+        <div className="flex flex-col items-center justify-center shrink-0 px-2">
+          {isRunning ? (
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-[6px] bg-primary text-primary-foreground cursor-pointer"
+            >
+              <LoaderCircle size={16} className="animate-spin" />
+              Cancel
+            </button>
+          ) : (
+            <form onSubmit={handleMatch}>
+              <button
+                type="submit"
+                disabled={!canMatch}
+                className={[
+                  "px-4 py-2 text-sm font-medium rounded-[6px] transition-colors",
+                  canMatch
+                    ? "bg-primary text-primary-foreground cursor-pointer"
+                    : "bg-primary/10 text-primary cursor-not-allowed",
+                ].join(" ")}
+              >
+                Analyze Match
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+
+      {/* JD Dialog */}
+      <Dialog open={isJDOpen} onOpenChange={setIsJDOpen}>
+        <DialogPortal>
+          <DialogBackdrop />
+          <DialogPopup>
+            <div className="flex items-center gap-3 relative">
+              <div className="w-10 h-10 bg-primary/10 rounded-[8px] flex items-center justify-center shrink-0">
+                <Sparkles size={20} className="text-primary" />
               </div>
-              <span className="text-sm font-semibold text-foreground">Job Description</span>
+              <DialogTitle>Job Description</DialogTitle>
+              <DialogClose aria-label="Close">
+                <X size={16} />
+              </DialogClose>
             </div>
 
             <textarea
-              className="w-full bg-muted/30 border border-border/50 rounded-md px-3 py-2 placeholder:text-muted-foreground text-sm text-foreground resize-none"
+              className="w-full bg-muted border border-border/50 rounded-[6px] px-3 py-2 placeholder:text-muted-foreground text-sm text-foreground resize-y outline-none focus:border-border"
               style={{ minHeight: "180px" }}
               placeholder="Paste your job description here"
               value={jobDescription}
               onChange={(e) => setJobDescription(e.target.value)}
+              autoFocus
             />
 
-            <span className="text-sm text-muted-foreground">{jobDescription.length} characters</span>
-          </div>
-        </div>
-      </div>
+            <span className="text-sm font-light text-muted-foreground">
+              {jobDescription.length} characters
+            </span>
 
-      {/* Button row */}
-      <div className="flex flex-col items-center gap-2 w-full">
-        <form onSubmit={handleMatch}>
-          <Button
-            type="submit"
-            disabled={!canMatch}
-            style={{ borderRadius: "6px" }}
-          >
-            Analyze Match
-          </Button>
-        </form>
-        <div className="cursor-pointer" onClick={() => setIsExpanded(false)}>
-          <ChevronUp size={16} className="text-foreground" />
-        </div>
-      </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsJDOpen(false)}
+                className="px-4 py-2 text-sm font-medium rounded-[6px] bg-primary text-primary-foreground cursor-pointer"
+              >
+                Confirm
+              </button>
+            </div>
+          </DialogPopup>
+        </DialogPortal>
+      </Dialog>
     </div>
   );
 }
