@@ -72,8 +72,12 @@ export default function UploadSection({
 
   const cardBase =
     "bg-background rounded-none flex flex-row items-center py-2 px-4 gap-3";
-  const cardBorder =
-    isRunning || isUploaded
+  const resumeCardBorder =
+    isRunning || resumeText !== null
+      ? "border-2 border-border"
+      : "border-2 border-dashed border-border";
+  const jdCardBorder =
+    isRunning || jobDescription.trim() !== ""
       ? "border-2 border-border"
       : "border-2 border-dashed border-border";
   return (
@@ -84,7 +88,7 @@ export default function UploadSection({
         {/* Resume Card */}
         <div className="flex-1 min-w-0">
           <div
-            className={`${cardBase} ${cardBorder} cursor-pointer`}
+            className={`${cardBase} ${resumeCardBorder} cursor-pointer`}
             onClick={() => fileInputRef.current?.click()}
           >
             {/* Left icon */}
@@ -146,17 +150,20 @@ export default function UploadSection({
 
         {/* JD Card */}
         <div className="flex-1 min-w-0">
-          <div
-            className={`${cardBase} ${cardBorder} cursor-pointer`}
-            onClick={() => setIsJDOpen(true)}
-          >
-            {/* Left icon */}
-            <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
+          <div className={`${cardBase} ${jdCardBorder}`}>
+            {/* Left icon — clicking opens dialog */}
+            <div
+              className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center shrink-0 cursor-pointer"
+              onClick={() => setIsJDOpen(true)}
+            >
               <Sparkles size={16} className="text-primary" />
             </div>
 
-            {/* Middle content */}
-            <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+            {/* Middle content — clicking opens dialog */}
+            <div
+              className="flex flex-col gap-0.5 flex-1 min-w-0 cursor-pointer"
+              onClick={() => setIsJDOpen(true)}
+            >
               <span className="text-xs font-semibold text-foreground">
                 Job Description
               </span>
@@ -171,21 +178,20 @@ export default function UploadSection({
               )}
             </div>
 
-            {/* Right action */}
+            {/* Right action — clear if filled, open dialog if empty */}
             <button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isUploaded) {
+              onClick={() => {
+                if (jobDescription.trim()) {
                   setJobDescription("");
                 } else {
                   setIsJDOpen(true);
                 }
               }}
               className="w-8 h-8 rounded-full bg-muted flex items-center justify-center cursor-pointer shrink-0"
-              aria-label={isUploaded ? "Clear job description" : "Add job description"}
+              aria-label={jobDescription.trim() ? "Clear job description" : "Add job description"}
             >
-              {isUploaded ? (
+              {jobDescription.trim() ? (
                 <Trash2 size={16} className="text-muted-foreground" />
               ) : (
                 <Pencil size={16} className="text-muted-foreground" />
