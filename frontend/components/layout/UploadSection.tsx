@@ -71,7 +71,7 @@ export default function UploadSection({
   }
 
   const cardBase =
-    "bg-background rounded-none flex flex-row items-center py-2 px-4 gap-3";
+    "bg-background rounded-xl flex flex-row items-center py-2 px-4 gap-3";
   const resumeCardBorder =
     isRunning || resumeText !== null
       ? "border-2 border-border"
