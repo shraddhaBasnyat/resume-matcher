@@ -53,11 +53,6 @@ export default function UploadSection({
   const [isJDOpen, setIsJDOpen] = useState(false);
 
   const isRunning = isInputsDisabled;
-  const isUploaded =
-    !isInputsDisabled &&
-    resumeText !== null &&
-    jobDescription.trim() !== "";
-  // empty = !isRunning && (no resume OR no JD)
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     setFileName(e.target.files?.[0]?.name ?? null);
