@@ -128,12 +128,14 @@ async function emitResult(
   emit: (eventName: string, data: object) => void,
   threadId: string,
   runStartTime: number,
-  isInterrupted: boolean
+  isInterrupted: boolean,
+  contextPrompt: string | null = null,
 ) {
   if (isInterrupted) {
     emit("interrupted", {
       fitScore: state.fitScore ?? null,
       threadId,
+      contextPrompt,
     });
   } else {
     if (state.fitScore === undefined || !state.scenarioId) {
@@ -216,8 +218,11 @@ export async function runMatchGraph(options: RunMatchGraphOptions): Promise<void
     const state = await invokeGraph(options, invokeConfig);
     const snapshot = await graph.getState(config);
     const isInterrupted = snapshot.next.length > 0;
+    const contextPrompt = isInterrupted
+      ? ((snapshot.tasks[0]?.interrupts[0]?.value as string) ?? null)
+      : null;
     try {
-      await emitResult(state, emit, newThreadId, runStartTime, isInterrupted);
+      await emitResult(state, emit, newThreadId, runStartTime, isInterrupted, contextPrompt);
     } finally {
       if (!isInterrupted) {
         await getCheckpointer().deleteThread(newThreadId);
