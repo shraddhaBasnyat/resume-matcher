@@ -241,7 +241,12 @@ export default function UploadSection({
               </DialogClose>
             </div>
 
+            <label htmlFor="job-description" className="sr-only">
+              Job Description
+            </label>
             <textarea
+              id="job-description"
+              name="job-description"
               className="w-full bg-muted border border-border/50 rounded-[6px] px-3 py-2 placeholder:text-muted-foreground text-sm text-foreground resize-y outline-none focus:border-border"
               style={{ minHeight: "180px" }}
               placeholder="Paste your job description here"

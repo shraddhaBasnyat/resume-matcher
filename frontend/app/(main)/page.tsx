@@ -1,6 +1,7 @@
 "use client";
 
 import { Header } from "@/components/layout/Header";
+import { HitlDrawer } from "@/components/layout/HitlDrawer";
 import UploadSection from "@/components/layout/UploadSection";
 import { MainResultsStage } from "@/components/resume-init/MainResultsStage";
 import { useMatchRunner } from "@/hooks/useMatchRunner";
@@ -22,6 +23,11 @@ export default function V2Page() {
     handleMatch,
     handleCancel,
     handleClearResume,
+    humanContext,
+    setHumanContext,
+    contextPrompt,
+    handleRescore,
+    handleAccept,
   } = useMatchRunner();
 
   return (
@@ -44,6 +50,14 @@ export default function V2Page() {
         />
         <MainResultsStage className="mt-2" appState={appState} result={result} progress={progress} />
       </div>
+      <HitlDrawer
+        open={appState === "interrupted"}
+        contextPrompt={contextPrompt}
+        humanContext={humanContext}
+        setHumanContext={setHumanContext}
+        handleRescore={handleRescore}
+        handleAccept={handleAccept}
+      />
     </div>
   );
 }
