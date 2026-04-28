@@ -10,22 +10,26 @@ Decisions here prioritise clarity over production readiness.
 
 ```
 START
-  ├→ atsAnalysis ──────────────┐
-  └→ analyzeFit ───────────────┤
-                               └→ routeVerdicts (pure fn, no LLM)
-                                       │
-                      ┌────────────────┼──────────────────────┐
-                      ↓                ↓                      ↓
-            analyzeStrongMatch  analyzeNarrativeGap  analyzeSkepticalReconciliation
-                      │                │                      │ ↑ (loops on HITL)
-                      └────────────────┴──────────────────────┘
-                                       ↓
-                                      END
+  ├→ atsAnalysis ──────────────────────────┐
+  │     └→ generateTerminologyFixes ────── │ ─ (fans out immediately after atsAnalysis)
+  └→ analyzeFit ───────────────────────────┤
+                                           └→ routeVerdicts (pure fn, no LLM)
+                                                   │
+                              ┌────────────────────┼──────────────────────┐
+                              ↓                    ↓                      ↓
+                    analyzeStrongMatch  analyzeNarrativeGap  analyzeSkepticalReconciliation
+                              │                    │                      │ ↑ (loops on HITL)
+                              └────────────────────┴──────────────────────┘
+                                                   ↓
+                                                  END
 ```
 
-`atsAnalysis` and `analyzeFit` run **in parallel** from `START` — both edges connect directly
-to `__start__`, both must complete before `routeVerdicts` fires. Exactly one verdict node fires
-per run. `analyzeSkepticalReconciliation` can loop back to itself via LangGraph `interrupt()`.
+`atsAnalysis` and `analyzeFit` run **in parallel** from `START`. `generateTerminologyFixes`
+fans out from `atsAnalysis` output immediately — it does not wait for `analyzeFit` or
+`routeVerdicts`. All four nodes (`atsAnalysis`, `generateTerminologyFixes`, `analyzeFit`,
+and whichever verdict node fires) must complete before the runner emits `completed`.
+Exactly one verdict node fires per run. `analyzeSkepticalReconciliation` can loop back to
+itself via LangGraph `interrupt()`.
 
 ---
 
@@ -33,12 +37,13 @@ per run. `analyzeSkepticalReconciliation` can loop back to itself via LangGraph 
 
 | Node | Reads | Writes | Notes |
 |------|-------|--------|-------|
-| `analyzeFit` | `resumeText`, `jobText` | `fitScore`, `headline`, `battleCardBullets`, `scenarioSummary`, `sourceRole`, `targetRole`, `fitAnalysis`, `weakMatch`, `weakMatchReason` | `weakMatch = fitScore < 50`, derived in node. `weakMatchReason` normalised: `"NONE"` → `null` |
-| `atsAnalysis` | `resumeText`, `jobText` | `atsProfile` | `machineParsing` is a TODO placeholder |
+| `analyzeFit` | `resumeText`, `jobText` | `fitScore`, `headline`, `battleCardBullets`, `scenarioSummary`, `sourceRole`, `targetRole`, `fitAnalysis`, `weakMatch` | `weakMatch = fitScore < 50`, derived in node. `fitAnalysis.weakMatchReason` normalised: `"NONE"` → `null`. No mechanical advice — keyword gaps and terminology belong to `atsAnalysis`. |
+| `atsAnalysis` | `resumeText`, `jobText` | `atsProfile` | Three-layer output: `machineParsing` (formatting), `knockoutQuestions` (hard filters), `recruiterSearch` (keyword discoverability). `atsScore` is composite weighted 60% recruiter search / 25% knockout / 15% formatting. |
+| `generateTerminologyFixes` | `resumeText`, `atsProfile.recruiterSearch.terminologyMismatches` | `terminologyDiffs` | Fans out from `atsAnalysis`. Finds the exact resume sentence for each terminology mismatch and rewrites only that sentence. Runs automatically — no user prompt needed. Tracked in `progress` but normalised to `atsAnalysis` in the stepper UI. |
 | `routeVerdicts` | `fitScore`, `atsScore` | `scenarioId` | Pure fn, no LLM — see routing thresholds below |
-| `analyzeStrongMatch` | `scenarioId`, `fitAnalysis`, `atsProfile` | `fitAdvice` | Fires for `confirmed_fit` and `invisible_expert` |
-| `analyzeNarrativeGap` | `scenarioId`, `fitAnalysis` | `fitAdvice` | Fires for `narrative_gap` |
-| `analyzeSkepticalReconciliation` | `scenarioId`, `fitAnalysis`, `weakMatchReason`, `humanContext`, `hitlFired` | `fitAdvice`, `humanContext` (on interrupt), `hitlFired` | Fires for `honest_verdict`. Calls `interrupt(contextPrompt)` on first pass if LLM returns a question. Second pass uses `humanContext` from HITL resume. |
+| `analyzeStrongMatch` | `scenarioId`, `fitAnalysis`, `atsProfile`, `terminologyDiffs` | `fitAdvice` | Fires for `confirmed_fit` and `invisible_expert`. For `confirmed_fit`, `fitAdvice` is empty — sparse output is correct. Does not restate `terminologyDiffs` already shown in the ATS panel. |
+| `analyzeNarrativeGap` | `scenarioId`, `fitAnalysis` | `fitAdvice` | Fires for `narrative_gap`. ATS panel may be clean — the gap is narrative, not mechanical. |
+| `analyzeSkepticalReconciliation` | `scenarioId`, `fitAnalysis`, `humanContext`, `hitlFired` | `fitAdvice`, `humanContext` (on interrupt), `hitlFired` | Fires for `honest_verdict`. Calls `interrupt(contextPrompt)` on first pass if LLM returns a question. Second pass uses `humanContext` from HITL resume. |
 
 ### Scenario routing (deriveScenario — pure fn)
 
@@ -57,20 +62,21 @@ LangGraph uses flat shared state — no enforced contract between nodes. This ta
 dependencies explicit. Before adding a node, declare its reads and writes here.
 
 | Field | Type | Default | Written by | Read by |
-|-------|------|---------|-----------|---------|
-| `resumeText` | `string` | required | request body | `analyzeFit`, `atsAnalysis` |
+|-------|------|---------|-----------|---------| 
+| `resumeText` | `string` | required | request body | `analyzeFit`, `atsAnalysis`, `generateTerminologyFixes` |
 | `jobText` | `string` | required | request body | `analyzeFit`, `atsAnalysis` |
 | `humanContext` | `string` | `""` | HITL resume endpoint; `analyzeSkepticalReconciliation` (on interrupt) | `analyzeSkepticalReconciliation` |
 | `fitScore` | `number \| undefined` | `undefined` | `analyzeFit` | `routeVerdicts`, all verdict nodes, runner |
 | `headline` | `string \| undefined` | `undefined` | `analyzeFit` | runner |
 | `battleCardBullets` | `string[] \| undefined` | `undefined` | `analyzeFit` | runner |
 | `scenarioSummary` | `string \| undefined` | `undefined` | `analyzeFit` | runner |
-| `sourceRole` | `string \| undefined` | `undefined` | `analyzeFit` | — (reserved for future archetype system) |
-| `targetRole` | `string \| undefined` | `undefined` | `analyzeFit` | — (reserved for future archetype system) |
+| `sourceRole` | `string \| undefined` | `undefined` | `analyzeFit` | — (reserved for archetype system) |
+| `targetRole` | `string \| undefined` | `undefined` | `analyzeFit` | — (reserved for archetype system) |
 | `fitAnalysis` | `FitAnalysis \| undefined` | `undefined` | `analyzeFit` | all verdict nodes |
+| `fitAnalysis.weakMatchReason` | `string \| null` | — | `analyzeFit` (normalised: `"NONE"` → `null`) | `analyzeSkepticalReconciliation`, runner |
 | `weakMatch` | `boolean \| undefined` | `undefined` | `analyzeFit` (derived) | `routeVerdicts` |
-| `weakMatchReason` | `string \| null \| undefined` | `undefined` | `analyzeFit` (normalised) | `analyzeSkepticalReconciliation` |
-| `atsProfile` | `{ atsScore, machineParsing, machineRanking } \| undefined` | `undefined` | `atsAnalysis` | `analyzeStrongMatch`, runner |
+| `atsProfile` | `AtsProfile \| undefined` | `undefined` | `atsAnalysis` | `generateTerminologyFixes`, `analyzeStrongMatch`, runner |
+| `terminologyDiffs` | `TerminologyDiff[] \| undefined` | `undefined` | `generateTerminologyFixes` | `analyzeStrongMatch`, runner |
 | `scenarioId` | `ScenarioId \| undefined` | `undefined` | `routeVerdicts` | all verdict nodes, runner |
 | `fitAdvice` | `Record<string, unknown> \| undefined` | `undefined` | verdict nodes | runner |
 | `hitlFired` | `boolean` | `false` | `analyzeSkepticalReconciliation` | `analyzeSkepticalReconciliation` |
@@ -81,6 +87,59 @@ dependencies explicit. Before adding a node, declare its reads and writes here.
 
 `humanContext` uses an append reducer: `prev ? "${prev}\n${next}" : next` — subsequent HITL
 passes accumulate context rather than overwriting it.
+
+`weakMatchReason` lives inside `fitAnalysis`, not as a top-level field. It is accessed as
+`fitAnalysis.weakMatchReason` throughout the graph.
+
+---
+
+## Type definitions
+
+```typescript
+interface AtsProfile {
+  atsScore: number | null
+
+  machineParsing: {
+    likelyTwoColumn: boolean
+    hasTablesOrGraphics: boolean
+    contactInHeaderFooter: boolean
+    inconsistentDateFormats: boolean
+    nonStandardBullets: boolean
+    missingSections: string[]
+    flags: string[]             // human-readable summary of issues found
+  }
+
+  knockoutQuestions: {
+    question: string
+    inferredFromJD: string
+    candidatePasses: boolean | null
+    riskLevel: "pass" | "at_risk" | "unknown"
+  }[]
+
+  recruiterSearch: {
+    likelySearchQuery: string
+    termsPresentInResume: string[]
+    termsMissingFromResume: string[]
+    terminologyMismatches: {
+      resumeUses: string
+      jdExpects: string
+    }[]
+  }
+
+  machineRanking: string[]      // keyword gap summary strings for UI display
+}
+
+interface TerminologyDiff {
+  location: string              // e.g. "Senior Engineer @ Acme — bullet 2"
+  swapLabel: string             // e.g. "agent orchestration → agentic systems"
+  before: string                // exact original sentence from resume
+  after: string                 // rewritten sentence with swap applied
+}
+```
+
+`machineParsing` is LLM-inferred from text artifacts in Phase 1. The LLM cannot detect
+two-column layout from linearized plain text — programmatic PDF/DOCX file analysis is the
+Phase 2 upgrade path for reliable formatting detection.
 
 ---
 
@@ -133,8 +192,8 @@ interface ExploringGapContext {
 | `error` | `{ error, message }` | Any execution error |
 
 `contextPrompt` in the interrupted payload is the question string generated by
-`analyzeSkepticalReconciliation` and passed to LangGraph's `interrupt()`. It may be
-`null` if the LLM did not generate a question — the frontend always renders fallback copy.
+`analyzeSkepticalReconciliation` and passed to LangGraph's `interrupt()`. May be `null`
+if the LLM did not generate a question — the frontend always renders fallback copy.
 
 ### `completed` event — `PublicMatchResponse` shape
 
@@ -143,8 +202,39 @@ interface ExploringGapContext {
   scenarioId: "confirmed_fit" | "invisible_expert" | "narrative_gap" | "honest_verdict"
   fitScore: number
   battleCard: { headline: string; bulletPoints: string[] }
-  fitAdvice: { key: string; bulletPoints: string[] }[]  // empty for confirmed_fit
-  atsProfile: { atsScore: number | null; machineParsing: string[]; machineRanking: string[] }
+  fitAdvice: { key: string; bulletPoints: string[] }[]   // empty for confirmed_fit
+
+  atsProfile: {
+    atsScore: number | null
+    machineParsing: {
+      flags: string[]
+      likelyTwoColumn: boolean
+      hasTablesOrGraphics: boolean
+      contactInHeaderFooter: boolean
+      inconsistentDateFormats: boolean
+      nonStandardBullets: boolean
+      missingSections: string[]
+    }
+    knockoutQuestions: {
+      question: string
+      inferredFromJD: string
+      riskLevel: "pass" | "at_risk" | "unknown"
+    }[]
+    recruiterSearch: {
+      likelySearchQuery: string
+      termsPresentInResume: string[]
+      termsMissingFromResume: string[]
+    }
+    machineRanking: string[]
+  }
+
+  terminologyDiffs: {
+    location: string
+    swapLabel: string
+    before: string
+    after: string
+  }[]
+
   scenarioSummary: { text: string }
   threadId: string
   _meta: { durationMs: number }
@@ -159,6 +249,11 @@ interface ExploringGapContext {
 
 `PublicMatchResponseSchema` (Zod) validates the mapped result before emission. If validation
 fails, an `error` event is emitted instead of malformed data.
+
+Internal fields never emitted: `fitAnalysis`, `headline` (remapped to `battleCard.headline`),
+`battleCardBullets` (remapped to `battleCard.bulletPoints`), `scenarioSummary` (remapped to
+`scenarioSummary.text`), `sourceRole`, `targetRole`, `weakMatch`, `humanContext`, `hitlFired`,
+`contextPrompt`.
 
 ---
 
@@ -193,7 +288,7 @@ app/(main)/page.tsx
   ├── useMatchRunner()          ← single source of truth for all state
   ├── <Header />
   ├── <UploadSection />         ← resume + JD input, sticky slim bar
-  ├── <MainResultsStage />      ← results tabs, stepper, fit advice
+  ├── <MainResultsStage />      ← results tabs, stepper, fit advice, ATS panel
   └── <HitlDrawer />            ← slides up from bottom on interrupted state
 ```
 
@@ -232,7 +327,9 @@ setJobDescription, setHumanContext
 ```
 
 Node progress tracking: three steps — `atsAnalysis`, `analyzeFit`, `analyzeMatch`.
-All three verdict nodes normalise to `"analyzeMatch"` for the progress stepper UI.
+All three verdict nodes normalise to `"analyzeMatch"` for the stepper UI.
+`generateTerminologyFixes` is tracked in `progress` but normalised to `"atsAnalysis"` —
+it is part of the ATS analysis work from the user's perspective.
 
 ### Component inventory
 
@@ -252,6 +349,7 @@ All three verdict nodes normalise to `"analyzeMatch"` for the progress stepper U
 - `BattleCard` — score circle + headline + bullets, skeleton while loading
 - `FitAdviceAccordion` — Base UI Accordion, maps `fitAdvice` keys via `accordion-config.ts`
 - `ScenarioSummary` — left-border accent block
+- `AtsPanelStation` — three-station ATS panel (machine parsing / knockout questions / recruiter terminal). Consumes `atsProfile` and `terminologyDiffs` from `result`. Station 3 renders `terminologyDiffs` as inline before/after diffs — no user prompt required.
 
 **UI primitives (`components/ui/`):** `button`, `avatar`, `tabs`, `progress`, `field`,
 `input`, `card`, `dialog`, `drawer` — all thin wrappers around `@base-ui/react` primitives
@@ -309,7 +407,8 @@ or `runId` is undefined — safe no-op in tests.
   that masks the real Zod error
 - Nullable string fields: `z.string().min(1).nullable()` not `z.string().nullable()` — empty
   string is not a valid null substitute
-- `weakMatch` and `weakMatchReason` are derived/normalised in `analyzeFit` node, not LLM output
+- `weakMatch` is derived in `analyzeFit` node, not LLM output
+- `fitAnalysis.weakMatchReason` is normalised in `analyzeFit` node (`"NONE"` → `null`), not LLM output
 
 ---
 
@@ -353,6 +452,7 @@ or `runId` is undefined — safe no-op in tests.
 
 - `safeParse + logValidationFailure` on every chain output
 - `weakMatch` derived deterministically — not an LLM output field
+- `fitAnalysis.weakMatchReason` normalised deterministically — not an LLM output field
 - HITL interrupt for `honest_verdict` (fitScore < 50) on first pass
 - `hitlFired` guard prevents second interrupt on resume pass
 - `AbortController` for user-initiated cancellation
@@ -372,6 +472,27 @@ or `runId` is undefined — safe no-op in tests.
 
 ## Breaking changes log
 
+### `generateTerminologyFixes` node added; `atsProfile` schema expanded (2026-04-28)
+
+New node `generateTerminologyFixes` added to the graph. Fans out from `atsAnalysis` output,
+runs in parallel with the fit analysis path. Reads `resumeText` and
+`atsProfile.recruiterSearch.terminologyMismatches`. Writes `terminologyDiffs[]` to state.
+Produces exact before/after sentence rewrites automatically — no user prompt.
+
+`atsProfile` schema expanded from `{ atsScore, machineParsing: string[], machineRanking: string[] }`
+to a structured three-section object: `machineParsing` (structured formatting flags),
+`knockoutQuestions` (inferred hard filters with risk level), `recruiterSearch` (Boolean
+query, present/missing terms, terminology mismatches). `atsScore` composite weighting: 60%
+recruiter search / 25% knockout / 15% formatting.
+
+`terminologyDiffs` added to `PublicMatchResponse`. Frontend `AtsPanelStation` component added
+to `MainResultsStage` — consumes `atsProfile` and `terminologyDiffs` from `result`.
+
+State table: `resumeText` readers updated to include `generateTerminologyFixes`.
+`weakMatchReason` removed as a top-level state field — it lives inside `fitAnalysis` as
+`fitAnalysis.weakMatchReason` (this was logged in the April refactor but the state table
+was not updated at that time; corrected now).
+
 ### `contextPrompt` added to interrupted SSE payload (2026-04-28)
 `contextPrompt: string | null` added to the `interrupted` event alongside `fitScore` and
 `threadId`. Extracted from `snapshot.tasks[0].interrupts[0].value` in `runner.ts` — the value
@@ -382,7 +503,8 @@ passed to LangGraph's `interrupt()` by `analyzeSkepticalReconciliation`. May be 
 `resumeText` and `jobText` directly. `scoreMatch` renamed to `analyzeFit` with an expanded
 output schema (adds `headline`, `battleCardBullets`, `scenarioSummary`, `sourceRole`,
 `targetRole`, `fitAnalysis`). Verdict nodes added: `analyzeStrongMatch`, `analyzeNarrativeGap`,
-`analyzeSkepticalReconciliation`.
+`analyzeSkepticalReconciliation`. `weakMatchReason` moved from top-level state into
+`fitAnalysis.weakMatchReason`.
 
 ### `score` renamed to `fitScore` (2026-04-05)
 `MatchResult.score` and `MatchResponse.score` renamed to `fitScore`. Any client reading
