@@ -20,6 +20,7 @@ export interface UseMatchRunnerReturn {
   fileInputRef: React.RefObject<HTMLInputElement>;
   humanContext: string;
   interruptedScore: number | null;
+  contextPrompt: string | null;
   result: MatchResponse | null;
   matchError: string | null;
   progress: Record<string, NodeProgress>;
@@ -56,6 +57,7 @@ export function useMatchRunner(): UseMatchRunnerReturn {
   // HITL
   const [humanContext, setHumanContext] = useState("");
   const [interruptedScore, setInterruptedScore] = useState<number | null>(null);
+  const [contextPrompt, setContextPrompt] = useState<string | null>(null);
 
   // Results
   const [result, setResult] = useState<MatchResponse | null>(null);
@@ -144,6 +146,7 @@ export function useMatchRunner(): UseMatchRunnerReturn {
         case "interrupted":
           receivedTerminalEvent = true;
           setInterruptedScore(payload.fitScore as number | null);
+          setContextPrompt((payload.contextPrompt as string) ?? null);
           if (payload.threadId) setThreadId(payload.threadId as string);
           setAppState("interrupted");
           break;
@@ -397,6 +400,7 @@ export function useMatchRunner(): UseMatchRunnerReturn {
     fileInputRef,
     humanContext,
     interruptedScore,
+    contextPrompt,
     result,
     matchError,
     progress,

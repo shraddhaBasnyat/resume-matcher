@@ -25,6 +25,7 @@ export default function V2Page() {
     handleClearResume,
     humanContext,
     setHumanContext,
+    contextPrompt,
     handleRescore,
     handleAccept,
   } = useMatchRunner();
@@ -51,6 +52,7 @@ export default function V2Page() {
       </div>
       <HitlDrawer
         open={appState === "interrupted"}
+        contextPrompt={contextPrompt}
         humanContext={humanContext}
         setHumanContext={setHumanContext}
         handleRescore={handleRescore}

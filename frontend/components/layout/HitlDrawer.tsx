@@ -4,19 +4,25 @@ import { DrawerBackdrop, DrawerPanel } from "@/components/ui/drawer";
 
 interface HitlDrawerProps {
   open: boolean;
+  contextPrompt: string | null;
   humanContext: string;
   setHumanContext: (v: string) => void;
   handleRescore: (e: React.FormEvent) => Promise<void>;
   handleAccept: () => Promise<void>;
 }
 
+const FALLBACK_DESCRIPTION =
+  "The role requires context that wasn’t clear from your resume alone. Add any relevant experience or examples below so the analysis can be recalculated accurately.";
+
 export function HitlDrawer({
   open,
+  contextPrompt,
   humanContext,
   setHumanContext,
   handleRescore,
   handleAccept,
 }: HitlDrawerProps) {
+  const description = contextPrompt?.trim() || FALLBACK_DESCRIPTION;
   return (
     <>
       <DrawerBackdrop open={open} />
@@ -31,18 +37,16 @@ export function HitlDrawer({
           </h2>
 
           {/* Description */}
-          <p className="text-sm text-muted-foreground">
-            The role requires context that wasn&apos;t clear from your resume
-            alone. Add any relevant experience or examples below so the
-            analysis can be recalculated accurately.
-          </p>
+          <p className="text-sm text-muted-foreground">{description}</p>
 
           {/* Form */}
           <form onSubmit={handleRescore} className="flex flex-col gap-3">
-            <label className="text-xs font-medium text-foreground">
+            <label htmlFor="hitl-context" className="text-xs font-medium text-foreground">
               Your context
             </label>
             <textarea
+              id="hitl-context"
+              name="hitl-context"
               value={humanContext}
               onChange={(e) => setHumanContext(e.target.value)}
               placeholder="e.g. I led a similar project at my previous role, or I have 3 years of relevant experience not listed on my resume…"
