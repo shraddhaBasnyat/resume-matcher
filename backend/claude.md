@@ -45,9 +45,18 @@ LLM output schema (all fields required):
 ```ts
 {
   fitScore: number
-  headline: string
-  battleCardBullets: string[]
-  scenarioSummary: string
+  headline: string              // role-facing — encodes both match AND gap if one exists
+                                // e.g. for 72: "Strong distributed systems background,
+                                // domain gap from storefront to fulfillment"
+                                // NOT a candidate summary or job title
+  battleCardBullets: string[]   // role-first format: [role requirement] — [candidate
+                                // evidence] — [honest assessment]. Must collectively
+                                // explain why score is not higher. If score < 85,
+                                // at least one bullet names what is absent or weak.
+  fitScenarioSummary: string    // human fit picture in isolation — factual paragraph,
+                                // no ATS context, no scenario tone yet. Read by verdict
+                                // nodes which synthesise this with atsScenarioSummary
+                                // into the final closingSummary.
   sourceRole: string
   targetRole: string
   fitAnalysis: {
@@ -57,10 +66,7 @@ LLM output schema (all fields required):
     weakMatchReason: string     // REQUIRED — use "NONE" if fitScore >= 50
   }
   fitAha: string                // one sentence — sharpest human fit observation
-                                // e.g. "Your Wayfair replatforming work maps directly
-                                // to fulfillment automation — but your resume frames
-                                // it as storefront engineering."
-                                // Pure observation only. Emitted in node_done payload.
+                                // pure observation only, emitted in node_done payload
 }
 ```
 
@@ -119,6 +125,14 @@ LLM output schema:
 
   machineRanking: string[]      // keyword gap summary strings for UI
 
+  atsScenarioSummary: string    // machine picture in isolation — 2–3 sentences,
+                                // plain-language synthesis of what the three layers
+                                // found collectively. No fit context. No scenario tone.
+                                // e.g. "Resume is parseable with minor formatting issues.
+                                // One knockout risk around production deployment language.
+                                // Missing 3 of 4 key search terms the recruiter would
+                                // filter on." Read by verdict nodes for closingSummary.
+
   atsAha: string                // one sentence — most important ATS observation
                                 // pure finding only — no fix language, no card content
                                 // emitted in node_done SSE payload
@@ -169,7 +183,7 @@ function deriveScenario(fitScore: number, atsScore: number | null): ScenarioId {
 ### `analyzeStrongMatch`
 
 Fires for: `confirmed_fit` and `invisible_expert`
-Reads: `fitScore`, `scenarioId`, `fitAnalysis`, `atsProfile`, `terminologyDiffs`
+Reads: `fitScore`, `scenarioId`, `fitAnalysis`, `atsProfile`, `terminologyDiffs`, `fitScenarioSummary`, `atsScenarioSummary`
 
 For `confirmed_fit`: sparse output is correct. ATS panel is clean, fit is strong. Empty `fitAdvice` is the right answer. Do not manufacture advice.
 
@@ -182,9 +196,8 @@ Output schema:
   scenarioId: "confirmed_fit"
   fitAdvice: []
   verdictAha: string            // one sentence even for confirmed_fit
-                                // e.g. "Your microservices background is a direct match
-                                // — check the battle card for the specific strengths
-                                // the hiring manager will notice first."
+  closingSummary: string        // brief and validating — synthesises both draft summaries
+                                // confirms the two-signal match without padding
 }
 
 // invisible_expert
@@ -196,7 +209,11 @@ Output schema:
     terminologySwaps: string[]
     keywordsToAdd: string[]
   }
-  verdictAha: string            // points to the terminology diff cards
+  verdictAha: string
+  closingSummary: string        // names the two-signal contrast explicitly
+                                // e.g. "Strong human match, invisible to filters —
+                                // the terminology fixes in Station 3 close the gap
+                                // without changing a single qualification."
 }
 ```
 
@@ -205,7 +222,7 @@ Output schema:
 ### `analyzeNarrativeGap`
 
 Fires for: `narrative_gap`
-Reads: `fitScore`, `scenarioId`, `fitAnalysis`
+Reads: `fitScore`, `scenarioId`, `fitAnalysis`, `fitScenarioSummary`, `atsScenarioSummary`
 
 The ATS panel may be entirely clean for this scenario. The problem is the career story doesn't obviously point at this role. This node owns the scenario entirely — no overlap with ATS findings.
 
@@ -218,7 +235,12 @@ Output schema:
     reframingSuggestions: string[]
     missingSkills: string[]
   }
-  verdictAha: string            // points to the most important reframing card
+  verdictAha: string
+  closingSummary: string        // closes with the reframe opportunity
+                                // names the experience-is-right-framing-is-wrong insight
+                                // explicitly. If ATS is also clean, notes it: "the machine
+                                // can read you fine — the human reader needs a different
+                                // story."
 }
 ```
 
@@ -227,7 +249,7 @@ Output schema:
 ### `analyzeSkepticalReconciliation`
 
 Fires for: `honest_verdict`
-Reads: `fitScore`, `scenarioId`, `fitAnalysis`, `hitlFired`
+Reads: `fitScore`, `scenarioId`, `fitAnalysis`, `hitlFired`, `fitScenarioSummary`, `atsScenarioSummary`
 
 Owns `contextPrompt`. First pass: if context would change assessment, generate question → `interrupt()` → set `hitlFired: true`. If no context would help, produce `fitAdvice` directly. Second pass: produce `fitAdvice` with `acknowledgement` if context shifted the assessment. No second interrupt.
 
@@ -241,11 +263,12 @@ Output schema:
     acknowledgement: string[] | null
   }
   verdictAha: string            // first pass: explains why HITL is needed
-                                // e.g. "The gap is real — answer the question below
-                                // to see if additional context changes the picture."
                                 // second pass: reflects whether context shifted assessment
-                                // e.g. "Your context clarified the production experience —
-                                // the assessment is updated in the cards below."
+  closingSummary: string        // the most emotionally important piece of writing in the
+                                // output — direct and respectful, mentor not rejection
+                                // machine. Tone: clarity over comfort, never cruelty.
+                                // If HITL fired and context shifted: acknowledges it here.
+                                // This is the last thing a user with a hard verdict reads.
 }
 ```
 
@@ -261,7 +284,7 @@ Output schema:
 | `weakMatch` | `analyzeFit` (derived) | `routeVerdicts` |
 | `headline` | `analyzeFit` | runner |
 | `battleCardBullets` | `analyzeFit` | runner |
-| `scenarioSummary` | `analyzeFit` | runner |
+| `fitScenarioSummary` | `analyzeFit` | verdict nodes |
 | `sourceRole` | `analyzeFit` | `detectArchetype` (future) |
 | `targetRole` | `analyzeFit` | `detectArchetype` (future) |
 | `fitAnalysis` | `analyzeFit` | all verdict nodes |
@@ -269,9 +292,11 @@ Output schema:
 | `fitAha` | `analyzeFit` | runner (emitted in `node_done`, remapped to `provenanceTrail`) |
 | `atsScore` | `atsAnalysis` | `routeVerdicts` |
 | `atsProfile` | `atsAnalysis` | `analyzeStrongMatch`, runner |
+| `atsScenarioSummary` | `atsAnalysis` | verdict nodes |
 | `atsAha` | `atsAnalysis` | runner (emitted in `node_done`, remapped to `provenanceTrail`) |
 | `terminologyDiffs` | `generateTerminologyFixes` | runner, `analyzeStrongMatch` |
 | `verdictAha` | verdict nodes | runner (emitted in `node_done`, remapped to `provenanceTrail`) |
+| `closingSummary` | verdict nodes | runner (remapped to `scenarioSummary.text`) |
 | `scenarioId` | `routeVerdicts` | all verdict nodes, runner |
 | `fitAdvice` | verdict nodes | runner |
 | `hitlFired` | `analyzeSkepticalReconciliation` | `analyzeSkepticalReconciliation` |
@@ -345,7 +370,10 @@ Emitted by `runner.ts` on the `completed` SSE event under `result`. Validated by
   }[]
 
   scenarioSummary: {
-    text: string
+    text: string              // populated from closingSummary (verdict node output)
+                              // scenario-aware synthesis of fitScenarioSummary +
+                              // atsScenarioSummary — the closing statement the user
+                              // reads at the bottom of the report
   }
 
   threadId: string
@@ -357,6 +385,9 @@ Emitted by `runner.ts` on the `completed` SSE event under `result`. Validated by
 Internal aha fields (`atsAha`, `fitAha`, `verdictAha`) are remapped here and never emitted
 raw. The frontend logic pill consumes `provenanceTrail` directly — it does not reconstruct
 the trail from individual SSE events.
+
+`scenarioSummary.text` is remapped from `closingSummary` (verdict node). Internal draft
+fields `fitScenarioSummary` and `atsScenarioSummary` are never emitted.
 
 ---
 
@@ -397,7 +428,11 @@ Lives in `runner.ts`.
 
 ## Runner whitelist — internal fields never emitted
 
-`fitAnalysis`, `headline` (remapped to `battleCard.headline`), `battleCardBullets` (remapped to `battleCard.bulletPoints`), `scenarioSummary` (remapped to `scenarioSummary.text`), `sourceRole`, `targetRole`, `weakMatch`, `weakMatchReason`, `matchedSkills`, `missingSkills`, `narrativeAlignment`, `humanContext`, `hitlFired`, `contextPrompt`
+`fitAnalysis`, `fitScenarioSummary`, `atsScenarioSummary`, `closingSummary` (remapped to
+`scenarioSummary.text`), `headline` (remapped to `battleCard.headline`), `battleCardBullets`
+(remapped to `battleCard.bulletPoints`), `atsAha`, `fitAha`, `verdictAha` (remapped into
+`provenanceTrail`), `sourceRole`, `targetRole`, `weakMatch`, `humanContext`, `hitlFired`,
+`contextPrompt`
 
 `PublicMatchResponseSchema.safeParse()` runs on the mapped result before emission. If validation fails → emit error event, never emit malformed data.
 

@@ -217,17 +217,23 @@ Single LLM call. Cold, forensic assessment of the human match. Reads raw resume 
 **Output schema (all fields required):**
 ```ts
 {
-  fitScore: number              // 0–100
-  headline: string              // battle card headline
-  battleCardBullets: string[]   // 3–5 supporting bullets
-  scenarioSummary: string       // user-facing prose summary
-  sourceRole: string            // candidate's current/most recent role
-  targetRole: string            // role they are applying for
+  fitScore: number
+  headline: string              // role-facing — encodes both match AND gap if one exists
+  battleCardBullets: string[]   // role-first format: [role requirement] — [candidate
+                                // evidence] — [honest assessment]. Collectively explain
+                                // the score. If score < 85, at least one bullet names
+                                // what is absent or weak.
+  fitScenarioSummary: string    // human fit picture in isolation — factual paragraph,
+                                // no ATS context, no scenario tone. Read by verdict nodes
+                                // which synthesise this with atsScenarioSummary into
+                                // the final closingSummary.
+  sourceRole: string
+  targetRole: string
 
   fitAnalysis: {
-    careerTrajectory: string    // where they've been and where they're heading
-    keyStrengths: string[]      // specific strengths relative to this role
-    experienceGaps: string[]    // specific gaps relative to this role
+    careerTrajectory: string
+    keyStrengths: string[]
+    experienceGaps: string[]
     weakMatchReason: string     // REQUIRED — use "NONE" if fitScore >= 50
   }
 }
@@ -355,15 +361,20 @@ The ATS panel may be clean. The gap is real — not a terminology problem, not a
 | `weakMatch` | `analyzeFit` (derived) | `routeVerdicts` |
 | `headline` | `analyzeFit` | runner |
 | `battleCardBullets` | `analyzeFit` | runner |
-| `scenarioSummary` | `analyzeFit` | runner |
+| `fitScenarioSummary` | `analyzeFit` | verdict nodes |
+| `fitAha` | `analyzeFit` | runner (emitted in `node_done`) |
 | `sourceRole` | `analyzeFit` | `detectArchetype` (future) |
 | `targetRole` | `analyzeFit` | `detectArchetype` (future) |
 | `fitAnalysis` | `analyzeFit` | all verdict nodes |
 | `atsScore` | `atsAnalysis` | `routeVerdicts` |
 | `atsProfile` | `atsAnalysis` | `analyzeStrongMatch`, runner |
+| `atsScenarioSummary` | `atsAnalysis` | verdict nodes |
+| `atsAha` | `atsAnalysis` | runner (emitted in `node_done`) |
 | `terminologyDiffs` | `generateTerminologyFixes` | runner, `analyzeStrongMatch` |
 | `scenarioId` | `routeVerdicts` | all verdict nodes, runner |
 | `fitAdvice` | verdict nodes | runner |
+| `verdictAha` | verdict nodes | runner (emitted in `node_done`) |
+| `closingSummary` | verdict nodes | runner (remapped to `scenarioSummary.text`) |
 | `hitlFired` | `analyzeSkepticalReconciliation` | `analyzeSkepticalReconciliation` |
 | `humanContext` | HITL resume endpoint | `analyzeSkepticalReconciliation` |
 | `contextPrompt` | `analyzeSkepticalReconciliation` | runner |
@@ -424,7 +435,9 @@ The ATS panel may be clean. The gap is real — not a terminology problem, not a
   }[]
 
   scenarioSummary: {
-    text: string
+    text: string              // remapped from closingSummary (verdict node)
+                              // scenario-aware synthesis of fitScenarioSummary +
+                              // atsScenarioSummary — closing statement the user reads
   }
 
   threadId: string

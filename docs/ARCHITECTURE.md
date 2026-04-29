@@ -37,13 +37,13 @@ itself via LangGraph `interrupt()`.
 
 | Node | Reads | Writes | Notes |
 |------|-------|--------|-------|
-| `analyzeFit` | `resumeText`, `jobText` | `fitScore`, `headline`, `battleCardBullets`, `scenarioSummary`, `sourceRole`, `targetRole`, `fitAnalysis`, `weakMatch`, `fitAha` | `weakMatch = fitScore < 50`, derived in node. `fitAnalysis.weakMatchReason` normalised: `"NONE"` → `null`. No mechanical advice — keyword gaps and terminology belong to `atsAnalysis`. `fitAha`: one sentence, the sharpest human fit observation from reading resume + JD — emitted in `node_done` payload. |
-| `atsAnalysis` | `resumeText`, `jobText` | `atsProfile`, `atsAha` | Three-layer output: `machineParsing` (formatting), `knockoutQuestions` (hard filters), `recruiterSearch` (keyword discoverability). `atsScore` composite weighted 60% recruiter search / 25% knockout / 15% formatting. `atsAha`: one sentence, the most important ATS observation — emitted in `node_done` payload. Pure observation only — no card content, no fix language. |
+| `analyzeFit` | `resumeText`, `jobText` | `fitScore`, `headline`, `battleCardBullets`, `fitScenarioSummary`, `sourceRole`, `targetRole`, `fitAnalysis`, `weakMatch`, `fitAha` | `weakMatch = fitScore < 50`, derived in node. `fitAnalysis.weakMatchReason` normalised: `"NONE"` → `null`. No mechanical advice — keyword gaps and terminology belong to `atsAnalysis`. `fitScenarioSummary`: human fit picture in isolation — factual, no ATS context, no scenario tone. `fitAha`: one sentence, the sharpest human fit observation — emitted in `node_done` payload. |
+| `atsAnalysis` | `resumeText`, `jobText` | `atsProfile`, `atsScenarioSummary`, `atsAha` | Three-layer output: `machineParsing` (formatting), `knockoutQuestions` (hard filters), `recruiterSearch` (keyword discoverability). `atsScore` composite weighted 60% recruiter search / 25% knockout / 15% formatting. `atsScenarioSummary`: machine picture in isolation — 2–3 sentences, plain-language synthesis of what the three layers found collectively, no fit context. `atsAha`: one sentence, the most important ATS observation — emitted in `node_done` payload. Pure observation only — no card content, no fix language. |
 | `generateTerminologyFixes` | `resumeText`, `atsProfile.recruiterSearch.terminologyMismatches` | `terminologyDiffs` | Fans out from `atsAnalysis`. Finds the exact resume sentence for each terminology mismatch and rewrites only that sentence. Runs automatically — no user prompt needed. Tracked in `progress` but normalised to `atsAnalysis` in the stepper UI. No aha — its output is already surfaced in the ATS panel cards. |
 | `routeVerdicts` | `fitScore`, `atsScore` | `scenarioId` | Pure fn, no LLM. Emits `fitScore`, `atsScore`, `scenarioId` in `node_done` payload — the deterministic "therefore" beat in the provenance trail. No aha field — the routing logic IS the observation. |
-| `analyzeStrongMatch` | `scenarioId`, `fitAnalysis`, `atsProfile`, `terminologyDiffs` | `fitAdvice`, `verdictAha` | Fires for `confirmed_fit` and `invisible_expert`. For `confirmed_fit`, `fitAdvice` is empty — sparse output is correct. Does not restate `terminologyDiffs` already shown in the ATS panel. `verdictAha`: one LLM sentence pointing the user to the single most important thing in their results. |
-| `analyzeNarrativeGap` | `scenarioId`, `fitAnalysis` | `fitAdvice`, `verdictAha` | Fires for `narrative_gap`. ATS panel may be clean — the gap is narrative, not mechanical. `verdictAha`: one LLM sentence pointing to the most important result card. |
-| `analyzeSkepticalReconciliation` | `scenarioId`, `fitAnalysis`, `humanContext`, `hitlFired` | `fitAdvice`, `verdictAha`, `humanContext` (on interrupt), `hitlFired` | Fires for `honest_verdict`. Calls `interrupt(contextPrompt)` on first pass if LLM returns a question. Second pass uses `humanContext` from HITL resume. `verdictAha`: one LLM sentence — on first pass points to the HITL context; on second pass reflects whether context changed the assessment. |
+| `analyzeStrongMatch` | `scenarioId`, `fitAnalysis`, `atsProfile`, `terminologyDiffs`, `fitScenarioSummary`, `atsScenarioSummary` | `fitAdvice`, `verdictAha`, `closingSummary` | Fires for `confirmed_fit` and `invisible_expert`. For `confirmed_fit`, `fitAdvice` is empty — sparse output is correct. Does not restate `terminologyDiffs` already shown in the ATS panel. `closingSummary`: scenario-aware synthesis of both draft summaries — for confirmed_fit brief and validating, for invisible_expert names the two-signal contrast explicitly. |
+| `analyzeNarrativeGap` | `scenarioId`, `fitAnalysis`, `fitScenarioSummary`, `atsScenarioSummary` | `fitAdvice`, `verdictAha`, `closingSummary` | Fires for `narrative_gap`. ATS panel may be clean — the gap is narrative, not mechanical. `closingSummary`: synthesises both drafts, closes with the reframe opportunity — names the experience-is-right-framing-is-wrong insight explicitly. |
+| `analyzeSkepticalReconciliation` | `scenarioId`, `fitAnalysis`, `humanContext`, `hitlFired`, `fitScenarioSummary`, `atsScenarioSummary` | `fitAdvice`, `verdictAha`, `closingSummary`, `humanContext` (on interrupt), `hitlFired` | Fires for `honest_verdict`. `closingSummary`: the most emotionally important piece of writing in the output — direct and respectful, mentor not rejection machine. If HITL fired and context shifted the assessment, `closingSummary` acknowledges it. No second interrupt. |
 
 ### Scenario routing (deriveScenario — pure fn)
 
@@ -69,7 +69,7 @@ dependencies explicit. Before adding a node, declare its reads and writes here.
 | `fitScore` | `number \| undefined` | `undefined` | `analyzeFit` | `routeVerdicts`, all verdict nodes, runner |
 | `headline` | `string \| undefined` | `undefined` | `analyzeFit` | runner |
 | `battleCardBullets` | `string[] \| undefined` | `undefined` | `analyzeFit` | runner |
-| `scenarioSummary` | `string \| undefined` | `undefined` | `analyzeFit` | runner |
+| `fitScenarioSummary` | `string \| undefined` | `undefined` | `analyzeFit` | verdict nodes |
 | `sourceRole` | `string \| undefined` | `undefined` | `analyzeFit` | — (reserved for archetype system) |
 | `targetRole` | `string \| undefined` | `undefined` | `analyzeFit` | — (reserved for archetype system) |
 | `fitAnalysis` | `FitAnalysis \| undefined` | `undefined` | `analyzeFit` | all verdict nodes |
@@ -77,9 +77,11 @@ dependencies explicit. Before adding a node, declare its reads and writes here.
 | `weakMatch` | `boolean \| undefined` | `undefined` | `analyzeFit` (derived) | `routeVerdicts` |
 | `fitAha` | `string \| undefined` | `undefined` | `analyzeFit` | runner (emitted in `node_done`) |
 | `atsProfile` | `AtsProfile \| undefined` | `undefined` | `atsAnalysis` | `generateTerminologyFixes`, `analyzeStrongMatch`, runner |
+| `atsScenarioSummary` | `string \| undefined` | `undefined` | `atsAnalysis` | verdict nodes |
 | `atsAha` | `string \| undefined` | `undefined` | `atsAnalysis` | runner (emitted in `node_done`) |
 | `terminologyDiffs` | `TerminologyDiff[] \| undefined` | `undefined` | `generateTerminologyFixes` | `analyzeStrongMatch`, runner |
 | `verdictAha` | `string \| undefined` | `undefined` | verdict nodes | runner (emitted in `node_done`) |
+| `closingSummary` | `string \| undefined` | `undefined` | verdict nodes | runner (remapped to `scenarioSummary.text` in `PublicMatchResponse`) |
 | `scenarioId` | `ScenarioId \| undefined` | `undefined` | `routeVerdicts` | all verdict nodes, runner |
 | `fitAdvice` | `Record<string, unknown> \| undefined` | `undefined` | verdict nodes | runner |
 | `hitlFired` | `boolean` | `false` | `analyzeSkepticalReconciliation` | `analyzeSkepticalReconciliation` |
@@ -319,7 +321,10 @@ if the LLM did not generate a question — the frontend always renders fallback 
     scenarioId?: ScenarioId     // routeVerdicts beat only
   }[]
 
-  scenarioSummary: { text: string }
+  scenarioSummary: { text: string }   // populated from closingSummary (verdict node)
+                                       // scenario-aware synthesis of fitScenarioSummary
+                                       // + atsScenarioSummary — the closing statement
+                                       // the user reads at the bottom of the report
   threadId: string
   _meta: { durationMs: number }
 }
@@ -341,11 +346,11 @@ duration without a text observation. `routeVerdicts` beat renders deterministica
 `PublicMatchResponseSchema` (Zod) validates the mapped result before emission. If validation
 fails, an `error` event is emitted instead of malformed data.
 
-Internal fields never emitted: `fitAnalysis`, `atsAha`, `fitAha`, `verdictAha`
+Internal fields never emitted: `fitAnalysis`, `fitScenarioSummary`, `atsScenarioSummary`,
+`closingSummary` (remapped to `scenarioSummary.text`), `atsAha`, `fitAha`, `verdictAha`
 (remapped into `provenanceTrail`), `headline` (remapped to `battleCard.headline`),
-`battleCardBullets` (remapped to `battleCard.bulletPoints`), `scenarioSummary` (remapped to
-`scenarioSummary.text`), `sourceRole`, `targetRole`, `weakMatch`, `humanContext`, `hitlFired`,
-`contextPrompt`.
+`battleCardBullets` (remapped to `battleCard.bulletPoints`), `sourceRole`, `targetRole`,
+`weakMatch`, `humanContext`, `hitlFired`, `contextPrompt`.
 
 ---
 
@@ -563,6 +568,31 @@ or `runId` is undefined — safe no-op in tests.
 ---
 
 ## Breaking changes log
+
+### Summary field refactor — two-draft closing summary model (2026-04-28)
+
+`scenarioSummary` removed from `analyzeFit` output. Replaced by two draft fields:
+
+`fitScenarioSummary` — added to `analyzeFit`. Human fit picture in isolation: career
+trajectory, strengths, gaps. Written blind to ATS context. Read by verdict nodes.
+
+`atsScenarioSummary` — added to `atsAnalysis`. Machine picture in isolation: 2–3 sentence
+plain-language synthesis of what the three ATS layers found collectively. Written blind to
+fit context. Read by verdict nodes.
+
+`closingSummary` — added to all verdict node outputs. Scenario-aware synthesis of both
+draft summaries. Reads `fitScenarioSummary`, `atsScenarioSummary`, `fitAnalysis`,
+`atsProfile`, `scenarioId`, and `fitAdvice`. Remapped to `scenarioSummary.text` in
+`PublicMatchResponse` by the runner — no frontend schema change required.
+
+Verdict nodes now read `fitScenarioSummary` and `atsScenarioSummary` from state in addition
+to their existing inputs. State field ownership table updated accordingly.
+
+Rationale: `analyzeFit` writes the fit summary blind to scenario and ATS findings.
+`atsAnalysis` writes the ATS summary blind to fit. The verdict node, which knows both
+`scenarioId` and both draft summaries, synthesises the final closing statement with
+scenario-appropriate tone. For `honest_verdict` this is the most emotionally important
+piece of writing in the output — direct, respectful, mentor not rejection machine.
 
 ### Provenance trail + aha observations added (2026-04-28)
 
