@@ -493,6 +493,34 @@ Attaches Zod schema failures to the LangSmith trace via `client.updateRun()`. Ta
 with `["validation-failed", nodeName]` for filtering. Short-circuits if tracing is disabled
 or `runId` is undefined — safe no-op in tests.
 
+### Known limitation — routeVerdicts node_done payload
+
+`routeVerdicts` returns a LangGraph `Command` object rather than a plain state update.
+LangGraph does not pass the `Command`'s `update` object through to `handleChainEnd._outputs`
+in the callback — it routes the update internally. As a result, the `routeVerdicts`
+`node_done` SSE event carries only the base payload `{ node, durationMs, timestamp }` —
+`fitScore`, `atsScore`, and `scenarioId` are absent despite being written to the Command
+update in `edges.ts`.
+
+**Frontend handling:** The logic pill renders the `routeVerdicts` beat in two phases:
+
+1. `node_done` fires → beat 3 appears as done with placeholder text (timing only, no
+   score data yet)
+2. `completed` fires → beat 3 is backfilled with real data from `result.fitScore`,
+   `result.atsProfile.atsScore`, and `result.scenarioId`
+
+The gap between `routeVerdicts` `node_done` and `completed` is the verdict node duration
+(~5–10s) — the backfill is effectively simultaneous with the results cards rendering from
+the user's perspective.
+
+**Do not attempt to fix this by changing the emitter or edges.ts** — the Command routing
+is LangGraph-internal and not accessible via callback `_outputs`. The two-phase pill
+rendering is the correct solution.
+
+The `node_done` per-node payload spec in the SSE events section describes the intended
+target state. The `routeVerdicts` entry there reflects the design intent, not the current
+runtime behaviour. This discrepancy is intentional and documented here.
+
 ---
 
 ## Schema conventions
