@@ -1,160 +1,172 @@
-# Architecture decisions & known limitations
+# Architecture — resume-matcher
 
-## Breaking changes
-
-### `score` renamed to `fitScore` (2026-04-05)
-`MatchResult.score` and `MatchResponse.score` renamed to `fitScore` across backend and frontend.
-`atsScore: number | undefined` added alongside it — set to `undefined` until the `atsAnalysis` node lands in Phase 1.
-Any client reading the `score` field from the `/api/match/run` SSE stream will receive `undefined` after this change.
-The field is now `fitScore` in the `completed` event payload.
+## Why this exists
+A learning project built to understand LangChain and LangGraph by building something real.
+Decisions here prioritise clarity over production readiness.
 
 ---
 
-## Why this exists
-This is a learning project built to understand LangChain and LangGraph
-by building something real. Decisions here prioritize clarity over
-production readiness.
+## Graph topology
 
-## LangGraph state management
-- No access control between nodes — any node can read/write any key
-- TypeScript is a guardrail, not a gate — it catches mistakes at dev time 
-  but does not prevent nodes from accessing keys they shouldn't at runtime.
-- No visible subscriptions — no built-in way to see which nodes own which keys
-- Overwrite reducers used throughout — merge reducers would be better 
-  for granular nodes
-- MemorySaver is ephemeral — paused HITL graphs lost on server restart.
-  Moving off localhost requires a persistent checkpointer (PostgresSaver,
-  RedisSaver) — without it, HITL sessions are dropped silently on restart.
+```
+START
+  ├→ atsAnalysis ──────────────────────────┐
+  │     └→ generateTerminologyFixes ────── │ ─ (fans out immediately after atsAnalysis)
+  └→ analyzeFit ───────────────────────────┤
+                                           └→ routeVerdicts (pure fn, no LLM)
+                                                   │
+                              ┌────────────────────┼──────────────────────┐
+                              ↓                    ↓                      ↓
+                    analyzeStrongMatch  analyzeNarrativeGap  analyzeSkepticalReconciliation
+                              │                    │                      │ ↑ (loops on HITL)
+                              └────────────────────┴──────────────────────┘
+                                                   ↓
+                                                  END
+```
 
-## Node data flow
+`atsAnalysis` and `analyzeFit` run **in parallel** from `START`. `generateTerminologyFixes`
+fans out from `atsAnalysis` output immediately — it does not wait for `analyzeFit` or
+`routeVerdicts`. All four nodes (`atsAnalysis`, `generateTerminologyFixes`, `analyzeFit`,
+and whichever verdict node fires) must complete before the runner emits `completed`.
+Exactly one verdict node fires per run. `analyzeSkepticalReconciliation` can loop back to
+itself via LangGraph `interrupt()`.
 
-`parseResume` and `parseJob` run **in parallel** from `__start__` — both edges are added
-directly to `__start__` in the StateGraph, so they execute concurrently before `scoreMatch`.
+---
 
-| Node        | Reads                                      | Writes                              | Notes |
-|-------------|--------------------------------------------|-------------------------------------|-------|
-| parseResume | resumeText                                 | resumeData (incl. sourceRole)       | parallel with parseJob |
-| parseJob    | jobText                                    | jobData (incl. targetRole)          | parallel with parseResume |
-| scoreMatch  | resumeData, jobData, intent, intentContext | matchResult (fitScore, weakMatch derived) | weakMatch = fitScore < 60, not LLM output |
-| awaitHuman  | —                                          | humanContext                        | LangGraph interrupt(); fitScore < 60 + confident_match only; pauses until /api/match/resume |
-| rescore     | resumeData, jobData, humanContext          | matchResult                         | same function as scoreMatch, re-bound so humanContext is in state |
+## Node responsibilities
 
-### New graph state fields (Pass 1)
+| Node | Reads | Writes | Notes |
+|------|-------|--------|-------|
+| `analyzeFit` | `resumeText`, `jobText` | `fitScore`, `headline`, `battleCardBullets`, `fitScenarioSummary`, `sourceRole`, `targetRole`, `fitAnalysis`, `weakMatch`, `fitAha` | `weakMatch = fitScore < 50`, derived in node. `fitAnalysis.weakMatchReason` normalised: `"NONE"` → `null`. No mechanical advice — keyword gaps and terminology belong to `atsAnalysis`. `fitScenarioSummary`: human fit picture in isolation — factual, no ATS context, no scenario tone. `fitAha`: one sentence, the sharpest human fit observation — emitted in `node_done` payload. |
+| `atsAnalysis` | `resumeText`, `jobText` | `atsProfile`, `atsScenarioSummary`, `atsAha` | Three-layer output: `machineParsing` (formatting), `knockoutQuestions` (hard filters), `recruiterSearch` (keyword discoverability). `atsScore` composite weighted 60% recruiter search / 25% knockout / 15% formatting. `atsScenarioSummary`: machine picture in isolation — 2–3 sentences, plain-language synthesis of what the three layers found collectively, no fit context. `atsAha`: one sentence, the most important ATS observation — emitted in `node_done` payload. Pure observation only — no card content, no fix language. |
+| `generateTerminologyFixes` | `resumeText`, `atsProfile.recruiterSearch.terminologyMismatches` | `terminologyDiffs` | Fans out from `atsAnalysis`. Finds the exact resume sentence for each terminology mismatch and rewrites only that sentence. Runs automatically — no user prompt needed. Tracked in `progress` but normalised to `atsAnalysis` in the stepper UI. No aha — its output is already surfaced in the ATS panel cards. |
+| `routeVerdicts` | `fitScore`, `atsScore` | `scenarioId` | Pure fn, no LLM. Emits `fitScore`, `atsScore`, `scenarioId` in `node_done` payload — the deterministic "therefore" beat in the provenance trail. No aha field — the routing logic IS the observation. |
+| `analyzeStrongMatch` | `scenarioId`, `fitAnalysis`, `atsProfile`, `terminologyDiffs`, `fitScenarioSummary`, `atsScenarioSummary` | `fitAdvice`, `verdictAha`, `closingSummary` | Fires for `confirmed_fit` and `invisible_expert`. For `confirmed_fit`, `fitAdvice` is empty — sparse output is correct. Does not restate `terminologyDiffs` already shown in the ATS panel. `closingSummary`: scenario-aware synthesis of both draft summaries — for confirmed_fit brief and validating, for invisible_expert names the two-signal contrast explicitly. |
+| `analyzeNarrativeGap` | `scenarioId`, `fitAnalysis`, `fitScenarioSummary`, `atsScenarioSummary` | `fitAdvice`, `verdictAha`, `closingSummary` | Fires for `narrative_gap`. ATS panel may be clean — the gap is narrative, not mechanical. `closingSummary`: synthesises both drafts, closes with the reframe opportunity — names the experience-is-right-framing-is-wrong insight explicitly. |
+| `analyzeSkepticalReconciliation` | `scenarioId`, `fitAnalysis`, `humanContext`, `hitlFired`, `fitScenarioSummary`, `atsScenarioSummary` | `fitAdvice`, `verdictAha`, `closingSummary`, `humanContext` (on interrupt), `hitlFired` | Fires for `honest_verdict`. `closingSummary`: the most emotionally important piece of writing in the output — direct and respectful, mentor not rejection machine. If HITL fired and context shifted the assessment, `closingSummary` acknowledges it. No second interrupt. |
 
-| Field | Type | Default | Source |
-|-------|------|---------|--------|
-| intent | "confident_match" \| "exploring_gap" | required | request body |
-| intentContext | ConfidentMatchContext \| ExploringGapContext | required | request body |
-| archetypeContext | ArchetypeContext \| null | null | detectArchetype node (Pass 2) |
-| hitlFired | boolean | false | set by awaitHuman node (Pass 2) |
-| userTier | "base" \| "paid" | "base" | auth middleware (Pass 2), hardcoded for now |
-| atsScore | number \| undefined | undefined | atsAnalysis node (Phase 1 ATS pipeline) |
+### Scenario routing (deriveScenario — pure fn)
+
+```typescript
+if (fitScore >= 75 && (atsScore === null || atsScore >= 75)) → "confirmed_fit"
+if (fitScore >= 75 && atsScore < 75)                         → "invisible_expert"
+if (fitScore >= 50)                                          → "narrative_gap"
+else                                                         → "honest_verdict"
+```
+
+---
 
 ## State field ownership
 
-LangGraph uses a flat shared state object with no enforced contract between 
-nodes and fields — any node can read or write any field, and the framework 
-does not surface implicit dependencies. This is a known rough edge at scale: 
-silent reads on undefined fields, write conflicts, and refactor blindness are 
-all possible as the graph grows. The table below makes dependencies explicit.
+LangGraph uses flat shared state — no enforced contract between nodes. This table makes
+dependencies explicit. Before adding a node, declare its reads and writes here.
 
-| Field             | Written by                           | Read by                                        |
-|-------------------|--------------------------------------|------------------------------------------------|
-| fitScore          | scoreMatch                           | routeVerdicts, all verdict nodes               |
-| matchedSkills     | scoreMatch                           | all verdict nodes                              |
-| missingSkills     | scoreMatch                           | all verdict nodes                              |
-| narrativeAlignment| scoreMatch                           | all verdict nodes                              |
-| gaps              | scoreMatch                           | all verdict nodes                              |
-| contextPrompt     | scoreMatch                           | analyzeSkepticalReconciliation                 |
-| weakMatchReason   | scoreMatch (optional — may be absent)| analyzeSkepticalReconciliation (handles absent)|
-| weakMatch         | scoreMatch node (derived, not LLM)   | routeVerdicts                                  |
-| atsScore          | atsAnalysis                          | routeVerdicts                                  |
-| atsProfile        | atsAnalysis                          | analyzeStrongMatch, runner                     |
-| scenarioId        | routeVerdicts                        | all verdict nodes, runner                      |
-| hitlFired         | analyzeSkepticalReconciliation       | analyzeSkepticalReconciliation, fitAdvice      |
-| humanContext      | HITL resume endpoint                 | scoreMatch, analyzeSkepticalReconciliation     |
-| fitAdvice         | verdict nodes                        | runner                                         |
+| Field | Type | Default | Written by | Read by |
+|-------|------|---------|-----------|---------| 
+| `resumeText` | `string` | required | request body | `analyzeFit`, `atsAnalysis`, `generateTerminologyFixes` |
+| `jobText` | `string` | required | request body | `analyzeFit`, `atsAnalysis` |
+| `humanContext` | `string` | `""` | HITL resume endpoint; `analyzeSkepticalReconciliation` (on interrupt) | `analyzeSkepticalReconciliation` |
+| `fitScore` | `number \| undefined` | `undefined` | `analyzeFit` | `routeVerdicts`, all verdict nodes, runner |
+| `headline` | `string \| undefined` | `undefined` | `analyzeFit` | runner |
+| `battleCardBullets` | `string[] \| undefined` | `undefined` | `analyzeFit` | runner |
+| `fitScenarioSummary` | `string \| undefined` | `undefined` | `analyzeFit` | verdict nodes |
+| `sourceRole` | `string \| undefined` | `undefined` | `analyzeFit` | — (reserved for archetype system) |
+| `targetRole` | `string \| undefined` | `undefined` | `analyzeFit` | — (reserved for archetype system) |
+| `fitAnalysis` | `FitAnalysis \| undefined` | `undefined` | `analyzeFit` | all verdict nodes |
+| `fitAnalysis.weakMatchReason` | `string \| null` | — | `analyzeFit` (normalised: `"NONE"` → `null`) | `analyzeSkepticalReconciliation`, runner |
+| `weakMatch` | `boolean \| undefined` | `undefined` | `analyzeFit` (derived) | `routeVerdicts` |
+| `fitAha` | `string \| undefined` | `undefined` | `analyzeFit` | runner (emitted in `node_done`) |
+| `atsProfile` | `AtsProfile \| undefined` | `undefined` | `atsAnalysis` | `generateTerminologyFixes`, `analyzeStrongMatch`, runner |
+| `atsScenarioSummary` | `string \| undefined` | `undefined` | `atsAnalysis` | verdict nodes |
+| `atsAha` | `string \| undefined` | `undefined` | `atsAnalysis` | runner (emitted in `node_done`) |
+| `terminologyDiffs` | `TerminologyDiff[] \| undefined` | `undefined` | `generateTerminologyFixes` | `analyzeStrongMatch`, runner |
+| `verdictAha` | `string \| undefined` | `undefined` | verdict nodes | runner (emitted in `node_done`) |
+| `closingSummary` | `string \| undefined` | `undefined` | verdict nodes | runner (remapped to `scenarioSummary.text` in `PublicMatchResponse`) |
+| `scenarioId` | `ScenarioId \| undefined` | `undefined` | `routeVerdicts` | all verdict nodes, runner |
+| `fitAdvice` | `Record<string, unknown> \| undefined` | `undefined` | verdict nodes | runner |
+| `hitlFired` | `boolean` | `false` | `analyzeSkepticalReconciliation` | `analyzeSkepticalReconciliation` |
+| `intent` | `"confident_match" \| "exploring_gap" \| undefined` | `undefined` | request body | — |
+| `intentContext` | `ConfidentMatchContext \| ExploringGapContext \| undefined` | `undefined` | request body | — |
+| `userTier` | `"base" \| "paid"` | `"base"` | request body (hardcoded) | — |
+| `threadId` | `string \| undefined` | `undefined` | — | runner |
 
-When adding a new node: declare its reads and writes here before implementing.
-When renaming a field: update every reader listed in this table.
+`humanContext` uses an append reducer: `prev ? "${prev}\n${next}" : next` — subsequent HITL
+passes accumulate context rather than overwriting it.
 
-### Cancellation
+`weakMatchReason` lives inside `fitAnalysis`, not as a top-level field. It is accessed as
+`fitAnalysis.weakMatchReason` throughout the graph.
 
-#### activeRuns Map (current)
-In-memory Map keyed by threadId.
-Stores AbortController reference per active graph run.
-Works on single Render instance — both /run and /cancel 
-hit the same process, same Map.
+---
 
-AbortController is a Web standard — not LangGraph specific.
-LangGraph respects the signal option in invoke config,
-checking it between nodes.
+## Type definitions
 
-#### Conventional alternatives at scale
-Single instance: activeRuns Map (current approach) — sufficient
-Multi-instance: Redis pub/sub for cross-instance abort signalling
-Production traffic: Job queue (BullMQ, Inngest) — cancellation,
-  retries, dead letter queues built in, workers scale independently
+```typescript
+interface AtsProfile {
+  atsScore: number | null
 
-## Schema design
+  machineParsing: {
+    likelyTwoColumn: boolean
+    hasTablesOrGraphics: boolean
+    contactInHeaderFooter: boolean
+    inconsistentDateFormats: boolean
+    nonStandardBullets: boolean
+    missingSections: string[]
+    flags: string[]             // human-readable summary of issues found
+  }
 
-### withStructuredOutput() vs Zod validation
-- withStructuredOutput(Schema) shapes LLM output into an object
-  but does NOT run Zod validation or apply .default() values
-- Manual Schema.safeParse(result) added after withStructuredOutput() in
-  resume-chain, job-chain, and scoring-chain to apply defaults and catch
-  invalid shapes
-- weakMatch is no longer an LLM output field — derived deterministically
-  as fitScore < 60 in the scoreMatch node after chain returns
-- sourceRole and targetRole validated as z.enum(SOURCE_ROLE_VOCABULARY).catch("unknown")
-  — invalid model output coerces to "unknown" transparently, which returns
-  null from buildContext and degrades gracefully
+  knockoutQuestions: {
+    question: string
+    inferredFromJD: string
+    candidatePasses: boolean | null
+    riskLevel: "pass" | "at_risk" | "unknown"
+  }[]
 
-### resumeAdvice type
-- Defined in lib/schemas/match-schema.ts as z.array(z.string()) — string[],
-  not a single string. Each element is one actionable resume suggestion.
-  Previously, the gapAnalysis node rewrote resumeAdvice; that node was removed
-  from scope per prd-match-scenarios.md, so resumeAdvice is no longer rewritten
-  there. Verdict nodes own the separate fitAdvice output, while resumeAdvice
-  remains produced by the scoring chain.
+  recruiterSearch: {
+    likelySearchQuery: string
+    termsPresentInResume: string[]
+    termsMissingFromResume: string[]
+    terminologyMismatches: {
+      resumeUses: string
+      jdExpects: string
+    }[]
+  }
 
-## LangSmith observability
+  machineRanking: string[]      // keyword gap summary strings for UI display
+}
 
-### Run ID capture (RootRunCapture)
-- BaseCallbackHandler that captures the root run ID from a LangChain invocation
-- Only fires on the first chain start with no parentRunId
-- Instantiated inside the invoke closure, not the chain factory — lives on 
-  the stack frame of each call so concurrent requests get independent instances
-- Pattern: new RootRunCapture((id) => { capturedRunId = id }) passed in 
-  callbacks array on every structuredModel.invoke()
+interface TerminologyDiff {
+  location: string              // e.g. "Senior Engineer @ Acme — bullet 2"
+  swapLabel: string             // e.g. "agent orchestration → agentic systems"
+  before: string                // exact original sentence from resume
+  after: string                 // rewritten sentence with swap applied
+}
+```
 
-### Validation failure logging (logValidationFailure)
-- Attaches schema validation failures to the LangSmith trace via client.updateRun()
-- Tags the run with ["validation-failed", nodeName] for filtering
-- Short-circuits if tracing is disabled or runId is undefined — safe no-op in tests
+`machineParsing` is LLM-inferred from text artifacts in Phase 1. The LLM cannot detect
+two-column layout from linearized plain text — programmatic PDF/DOCX file analysis is the
+Phase 2 upgrade path for reliable formatting detection.
 
-## API design
+---
 
-### Match API — three routes, all SSE streaming
+## API
 
-| Route | Request body | Response |
-|---|---|---|
-| `POST /api/match/run` | `{ resumeText, jobText, intent, intentContext }` | SSE stream |
-| `POST /api/match/resume` | `{ threadId: string, humanContext: string }` | SSE stream |
-| `POST /api/match/cancel` | `{ threadId: string, rootRunId?: string, runStartTime?: number }` | `{ cancelled: true }` JSON |
+### Routes
 
-`/run` starts a fresh graph run. `humanContext` is no longer accepted on first run — structured
-`intent` and `intentContext` replace it. Free text context is only accepted via `/resume` (HITL).
+| Route | Method | Request body | Response |
+|-------|--------|--------------|----------|
+| `/api/match/run` | POST | `{ resumeText, jobText, intent, intentContext }` | SSE stream |
+| `/api/match/resume` | POST | `{ threadId, humanContext }` | SSE stream |
+| `/api/match/accept` | POST | `{ threadId }` | SSE stream |
+| `/api/match/cancel` | POST | `{ threadId, rootRunId?, runStartTime? }` | JSON `{ cancelled: true }` |
+| `/api/parse-resume` | POST | FormData with `resume` (PDF file) | JSON `{ text }` |
+| `/api/health` | GET | — | JSON `{ status: "ok", timestamp }` |
 
-`/resume` resumes a HITL-interrupted run via LangGraph `Command({ resume })`. `humanContext`
-must be a non-empty string — validated by Zod `z.string().min(1)` before the graph resumes.
+All routes validate request bodies with Zod before touching the graph. Text fields are
+clamped to 1–100,000 chars. `/run` uses a discriminated union schema to enforce that
+`intentContext` shape matches `intent`.
 
-`/cancel` aborts the in-flight run via `activeRuns` and optionally tags the LangSmith trace
-as user-cancelled.
+### `/api/match/run` — request body
 
-All three routes validate their request bodies with Zod schemas before touching the graph.
-
-### /api/match/run — request body shape
 ```typescript
 {
   resumeText: string
@@ -163,141 +175,478 @@ All three routes validate their request bodies with Zod schemas before touching 
   intentContext: ConfidentMatchContext | ExploringGapContext
 }
 
-// confident_match — user believes they are a strong fit
 interface ConfidentMatchContext {
-  basis: Array<"direct_experience" | "adjacent_role" | "side_projects" | 
-               "self_taught" | "career_pivot">  // min 1
+  basis: Array<"direct_experience" | "adjacent_role" | "side_projects" | "self_taught" | "career_pivot">
 }
 
-// exploring_gap — user wants to see how far off they are
 interface ExploringGapContext {
   timeline: "applying_now" | "three_to_six_months" | "one_year_plus"
-  currentStatus: Array<"side_projects" | "self_taught" | "transferable_skills" | 
-                       "starting_from_scratch" | "already_retraining">  // min 1
+  currentStatus: Array<"side_projects" | "self_taught" | "transferable_skills" | "starting_from_scratch" | "already_retraining">
 }
 ```
 
-### /api/match/run — completed SSE event payload
+### SSE events
+
+| Event | Payload | When |
+|-------|---------|------|
+| `meta` | `{ threadId, rootRunId, runStartTime }` | Before graph invocation (LangSmith enabled only) |
+| `node_start` | `{ node, timestamp }` | Tracked node begins |
+| `node_done` | see per-node payload below | Tracked node completes |
+| `completed` | `{ result: PublicMatchResponse }` | Graph ran to completion |
+| `interrupted` | `{ fitScore, threadId, contextPrompt }` | HITL interrupt fired |
+| `error` | `{ error, message }` | Any execution error |
+
+#### `node_done` payload — per node
+
+Each node emits a base payload plus node-specific fields. The `aha` field is the provenance trail beat for that node — one sentence, human-readable, surfaced in the logic pill UI.
+
+```typescript
+// base (all nodes)
+{ node: string, durationMs: number, timestamp: string }
+
+// atsAnalysis
+{
+  node: "atsAnalysis", durationMs, timestamp,
+  aha: string    // one sentence — most important ATS observation, pure finding only
+                 // e.g. "Your resume surfaces for Python and LangGraph but misses
+                 //       RAG and agentic systems — the terms the recruiter is filtering for."
+}
+
+// generateTerminologyFixes
+{ node: "generateTerminologyFixes", durationMs, timestamp }
+// no aha — output already surfaced in ATS panel cards, no duplication
+
+// analyzeFit
+{
+  node: "analyzeFit", durationMs, timestamp,
+  aha: string    // one sentence — sharpest human fit observation
+                 // e.g. "Your Wayfair replatforming work maps directly to fulfillment
+                 //       automation — but your resume frames it as storefront engineering."
+}
+
+// routeVerdicts
+{
+  node: "routeVerdicts", durationMs: 0, timestamp,
+  fitScore: number,
+  atsScore: number | null,
+  scenarioId: ScenarioId
+  // no aha — the routing data IS the observation, rendered deterministically in the pill
+}
+
+// verdict nodes (analyzeStrongMatch | analyzeNarrativeGap | analyzeSkepticalReconciliation)
+{
+  node: "analyzeStrongMatch" | "analyzeNarrativeGap" | "analyzeSkepticalReconciliation",
+  durationMs, timestamp,
+  aha: string    // one LLM sentence — points user to the single most important result card
+                 // e.g. "Your reframing cards show exactly how to retell the Wayfair
+                 //       story as fulfillment-native — start there."
+                 // For honest_verdict first pass: points to the HITL context question
+                 // For honest_verdict second pass: reflects whether context shifted assessment
+}
+```
+
+#### Provenance trail — pill content spec
+
+The logic pill in the frontend assembles its provenance trail from `node_done` events in arrival order. Four beats, rendered sequentially as nodes complete:
+
+```
+Beat 1 — atsAnalysis node_done
+  aha string (LLM-generated, one sentence)
+
+Beat 2 — analyzeFit node_done
+  aha string (LLM-generated, one sentence)
+
+Beat 3 — routeVerdicts node_done
+  Deterministic render: "fit {fitScore} · ATS {atsScore} → {scenarioId label}"
+  Different visual treatment from beats 1 and 2 — mechanical, smaller, muted
+
+Beat 4 — verdict node node_done
+  aha string (LLM-generated, one sentence)
+  Followed by: "Results ready — collapse to view" (static closing line, not LLM)
+```
+
+The pill auto-expands when "Analyze Match" is pressed. It does not auto-collapse on `completed` — the user closes it manually. The static "Results ready — collapse to view" line appears as the final beat when the verdict node fires, cueing the user that the results are ready without forcing them to close.
+
+`contextPrompt` in the interrupted payload is the question string generated by
+`analyzeSkepticalReconciliation` and passed to LangGraph's `interrupt()`. May be `null`
+if the LLM did not generate a question — the frontend always renders fallback copy.
+
+### `completed` event — `PublicMatchResponse` shape
+
 ```typescript
 {
-  fitScore: number         // semantic fit score 0–100
-  atsScore: number | undefined  // ATS surface score — undefined until Phase 1
-  matchedSkills: string[]
-  missingSkills: string[]
-  narrativeAlignment: string
-  gaps: string[]
-  resumeAdvice: string[]
-  contextPrompt: string | null
-  weakMatch: boolean       // derived: fitScore < 60, not LLM output
-  weakMatchReason?: string
+  scenarioId: "confirmed_fit" | "invisible_expert" | "narrative_gap" | "honest_verdict"
+  fitScore: number
+  battleCard: { headline: string; bulletPoints: string[] }
+  fitAdvice: { key: string; bulletPoints: string[] }[]   // empty for confirmed_fit
+
+  atsProfile: {
+    atsScore: number | null
+    machineParsing: {
+      flags: string[]
+      likelyTwoColumn: boolean
+      hasTablesOrGraphics: boolean
+      contactInHeaderFooter: boolean
+      inconsistentDateFormats: boolean
+      nonStandardBullets: boolean
+      missingSections: string[]
+    }
+    knockoutQuestions: {
+      question: string
+      inferredFromJD: string
+      riskLevel: "pass" | "at_risk" | "unknown"
+    }[]
+    recruiterSearch: {
+      likelySearchQuery: string
+      termsPresentInResume: string[]
+      termsMissingFromResume: string[]
+    }
+    machineRanking: string[]
+  }
+
+  terminologyDiffs: {
+    location: string
+    swapLabel: string
+    before: string
+    after: string
+  }[]
+
+  provenanceTrail: {
+    node: string
+    durationMs: number
+    aha: string | null          // null for generateTerminologyFixes; routeVerdicts uses
+                                // fitScore/atsScore/scenarioId instead
+    fitScore?: number           // routeVerdicts beat only
+    atsScore?: number | null    // routeVerdicts beat only
+    scenarioId?: ScenarioId     // routeVerdicts beat only
+  }[]
+
+  scenarioSummary: { text: string }   // populated from closingSummary (verdict node)
+                                       // scenario-aware synthesis of fitScenarioSummary
+                                       // + atsScenarioSummary — the closing statement
+                                       // the user reads at the bottom of the report
+  threadId: string
+  _meta: { durationMs: number }
 }
 ```
 
-Note: `resumeData` and `jobData` are no longer included in the completed event — internal
-graph state only, not surfaced to the client.
+`fitAdvice` keys by scenario:
+- `confirmed_fit`: `[]`
+- `invisible_expert`: `standout_strengths`, `ats_reality_check`, `terminology_swaps`, `keywords_to_add`
+- `narrative_gap`: `transferable_strengths`, `reframing_suggestions`, `missing_skills`
+- `honest_verdict`: `honest_assessment`, `closing_steps`, `acknowledgement` (optional — present if HITL context changed the assessment)
 
-## Resilience strategies
+`provenanceTrail` is assembled by the runner from `node_done` events in arrival order. It is
+always present in `PublicMatchResponse` — the frontend logic pill consumes it directly.
+`generateTerminologyFixes` is included as a beat with `aha: null` so the pill can show its
+duration without a text observation. `routeVerdicts` beat renders deterministically from
+`fitScore`, `atsScore`, and `scenarioId` — the pill formats this as
+`"fit {fitScore} · ATS {atsScore} → {scenarioLabel}"` without an aha string.
 
-### Implemented
-- safeParse + logValidationFailure on every chain output
-- weakMatch derived deterministically in scoreMatch node — removed from LLM schema
-- sourceRole/targetRole vocabulary enforced at schema level via z.enum().catch("unknown")
-- HITL interrupt for low confidence scores (fitScore < 60, confident_match intent)
-- AbortController for user-initiated cancellation
-- activeRuns Map (lib/active-runs.ts) — in-process memory only; maps threadId
-  to abort fn + runStartTime; used by /api/match/cancel to abort in-flight runs
+`PublicMatchResponseSchema` (Zod) validates the mapped result before emission. If validation
+fails, an `error` event is emitted instead of malformed data.
+
+Internal fields never emitted: `fitAnalysis`, `fitScenarioSummary`, `atsScenarioSummary`,
+`closingSummary` (remapped to `scenarioSummary.text`), `atsAha`, `fitAha`, `verdictAha`
+(remapped into `provenanceTrail`), `headline` (remapped to `battleCard.headline`),
+`battleCardBullets` (remapped to `battleCard.bulletPoints`), `sourceRole`, `targetRole`,
+`weakMatch`, `humanContext`, `hitlFired`, `contextPrompt`.
+
+---
+
+## HITL flow
+
+1. `analyzeSkepticalReconciliation` fires for `honest_verdict` (fitScore < 50)
+2. If first pass and LLM returns a `contextPrompt` question: calls `interrupt(contextPrompt)`,
+   sets `hitlFired = true`, loops back to itself
+3. Backend emits `interrupted` SSE event with `fitScore`, `threadId`, `contextPrompt`
+4. Thread persists in checkpointer (not deleted)
+5. Frontend shows `HitlDrawer` — user types context and submits
+6. `POST /api/match/resume` sends `{ threadId, humanContext }` → resumes graph via
+   `Command({ resume: humanContext })`
+7. Second pass runs with `humanContext` in state, `hitlFired = true` prevents second interrupt
+8. Graph completes normally, emits `completed`
+
+**Accept path:** `POST /api/match/accept` reads final state from checkpointer without
+re-invoking the graph, then emits `completed` with the pre-interrupt state.
+
+---
+
+## Frontend
+
+### Entry point and state management
+
+`app/(main)/page.tsx` is a single `"use client"` page. All application state lives in
+`useMatchRunner` — no global store (no Zustand, Redux, Context). The page calls the hook
+once and fans props out to children.
+
+```
+app/(main)/page.tsx
+  ├── useMatchRunner()          ← single source of truth for all state
+  ├── <Header />
+  ├── <UploadSection />         ← resume + JD input, sticky slim bar
+  ├── <MainResultsStage />      ← results tabs, stepper, fit advice, ATS panel
+  └── <HitlDrawer />            ← slides up from bottom on interrupted state
+```
+
+### `useMatchRunner` — what it owns
+
+```typescript
+// App state machine
+appState: "idle" | "running" | "interrupted" | "completed"
+
+// Inputs
+resumeText: string | null
+jobDescription: string
+parseLoading: boolean
+parseError: string | null
+fileInputRef: RefObject<HTMLInputElement>
+
+// HITL
+humanContext: string
+contextPrompt: string | null   // from interrupted SSE event, null if absent
+interruptedScore: number | null
+
+// Results
+result: MatchResponse | null
+matchError: string | null
+progress: Record<string, NodeProgress>
+
+// Derived flags (not state — re-derived on every render)
+isInputsDisabled: boolean      // appState === "running" || "interrupted"
+canMatch: boolean              // !isInputsDisabled && resumeText && jobDescription.trim()
+showCancel: boolean            // same as isInputsDisabled
+
+// Handlers
+handleMatch, handleRescore, handleAccept, handleCancel,
+handleFileUpload, handleClearResume,
+setJobDescription, setHumanContext
+```
+
+Node progress tracking: three steps — `atsAnalysis`, `analyzeFit`, `analyzeMatch`.
+All three verdict nodes normalise to `"analyzeMatch"` for the stepper UI.
+`generateTerminologyFixes` is tracked in `progress` but normalised to `"atsAnalysis"` —
+it is part of the ATS analysis work from the user's perspective.
+
+### Component inventory
+
+**Layout:**
+- `Header` — sticky, `z-50`, `h-[88px]`, Base UI `Menu` dropdown
+- `UploadSection` — sticky slim bar at `top-[88px]`, `z-10`. Two cards (resume + JD) with
+  3 visual states: empty (dashed border), uploaded (solid border), running (opacity-40,
+  pointer-events-none). JD input via `Dialog` modal.
+- `HitlDrawer` — `position: fixed`, bottom-of-viewport slide-up, `z-50`. Opens when
+  `appState === "interrupted"`. Always shows fallback copy if `contextPrompt` is null.
+
+**Results (`components/resume-init/`):**
+- `MainResultsStage` — owns `activeTab` state, 3-tab layout (ResumeInit / CompanyInit / ArcInit)
+- `ResultsHeader` — tab switcher + progress bar
+- `ResultsTop` — stepper + BattleCard
+- `Stepper` — 3 nodes with done/active/idle states
+- `BattleCard` — score circle + headline + bullets, skeleton while loading
+- `FitAdviceAccordion` — Base UI Accordion, maps `fitAdvice` keys via `accordion-config.ts`
+- `ScenarioSummary` — left-border accent block
+- `AtsPanelStation` — three-station ATS panel (machine parsing / knockout questions / recruiter terminal). Consumes `atsProfile` and `terminologyDiffs` from `result`. Station 3 renders `terminologyDiffs` as inline before/after diffs — no user prompt required.
+
+**UI primitives (`components/ui/`):** `button`, `avatar`, `tabs`, `progress`, `field`,
+`input`, `card`, `dialog`, `drawer` — all thin wrappers around `@base-ui/react` primitives
+using CVA variants and Tailwind.
+
+**Paywall:** `PaywallGateResult` shared by `CompanyInitResult` and `ArcInitResult`.
+
+### Frontend → backend communication
+
+Frontend calls the backend directly via `NEXT_PUBLIC_BACKEND_URL` (default `http://localhost:3001`).
+**No Next.js proxy rewrites** — `next.config.mjs` is empty. On Vercel, `NEXT_PUBLIC_BACKEND_URL`
+points to the Render service URL.
+
+SSE is consumed by `fetch()` + `ReadableStream` reader in `useMatchRunner.processStream`.
+The hook manages reader lifecycle: closes any in-flight reader before opening a new connection
+to prevent duplicate-connection errors across multiple runs.
+
+---
+
+## Cancellation
+
+In-memory `activeRuns` Map, keyed by `threadId`. Stores `AbortController` reference per run.
+Works on single Render instance — `/run` and `/cancel` hit the same process, same Map.
+
+`AbortController` is a Web standard. LangGraph respects the `signal` option in invoke config,
+checking it between nodes. On cancel: abort signal fired → `/cancel` optionally tags the
+LangSmith trace as user-cancelled → thread deleted from checkpointer.
+
+At scale: Redis pub/sub for cross-instance abort signalling; job queue (BullMQ, Inngest) for
+retries, dead letter queues, and independent worker scaling.
+
+---
+
+## Observability (LangSmith)
+
+### RootRunCapture
+`BaseCallbackHandler` that captures the root run ID from a LangChain invocation. Fires only
+on the first chain start with no `parentRunId`. Instantiated inside the invoke closure (not
+the chain factory) — lives on the stack frame of each call so concurrent requests get
+independent instances.
+
+### logValidationFailure
+Attaches Zod schema failures to the LangSmith trace via `client.updateRun()`. Tags the run
+with `["validation-failed", nodeName]` for filtering. Short-circuits if tracing is disabled
+or `runId` is undefined — safe no-op in tests.
+
+---
+
+## Schema conventions
+
+- `withStructuredOutput(Schema)` shapes LLM output but does NOT run Zod validation or apply
+  `.default()` values
+- Every chain: `safeParse → logValidationFailure → throw validated.error`
+- Never use `Schema.parse({ ...result })` — spreading `null`/`undefined` throws TypeError
+  that masks the real Zod error
+- Nullable string fields: `z.string().min(1).nullable()` not `z.string().nullable()` — empty
+  string is not a valid null substitute
+- `weakMatch` is derived in `analyzeFit` node, not LLM output
+- `fitAnalysis.weakMatchReason` is normalised in `analyzeFit` node (`"NONE"` → `null`), not LLM output
+
+---
+
+## LangGraph state management — known rough edges
+
+- No access control between nodes — any node can read/write any key at runtime
+- TypeScript is a guardrail at dev time, not a gate at runtime
+- Overwrite reducers used for most fields — merge reducers would be better for granular nodes
+- `MemorySaver` is ephemeral — paused HITL graphs lost on server restart.
+  `PostgresSaver` (Supabase) required for production HITL persistence.
+
+---
+
+## Deployment
+
+### Frontend: Vercel
+- Serves Next.js UI only
+- `NEXT_PUBLIC_BACKEND_URL` env var points to Render backend
+- No API routes on Vercel
+
+### Backend: Render (persistent server)
+- Persistent Node.js process — `MemorySaver` and `activeRuns` work within a session
+- Kept alive via UptimeRobot pinger every 10 minutes
+- 512MB RAM limit — rules out local Ollama; uses `ChatAnthropic` in production
+- `buildScoringGraph(model)` factory pattern makes model swap a one-line change
+
+### State: Supabase
+- `PostgresSaver` replaces `MemorySaver` for persistent HITL checkpointing
+- Survives Render restarts and deploys
+- Self-cleaning cron: `DELETE FROM checkpoints WHERE created_at < NOW() - INTERVAL '24 hours'`
+- `waitlist` and `subscriptions` tables for beta user management
+
+### Still needed at scale
+- Redis: only if multiple Render instances needed
+- Circuit breaker: if Anthropic has outages at scale
+- SIGTERM handler: for clean deploys on Render
+
+---
+
+## Resilience — implemented
+
+- `safeParse + logValidationFailure` on every chain output
+- `weakMatch` derived deterministically — not an LLM output field
+- `fitAnalysis.weakMatchReason` normalised deterministically — not an LLM output field
+- HITL interrupt for `honest_verdict` (fitScore < 50) on first pass
+- `hitlFired` guard prevents second interrupt on resume pass
+- `AbortController` for user-initiated cancellation
+- `activeRuns` Map (`src/active-runs.ts`) — maps `threadId` to abort fn + `runStartTime`
+- `PublicMatchResponseSchema` validates before every `completed` emission
 - LangSmith tagging for failure classification
 
-### Planned (schema and graph retry are coupled — implement together)
+## Resilience — planned
+
 - Critical vs non-critical field distinction in schemas
-  (name, email: no default → fail fast)
-- retryCount in GraphState + max retry conditional edge
+- `retryCount` in `GraphState` + max retry conditional edge
 - On retry exhausted → route to HITL, not silent error
 - Input validation before graph starts (fail fast, save tokens)
-- maxRetries + timeout on model constructor (transient failures only)
+- `maxRetries` + timeout on model constructor (transient failures only)
 
-## Deployment architecture
+---
 
-### Frontend: Vercel (free)
-- Serves Next.js UI only
-- /api/* requests proxied to Render via next.config.js rewrites
-- No API routes run on Vercel — avoids serverless limitations
+## Breaking changes log
 
-### Backend: Render (free tier, persistent server)
-- Persistent Node.js process — MemorySaver and activeRuns work correctly
-- Kept alive via UptimeRobot pinger every 10 minutes
-- 512MB RAM limit — rules out local Ollama
-- Requires cloud LLM: ChatOllama → ChatAnthropic (Claude Haiku)
-- buildScoringGraph(model) factory pattern makes model swap one line
+### Summary field refactor — two-draft closing summary model (2026-04-28)
 
-### State: Supabase (free tier)
-- PostgresSaver replaces MemorySaver for persistent HITL checkpointing
-- Survives Render restarts and deploys
-- waitlist table for beta user management
-- subscriptions table for usage tracking
-- Self-cleaning cron for expired checkpointer rows:
-  DELETE FROM checkpoints WHERE created_at < NOW() - INTERVAL '24 hours'
-- One-time setup: checkpointer.setup() on first deploy
+`scenarioSummary` removed from `analyzeFit` output. Replaced by two draft fields:
 
-### What persistent server solves
-Render gives us a persistent process — these work without Redis:
-- activeRuns Map survives within a session
-- MemorySaver → replaced by PostgresSaver (more robust anyway)
-- HITL threadId survives between /run and /resume calls
-- Cancel works — AbortController is in the same process
+`fitScenarioSummary` — added to `analyzeFit`. Human fit picture in isolation: career
+trajectory, strengths, gaps. Written blind to ATS context. Read by verdict nodes.
 
-### Still needed at scale (not now)
-- Redis: only if multiple Render instances needed (free tier = one instance)
-- Circuit breaker: if Anthropic has outages at scale
-- SIGTERM handler: worth adding for clean deploys on Render
+`atsScenarioSummary` — added to `atsAnalysis`. Machine picture in isolation: 2–3 sentence
+plain-language synthesis of what the three ATS layers found collectively. Written blind to
+fit context. Read by verdict nodes.
 
-### Product model - Chrome Extension
+`closingSummary` — added to all verdict node outputs. Scenario-aware synthesis of both
+draft summaries. Reads `fitScenarioSummary`, `atsScenarioSummary`, `fitAnalysis`,
+`atsProfile`, `scenarioId`, and `fitAdvice`. Remapped to `scenarioSummary.text` in
+`PublicMatchResponse` by the runner — no frontend schema change required.
 
-### Beta (current)
-- Free for invited beta users
-- You manually create Supabase accounts for waitlist signups
-- Usage tracked per user_id in Supabase usage table
-- Monthly limit enforced in backend (limit TBD)
-- Resets monthly via Supabase cron
+Verdict nodes now read `fitScenarioSummary` and `atsScenarioSummary` from state in addition
+to their existing inputs. State field ownership table updated accordingly.
 
-### Cost control
-Layer 1: per-user monthly usage limit tracked in Supabase
-Layer 2: global Anthropic spending limit as safety net
+Rationale: `analyzeFit` writes the fit summary blind to scenario and ATS findings.
+`atsAnalysis` writes the ATS summary blind to fit. The verdict node, which knows both
+`scenarioId` and both draft summaries, synthesises the final closing statement with
+scenario-appropriate tone. For `honest_verdict` this is the most emotionally important
+piece of writing in the output — direct, respectful, mentor not rejection machine.
 
-### Auth flow per request - Planned
-1. User logs in via Chrome extension → Supabase returns JWT
-2. JWT sent as Bearer token to Render backend
-3. Backend verifies JWT via Supabase service role key
-4. Check monthly usage for that user_id
-5. If under limit: run agent, increment usage
-6. If over limit: return 429 with reset date
+### Provenance trail + aha observations added (2026-04-28)
 
-### Monetization (post PMF)
-TBD based on beta feedback — options include
-subscription billing via Stripe, one-time purchase,
-or usage-based pricing.
+`aha` fields added to `atsAnalysis`, `analyzeFit`, and all verdict node output schemas.
+Each is a single LLM-generated sentence — the most important observation from that node's
+analysis. `generateTerminologyFixes` and `routeVerdicts` do not produce aha fields.
 
-## Go-to-market
+`node_done` SSE payload is now node-specific rather than uniform. `atsAnalysis` and
+`analyzeFit` emit `{ node, durationMs, timestamp, aha }`. `routeVerdicts` emits
+`{ node, durationMs: 0, timestamp, fitScore, atsScore, scenarioId }`. Verdict nodes emit
+`{ node, durationMs, timestamp, aha }`. `generateTerminologyFixes` emits base payload only.
 
-### Rollout sequence
-1. Build + test locally
-2. Publish to Chrome Web Store (unlisted first)
-3. Share with 5-10 people via direct link
-4. Collect feedback, fix issues
-5. Publish publicly, enable waitlist
-6. Add subscription billing when ready to charge
+`provenanceTrail` added to `PublicMatchResponse` — assembled by runner from `node_done`
+events in arrival order. The frontend logic pill consumes this field directly to render
+the four-beat provenance trail. Internal aha state fields (`atsAha`, `fitAha`,
+`verdictAha`) are remapped into `provenanceTrail` by the runner and never emitted raw.
 
-### Waitlist flow
-Chrome Web Store listing → "Get early access" in extension popup
-  → user enters email → stored in Supabase waitlist table
-  → you create account in Supabase dashboard 
-  → trigger invite email (magic link)
-  → user clicks link, sets their own password
-  → logs into Chrome extension with email/password
+State field ownership table updated: `atsAha`, `fitAha`, `verdictAha` added as fields
+written by their respective nodes and read only by the runner for remapping.
 
-### Supabase waitlist table
-  email, signed_up_at, invited, invited_at
+### `generateTerminologyFixes` node added; `atsProfile` schema expanded (2026-04-28)
 
-### Supabase usage table
-  user_id (references auth.users), matches_this_month, reset_at
+New node `generateTerminologyFixes` added to the graph. Fans out from `atsAnalysis` output,
+runs in parallel with the fit analysis path. Reads `resumeText` and
+`atsProfile.recruiterSearch.terminologyMismatches`. Writes `terminologyDiffs[]` to state.
+Produces exact before/after sentence rewrites automatically — no user prompt.
 
+`atsProfile` schema expanded from `{ atsScore, machineParsing: string[], machineRanking: string[] }`
+to a structured three-section object: `machineParsing` (structured formatting flags),
+`knockoutQuestions` (inferred hard filters with risk level), `recruiterSearch` (Boolean
+query, present/missing terms, terminology mismatches). `atsScore` composite weighting: 60%
+recruiter search / 25% knockout / 15% formatting.
+
+`terminologyDiffs` added to `PublicMatchResponse`. Frontend `AtsPanelStation` component added
+to `MainResultsStage` — consumes `atsProfile` and `terminologyDiffs` from `result`.
+
+State table: `resumeText` readers updated to include `generateTerminologyFixes`.
+`weakMatchReason` removed as a top-level state field — it lives inside `fitAnalysis` as
+`fitAnalysis.weakMatchReason` (this was logged in the April refactor but the state table
+was not updated at that time; corrected now).
+
+### `contextPrompt` added to interrupted SSE payload (2026-04-28)
+`contextPrompt: string | null` added to the `interrupted` event alongside `fitScore` and
+`threadId`. Extracted from `snapshot.tasks[0].interrupts[0].value` in `runner.ts` — the value
+passed to LangGraph's `interrupt()` by `analyzeSkepticalReconciliation`. May be `null`.
+
+### Graph refactor — `parseResume`, `parseJob`, `scoreMatch` removed (2026-04)
+`parseResume` and `parseJob` nodes deleted. Both `analyzeFit` and `atsAnalysis` read raw
+`resumeText` and `jobText` directly. `scoreMatch` renamed to `analyzeFit` with an expanded
+output schema (adds `headline`, `battleCardBullets`, `scenarioSummary`, `sourceRole`,
+`targetRole`, `fitAnalysis`). Verdict nodes added: `analyzeStrongMatch`, `analyzeNarrativeGap`,
+`analyzeSkepticalReconciliation`. `weakMatchReason` moved from top-level state into
+`fitAnalysis.weakMatchReason`.
+
+### `score` renamed to `fitScore` (2026-04-05)
+`MatchResult.score` and `MatchResponse.score` renamed to `fitScore`. Any client reading
+`score` from the SSE stream will receive `undefined` after this change.

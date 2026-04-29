@@ -1,97 +1,203 @@
-Backend — Claude Context (New Architecture)
+# Backend — Claude Context (New Architecture)
+
 This file describes the target architecture for the backend sprint.
 Compare against the existing root-level CLAUDE.md to understand what has changed.
 
-Graph topology
+## Graph topology
+
+```
 raw resumeText + jobText
         ↓
-atsAnalysis ──────────── analyzeFit    (parallel, both read raw text directly)
-        ↓                      ↓
-        └──── routeVerdicts ───┘
-              (deriveScenario — pure function, no LLM)
-                    ↓
-            one verdict node fires:
-            analyzeStrongMatch | analyzeNarrativeGap | analyzeSkepticalReconciliation
-                    ↓
-                   END
-What changed from the old graph
+atsAnalysis ──────────────────────── analyzeFit    (parallel, both read raw text directly)
+        ↓                                  ↓
+generateTerminologyFixes            routeVerdicts
+(fans out from atsAnalysis,         (deriveScenario — pure function, no LLM)
+ runs parallel to fit path)               ↓
+        ↓                     one verdict node fires:
+        └──────────────────── analyzeStrongMatch | analyzeNarrativeGap | analyzeSkepticalReconciliation
+                                          ↓
+                                         END
+```
 
-parseResume and parseJob nodes are deleted. Both nodes are removed from the
-graph entirely. analyzeFit and atsAnalysis read raw resumeText and jobText
-directly from graph state.
-scoreMatch is renamed to analyzeFit. It now also produces the battle card,
-scenario summary, and structured fitAnalysis for verdict nodes.
-atsAnalysis remains but its output schema changes — see below.
-contextPrompt moves out of analyzeFit and into analyzeSkepticalReconciliation.
+## What changed from the old graph
 
+`parseResume` and `parseJob` nodes are deleted. Both nodes are removed from the graph entirely. `analyzeFit` and `atsAnalysis` read raw `resumeText` and `jobText` directly from graph state.
 
-Node responsibilities
-analyzeFit
-Reads: resumeText, jobText (raw text — no parsed objects)
-Single LLM call. Cold, forensic assessment. No advice — facts only.
-LLM output schema (all fields required — no optional fields):
-ts{
-  fitScore: number              // 0–100
-  headline: string              // battle card headline — who this person is relative to this role
-  battleCardBullets: string[]   // 3–5 supporting bullets for the battle card
-  scenarioSummary: string       // user-facing prose summary of the fit assessment
-  sourceRole: string            // candidate's current/most recent role
-  targetRole: string            // role they are applying for
+`scoreMatch` is renamed to `analyzeFit`. It now produces the battle card, scenario summary, and structured `fitAnalysis` for verdict nodes.
 
+`atsAnalysis` output schema significantly expanded — now covers three layers (machine parsing, knockout questions, recruiter search) rather than a single score and keyword list.
+
+`generateTerminologyFixes` is a new node. It fans out from `atsAnalysis` output and runs in parallel with the fit analysis path. It produces `terminologyDiffs[]` — exact before/after rewrites of resume sentences — automatically, without user prompt.
+
+`contextPrompt` moves out of `analyzeFit` and into `analyzeSkepticalReconciliation`.
+
+---
+
+## Node responsibilities
+
+### `analyzeFit`
+
+Reads: `resumeText`, `jobText` (raw text)
+
+Single LLM call. Cold, forensic assessment of the human match. No mechanical advice — keyword lists, formatting observations, and terminology gaps belong entirely to `atsAnalysis` and `generateTerminologyFixes`.
+
+LLM output schema (all fields required):
+```ts
+{
+  fitScore: number
+  headline: string              // role-facing — encodes both match AND gap if one exists
+                                // e.g. for 72: "Strong distributed systems background,
+                                // domain gap from storefront to fulfillment"
+                                // NOT a candidate summary or job title
+  battleCardBullets: string[]   // role-first format: [role requirement] — [candidate
+                                // evidence] — [honest assessment]. Must collectively
+                                // explain why score is not higher. If score < 85,
+                                // at least one bullet names what is absent or weak.
+  fitScenarioSummary: string    // human fit picture in isolation — factual paragraph,
+                                // no ATS context, no scenario tone yet. Read by verdict
+                                // nodes which synthesise this with atsScenarioSummary
+                                // into the final closingSummary.
+  sourceRole: string
+  targetRole: string
   fitAnalysis: {
-    careerTrajectory: string    // where they've been and where they're heading
-    keyStrengths: string[]      // specific strengths relative to this role
-    experienceGaps: string[]    // specific gaps relative to this role
+    careerTrajectory: string
+    keyStrengths: string[]
+    experienceGaps: string[]
     weakMatchReason: string     // REQUIRED — use "NONE" if fitScore >= 50
   }
+  fitAha: string                // one sentence — sharpest human fit observation
+                                // pure observation only, emitted in node_done payload
 }
-Node logic after LLM call:
-ts// weakMatch derived deterministically — not LLM output
-matchResult.weakMatch = matchResult.fitScore < 50
+```
 
-// normalise sentinel value
+Node logic after LLM call:
+```ts
+matchResult.weakMatch = matchResult.fitScore < 50
 matchResult.fitAnalysis.weakMatchReason =
   result.fitAnalysis.weakMatchReason === "NONE"
     ? null
     : result.fitAnalysis.weakMatchReason
-Critical prompt instruction:
-weakMatchReason is always required. If fitScore >= 50, return the string "NONE".
-Do not omit the field. The LLM must always populate it — conditional fields are
-unreliable and will be missed.
+```
 
-atsAnalysis
-Reads: resumeText, jobText (raw text)
-Single LLM call. Mechanical, literal. Keyword and terminology analysis only.
-machineParsing is a TODO — populated with placeholder data for now.
+Critical prompt instruction: `weakMatchReason` is always required. If `fitScore >= 50`, return the string "NONE". Do not omit the field. Conditional fields are unreliable and will be missed.
+
+---
+
+### `atsAnalysis`
+
+Reads: `resumeText`, `jobText` (raw text)
+
+Single LLM call. Mechanical and literal — no semantic inference. Covers three distinct layers of ATS evaluation.
+
+Prompt framing: the LLM simultaneously plays a recruiter configuring knockout questions before posting the role, and a recruiter running a Boolean search to find candidates. This framing produces more realistic output than asking for "ATS analysis" abstractly.
+
 LLM output schema:
-ts{
-  atsScore: number              // 0–100
-  machineRanking: string[]      // keyword gaps, terminology mismatches vs job description
-}
-Node logic after LLM call:
-ts// machineParsing is TODO — hardcoded placeholder, replace with programmatic analysis
-atsResult.machineParsing = [
-  "// TODO: replace with programmatic resume parsing analysis"
-]
+```ts
+{
+  atsScore: number              // 0–100, composite weighted 60% L3 / 25% L2 / 15% L1
 
-routeVerdicts
-Pure function. No LLM. Reads fitScore and atsScore. Writes scenarioId.
-tsfunction deriveScenario(fitScore: number, atsScore: number | null): ScenarioId {
+  machineParsing: {             // Layer 1 — formatting
+    likelyTwoColumn: boolean
+    hasTablesOrGraphics: boolean
+    contactInHeaderFooter: boolean
+    inconsistentDateFormats: boolean
+    nonStandardBullets: boolean
+    missingSections: string[]
+    flags: string[]             // human-readable summary of issues found
+  }
+
+  knockoutQuestions: {          // Layer 2 — hard filters
+    question: string
+    inferredFromJD: string
+    candidatePasses: boolean | null
+    riskLevel: "pass" | "at_risk" | "unknown"
+  }[]
+
+  recruiterSearch: {            // Layer 3 — keyword discoverability
+    likelySearchQuery: string
+    termsPresentInResume: string[]
+    termsMissingFromResume: string[]
+    terminologyMismatches: {
+      resumeUses: string
+      jdExpects: string
+    }[]
+  }
+
+  machineRanking: string[]      // keyword gap summary strings for UI
+
+  atsScenarioSummary: string    // machine picture in isolation — 2–3 sentences,
+                                // plain-language synthesis of what the three layers
+                                // found collectively. No fit context. No scenario tone.
+                                // e.g. "Resume is parseable with minor formatting issues.
+                                // One knockout risk around production deployment language.
+                                // Missing 3 of 4 key search terms the recruiter would
+                                // filter on." Read by verdict nodes for closingSummary.
+
+  atsAha: string                // one sentence — most important ATS observation
+                                // pure finding only — no fix language, no card content
+                                // emitted in node_done SSE payload
+}
+```
+
+Layer 1 limitation: the LLM infers formatting problems from text artifacts. It cannot detect two-column layout from plain linearized text. LLM inference is the Phase 1 approach; programmatic PDF/DOCX file analysis is the Phase 2 upgrade path.
+
+---
+
+### `generateTerminologyFixes`
+
+Reads: `resumeText`, `atsAnalysis.recruiterSearch.terminologyMismatches[]`
+
+New node. Single focused LLM call. Fires immediately after `atsAnalysis` completes. Finds the exact sentence in the resume for each terminology mismatch and rewrites only that sentence — no other content changes.
+
+LLM output schema:
+```ts
+{
+  terminologyDiffs: {
+    location: string      // e.g. "Senior Engineer @ Acme — bullet 2"
+    swapLabel: string     // e.g. "agent orchestration → agentic systems"
+    before: string        // exact original sentence from resume
+    after: string         // rewritten sentence with swap applied
+  }[]
+}
+```
+
+This node runs automatically — it does not require user input. The output is surfaced directly in Station 3 of the ATS panel as inline before/after diffs. For the invisible_expert scenario, seeing their own sentence with the fix already applied is the product's primary trust-building moment.
+
+---
+
+### `routeVerdicts`
+
+Pure function. No LLM. Reads `fitScore` and `atsScore`. Writes `scenarioId`.
+
+```ts
+function deriveScenario(fitScore: number, atsScore: number | null): ScenarioId {
   if (fitScore >= 75 && (atsScore === null || atsScore >= 75)) return "confirmed_fit"
   if (fitScore >= 75 && atsScore !== null && atsScore < 75)   return "invisible_expert"
   if (fitScore >= 50)                                          return "narrative_gap"
   return "honest_verdict"
 }
+```
 
-analyzeStrongMatch
-Fires for: confirmed_fit and invisible_expert
-Reads: fitScore, scenarioId, fitAnalysis, atsProfile
-No temperature override.
+---
+
+### `analyzeStrongMatch`
+
+Fires for: `confirmed_fit` and `invisible_expert`
+Reads: `fitScore`, `scenarioId`, `fitAnalysis`, `atsProfile`, `terminologyDiffs`, `fitScenarioSummary`, `atsScenarioSummary`
+
+For `confirmed_fit`: sparse output is correct. ATS panel is clean, fit is strong. Empty `fitAdvice` is the right answer. Do not manufacture advice.
+
+For `invisible_expert`: fit analysis confirms qualification. ATS panel and `terminologyDiffs` already contain the mechanical fix. The verdict node provides human framing only — it does not restate terminology gaps already shown in Station 3.
+
 Output schema:
-ts// confirmed_fit — empty fitAdvice, sparse is correct
+```ts
+// confirmed_fit
 {
   scenarioId: "confirmed_fit"
   fitAdvice: []
+  verdictAha: string            // one sentence even for confirmed_fit
+  closingSummary: string        // brief and validating — synthesises both draft summaries
+                                // confirms the two-signal match without padding
 }
 
 // invisible_expert
@@ -103,57 +209,108 @@ ts// confirmed_fit — empty fitAdvice, sparse is correct
     terminologySwaps: string[]
     keywordsToAdd: string[]
   }
+  verdictAha: string
+  closingSummary: string        // names the two-signal contrast explicitly
+                                // e.g. "Strong human match, invisible to filters —
+                                // the terminology fixes in Station 3 close the gap
+                                // without changing a single qualification."
 }
+```
 
-analyzeNarrativeGap
-Fires for: narrative_gap
-Reads: fitScore, scenarioId, fitAnalysis
-No temperature override.
+---
+
+### `analyzeNarrativeGap`
+
+Fires for: `narrative_gap`
+Reads: `fitScore`, `scenarioId`, `fitAnalysis`, `fitScenarioSummary`, `atsScenarioSummary`
+
+The ATS panel may be entirely clean for this scenario. The problem is the career story doesn't obviously point at this role. This node owns the scenario entirely — no overlap with ATS findings.
+
 Output schema:
-ts{
+```ts
+{
   scenarioId: "narrative_gap"
   fitAdvice: {
     transferableStrengths: string[]
     reframingSuggestions: string[]
     missingSkills: string[]
   }
+  verdictAha: string
+  closingSummary: string        // closes with the reframe opportunity
+                                // names the experience-is-right-framing-is-wrong insight
+                                // explicitly. If ATS is also clean, notes it: "the machine
+                                // can read you fine — the human reader needs a different
+                                // story."
 }
+```
 
-analyzeSkepticalReconciliation
-Fires for: honest_verdict
-Reads: fitScore, scenarioId, fitAnalysis, hitlFired
-No temperature override.
-Owns contextPrompt — generates it here, not inherited from analyzeFit.
-First pass (hitlFired === false):
+---
 
-If the gap is real and more context would change the assessment:
-generate contextPrompt (the specific question) → call interrupt() → set hitlFired: true
-If no context would help: produce fitAdvice directly, no interrupt
+### `analyzeSkepticalReconciliation`
 
-Second pass (hitlFired === true):
+Fires for: `honest_verdict`
+Reads: `fitScore`, `scenarioId`, `fitAnalysis`, `hitlFired`, `fitScenarioSummary`, `atsScenarioSummary`
 
-humanContext is in state from HITL resume
-Produce fitAdvice with acknowledgement if context changed the assessment
-No second interrupt regardless of score
+Owns `contextPrompt`. First pass: if context would change assessment, generate question → `interrupt()` → set `hitlFired: true`. If no context would help, produce `fitAdvice` directly. Second pass: produce `fitAdvice` with `acknowledgement` if context shifted the assessment. No second interrupt.
 
 Output schema:
-ts{
+```ts
+{
   scenarioId: "honest_verdict"
   fitAdvice: {
     honestAssessment: string[]
     closingSteps: string[]
-    acknowledgement: string[] | null    // populated if HITL fired and context was useful
+    acknowledgement: string[] | null
   }
+  verdictAha: string            // first pass: explains why HITL is needed
+                                // second pass: reflects whether context shifted assessment
+  closingSummary: string        // the most emotionally important piece of writing in the
+                                // output — direct and respectful, mentor not rejection
+                                // machine. Tone: clarity over comfort, never cruelty.
+                                // If HITL fired and context shifted: acknowledges it here.
+                                // This is the last thing a user with a hard verdict reads.
 }
+```
 
-Internal graph state — field ownership
-FieldWritten byRead byresumeTextrequest bodyanalyzeFit, atsAnalysisjobTextrequest bodyanalyzeFit, atsAnalysisfitScoreanalyzeFitrouteVerdicts, all verdict nodesweakMatchanalyzeFit (derived)routeVerdictsheadlineanalyzeFitrunnerbattleCardBulletsanalyzeFitrunnerscenarioSummaryanalyzeFitrunnersourceRoleanalyzeFitdetectArchetype (future)targetRoleanalyzeFitdetectArchetype (future)fitAnalysisanalyzeFitall verdict nodesfitAnalysis.weakMatchReasonanalyzeFit (normalised in node)analyzeSkepticalReconciliation, runneratsScoreatsAnalysisrouteVerdictsatsProfileatsAnalysisanalyzeStrongMatch, runnerscenarioIdrouteVerdictsall verdict nodes, runnerfitAdviceverdict nodesrunnerhitlFiredanalyzeSkepticalReconciliationanalyzeSkepticalReconciliationhumanContextHITL resume endpointanalyzeSkepticalReconciliation
+---
 
-Public API — PublicMatchResponse
-Emitted by runner.ts on the completed SSE event under result.
-Validated by PublicMatchResponseSchema (Zod) before emission.
-Internal fields never leave the server.
-ts{
+## Internal graph state — field ownership
+
+| Field | Written by | Read by |
+|---|---|---|
+| `resumeText` | request body | `analyzeFit`, `atsAnalysis`, `generateTerminologyFixes` |
+| `jobText` | request body | `analyzeFit`, `atsAnalysis` |
+| `fitScore` | `analyzeFit` | `routeVerdicts`, all verdict nodes |
+| `weakMatch` | `analyzeFit` (derived) | `routeVerdicts` |
+| `headline` | `analyzeFit` | runner |
+| `battleCardBullets` | `analyzeFit` | runner |
+| `fitScenarioSummary` | `analyzeFit` | verdict nodes |
+| `sourceRole` | `analyzeFit` | `detectArchetype` (future) |
+| `targetRole` | `analyzeFit` | `detectArchetype` (future) |
+| `fitAnalysis` | `analyzeFit` | all verdict nodes |
+| `fitAnalysis.weakMatchReason` | `analyzeFit` (normalised) | `analyzeSkepticalReconciliation`, runner |
+| `fitAha` | `analyzeFit` | runner (emitted in `node_done`, remapped to `provenanceTrail`) |
+| `atsScore` | `atsAnalysis` | `routeVerdicts` |
+| `atsProfile` | `atsAnalysis` | `analyzeStrongMatch`, runner |
+| `atsScenarioSummary` | `atsAnalysis` | verdict nodes |
+| `atsAha` | `atsAnalysis` | runner (emitted in `node_done`, remapped to `provenanceTrail`) |
+| `terminologyDiffs` | `generateTerminologyFixes` | runner, `analyzeStrongMatch` |
+| `verdictAha` | verdict nodes | runner (emitted in `node_done`, remapped to `provenanceTrail`) |
+| `closingSummary` | verdict nodes | runner (remapped to `scenarioSummary.text`) |
+| `scenarioId` | `routeVerdicts` | all verdict nodes, runner |
+| `fitAdvice` | verdict nodes | runner |
+| `hitlFired` | `analyzeSkepticalReconciliation` | `analyzeSkepticalReconciliation` |
+| `humanContext` | HITL resume endpoint | `analyzeSkepticalReconciliation` |
+| `contextPrompt` | `analyzeSkepticalReconciliation` | runner |
+
+---
+
+## Public API — PublicMatchResponse
+
+Emitted by `runner.ts` on the `completed` SSE event under `result`. Validated by `PublicMatchResponseSchema` (Zod) before emission. Internal fields never leave the server.
+
+```ts
+{
   scenarioId: ScenarioId
 
   fitScore: number
@@ -166,24 +323,80 @@ ts{
   fitAdvice: {
     key: string
     bulletPoints: string[]
-  }[]                           // empty array for confirmed_fit
+  }[]
 
   atsProfile: {
     atsScore: number | null
-    machineParsing: string[]    // TODO: programmatic analysis — placeholder for now
-    machineRanking: string[]    // real data from atsAnalysis LLM call
+
+    machineParsing: {
+      flags: string[]
+      likelyTwoColumn: boolean
+      hasTablesOrGraphics: boolean
+      contactInHeaderFooter: boolean
+      inconsistentDateFormats: boolean
+      nonStandardBullets: boolean
+      missingSections: string[]
+    }
+
+    knockoutQuestions: {
+      question: string
+      inferredFromJD: string
+      riskLevel: "pass" | "at_risk" | "unknown"
+    }[]
+
+    recruiterSearch: {
+      likelySearchQuery: string
+      termsPresentInResume: string[]
+      termsMissingFromResume: string[]
+    }
+
+    machineRanking: string[]
   }
 
+  terminologyDiffs: {
+    location: string
+    swapLabel: string
+    before: string
+    after: string
+  }[]
+
+  provenanceTrail: {
+    node: string
+    durationMs: number
+    aha: string | null          // null for generateTerminologyFixes and routeVerdicts
+    fitScore?: number           // routeVerdicts beat only
+    atsScore?: number | null    // routeVerdicts beat only
+    scenarioId?: ScenarioId     // routeVerdicts beat only
+  }[]
+
   scenarioSummary: {
-    text: string
+    text: string              // populated from closingSummary (verdict node output)
+                              // scenario-aware synthesis of fitScenarioSummary +
+                              // atsScenarioSummary — the closing statement the user
+                              // reads at the bottom of the report
   }
 
   threadId: string
   _meta: { durationMs: number }
 }
-mapFitAdvice — discriminated union → flat array
-Lives in runner.ts. The one place where verdict node output maps to public shape.
-ts// confirmed_fit
+```
+
+`provenanceTrail` is assembled by the runner from `node_done` events in arrival order.
+Internal aha fields (`atsAha`, `fitAha`, `verdictAha`) are remapped here and never emitted
+raw. The frontend logic pill consumes `provenanceTrail` directly — it does not reconstruct
+the trail from individual SSE events.
+
+`scenarioSummary.text` is remapped from `closingSummary` (verdict node). Internal draft
+fields `fitScenarioSummary` and `atsScenarioSummary` are never emitted.
+
+---
+
+## `mapFitAdvice` — discriminated union to flat array
+
+Lives in `runner.ts`.
+
+```ts
+// confirmed_fit
 []
 
 // invisible_expert
@@ -209,100 +422,88 @@ ts// confirmed_fit
     ? [{ key: "acknowledgement", bulletPoints: fitAdvice.acknowledgement }]
     : []),
 ]
-Runner whitelist — internal fields never emitted
-The following fields exist in graph state but are never included in PublicMatchResponse:
-fitAnalysis, headline (remapped to battleCard.headline),
-battleCardBullets (remapped to battleCard.bulletPoints),
-scenarioSummary (remapped to scenarioSummary.text),
-sourceRole, targetRole, weakMatch, weakMatchReason,
-matchedSkills, missingSkills, narrativeAlignment, humanContext,
-hitlFired, contextPrompt
-PublicMatchResponseSchema.safeParse() runs on the mapped result before emission.
-If validation fails → emit error event, never emit malformed data.
+```
 
-Schema conventions (unchanged from existing CLAUDE.md)
+---
 
-safeParse → logValidationFailure → throw validated.error on every chain output
-Never use Schema.parse({ ...result }) — spreading null/undefined throws TypeError
-that masks the real Zod error
-Nullable string fields: z.string().min(1).nullable() not z.string().nullable()
-weakMatch and weakMatchReason (after normalisation) are derived in the node —
-not LLM output fields
+## Runner whitelist — internal fields never emitted
 
+`fitAnalysis`, `fitScenarioSummary`, `atsScenarioSummary`, `closingSummary` (remapped to
+`scenarioSummary.text`), `headline` (remapped to `battleCard.headline`), `battleCardBullets`
+(remapped to `battleCard.bulletPoints`), `atsAha`, `fitAha`, `verdictAha` (remapped into
+`provenanceTrail`), `sourceRole`, `targetRole`, `weakMatch`, `humanContext`, `hitlFired`,
+`contextPrompt`
 
-Testing conventions (unchanged from existing CLAUDE.md)
+`PublicMatchResponseSchema.safeParse()` runs on the mapped result before emission. If validation fails → emit error event, never emit malformed data.
 
-Top-level vi.mock() only — never vi.doMock()
-All model mocks must include bind: vi.fn().mockReturnThis()
-RootRunCapture must be a regular function declaration, not an arrow function
-Every chain must have a validation failure test asserting ZodError +
-logValidationFailure called with rawOutput and nodeName
-buildMockModel in scoring-graph.test.ts must include LLM schema for every
-verdict node — add new schemas there when adding new nodes
-Use expect.objectContaining({ nodeName: "...", rawOutput: invalidOutput })
-on validation failure assertions
+---
 
+## Scenarios reference
 
-Temperature per node (updated)
-No .bind({ temperature: 0 }) on any node currently — removed due to TypeScript
-issues. All nodes run at model default temperature until this is revisited.
+| scenarioId | fitScore | atsScore | Verdict node |
+|---|---|---|---|
+| `confirmed_fit` | >= 75 | >= 75 or null | `analyzeStrongMatch` |
+| `invisible_expert` | >= 75 | < 75 | `analyzeStrongMatch` |
+| `narrative_gap` | 50–74 | any | `analyzeNarrativeGap` |
+| `honest_verdict` | < 50 | any | `analyzeSkepticalReconciliation` |
 
-What to delete
+---
 
-backend/src/graphs/scoring/nodes/parseResume.ts
-backend/src/graphs/scoring/nodes/parseJob.ts
-All imports and graph edges referencing parseResume and parseJob
-scoreMatch node file — replaced by analyzeFit
-Any chain files for scoreMatch
-MatchResult fields that no longer exist:
-matchedSkills, missingSkills, narrativeAlignment, contextPrompt (top-level),
-weakMatchReason (top-level — moved into fitAnalysis)
+## SSE events
 
-What to add
+| Event | Payload |
+|---|---|
+| `meta` | `threadId`, `rootRunId`, `runStartTime` |
+| `node_start` | `node`, `timestamp` |
+| `node_done` | `node`, `durationMs`, `timestamp` |
+| `completed` | `result: PublicMatchResponse` |
+| `interrupted` | `fitScore`, `threadId`, `contextPrompt` |
+| `error` | `error`, `message` |
 
-backend/src/graphs/scoring/nodes/analyzeFit.ts
-Updated atsAnalysis node with new output schema
-PublicMatchResponseSchema Zod schema in a new file e.g.
-backend/src/types/public-response.ts
-mapFitAdvice function in runner.ts
-buildPublicResponse function in runner.ts replacing current emitResult mapping
+---
 
-What to update
+## Schema conventions (unchanged)
 
-frontend/lib/types/api.ts — replace MatchResponse with PublicMatchResponse shape
-frontend/components/resume-init/accordion-config.ts — update keys:
+`safeParse` → `logValidationFailure` → `throw validated.error` on every chain output. Never use `Schema.parse({ ...result })` — spreading null/undefined throws TypeError that masks the real Zod error. Nullable string fields: `z.string().min(1).nullable()` not `z.string().nullable()`. `weakMatch` and `weakMatchReason` (after normalisation) are derived in the node — not LLM output fields.
 
-ts  // invisible_expert
-  standout_strengths    → { question: "What makes you stand out?",        subtitle: "strengths" }
-  ats_reality_check     → { question: "Why aren't you getting interviews?", subtitle: "signals" }
-  terminology_swaps     → { question: "How should you reword your resume?", subtitle: "swaps" }
-  keywords_to_add       → { question: "What keywords should you add?",      subtitle: "keywords" }
+---
 
-  // narrative_gap
-  transferable_strengths → { question: "What experience transfers directly?", subtitle: "strengths" }
-  reframing_suggestions  → { question: "How should you retell your story?",   subtitle: "suggestions" }
-  missing_skills         → { question: "What gaps are genuinely there?",      subtitle: "gaps" }
+## Testing conventions (unchanged)
 
-  // honest_verdict
-  honest_assessment → { question: "Why is the gap real?",             subtitle: "reasons" }
-  closing_steps     → { question: "What would it actually take?",     subtitle: "steps" }
-  acknowledgement   → { question: "What did your context change?",    subtitle: "updates" }
+Top-level `vi.mock()` only. All model mocks must include `bind: vi.fn().mockReturnThis()`. `RootRunCapture` must be a regular function declaration, not an arrow function. Every chain must have a validation failure test asserting `ZodError` + `logValidationFailure` called with `rawOutput` and `nodeName`. `buildMockModel` in `scoring-graph.test.ts` must include LLM schema for every verdict node. Use `expect.objectContaining({ nodeName: "...", rawOutput: invalidOutput })` on validation failure assertions.
 
-frontend/components/resume-init/MainResultsStage.tsx — wire to live data,
-replace all DUMMY_* imports with props from useMatchRunner
-frontend/hooks/useMatchRunner.ts — result type updates to new MatchResponse
-Delete frontend/components/resume-init/dummy-data.ts
-Delete frontend/app/page.tsx (legacy)
-Delete frontend/components/match/ (legacy, entire directory)
+---
 
+## Temperature per node
 
-Scenarios reference
-scenarioIdfitScoreatsScoreVerdict nodeconfirmed_fit≥ 75≥ 75 or nullanalyzeStrongMatchinvisible_expert≥ 75< 75analyzeStrongMatchnarrative_gap50–74anyanalyzeNarrativeGaphonest_verdict< 50anyanalyzeSkepticalReconciliation
+No `.bind({ temperature: 0 })` on any node currently — removed due to TypeScript issues. All nodes run at model default temperature until revisited.
 
-SSE events
-EventPayloadmetathreadId, rootRunId, runStartTimenode_startnode, timestampnode_donenode, durationMs, timestampcompletedresult: PublicMatchResponseinterruptedfitScore, threadId, contextPrompterrorerror, message
-Note: contextPrompt in the interrupted payload is the question string generated by
-analyzeSkepticalReconciliation and passed to LangGraph's interrupt() function.
-It is extracted from snapshot.tasks[0].interrupts[0].value in runner.ts and forwarded
-to the client. It may be null if the interrupt value is missing or non-string — the
-frontend must always render fallback copy in that case.
+---
+
+## What to delete
+
+- `backend/src/graphs/scoring/nodes/parseResume.ts`
+- `backend/src/graphs/scoring/nodes/parseJob.ts`
+- All imports and graph edges referencing `parseResume` and `parseJob`
+- `scoreMatch` node file — replaced by `analyzeFit`
+- Any chain files for `scoreMatch`
+- `MatchResult` fields that no longer exist: `matchedSkills`, `missingSkills`, `narrativeAlignment`, `contextPrompt` (top-level), `weakMatchReason` (top-level — moved into `fitAnalysis`)
+
+## What to add
+
+- `backend/src/graphs/scoring/nodes/analyzeFit.ts`
+- `backend/src/graphs/scoring/nodes/generateTerminologyFixes.ts`
+- Updated `atsAnalysis` node with three-layer output schema
+- `PublicMatchResponseSchema` Zod schema — `backend/src/types/public-response.ts`
+- `mapFitAdvice` function in `runner.ts`
+- `buildPublicResponse` function in `runner.ts`
+
+## What to update
+
+- `frontend/lib/types/api.ts` — replace `MatchResponse` with `PublicMatchResponse` shape including `terminologyDiffs` and full `atsProfile`
+- `frontend/components/resume-init/accordion-config.ts` — update keys per scenario
+- `frontend/components/resume-init/MainResultsStage.tsx` — wire to live data, surface ATS three-layer panel and `terminologyDiffs` diffs in Station 3
+- `frontend/hooks/useMatchRunner.ts` — result type updates
+- Delete `frontend/components/resume-init/dummy-data.ts`
+- Delete `frontend/app/page.tsx` (legacy)
+- Delete `frontend/components/match/` (legacy, entire directory)
