@@ -13,39 +13,57 @@ export function makeAnalyzeStrongMatchNode(model: BaseChatModel) {
       );
     }
 
-    if (state.scenarioId === "confirmed_fit") {
-      return {
-        fitAdvice: {
-          scenarioId: "confirmed_fit" as const,
-          fitAdvice: [],
-        },
-      };
+    if (!state.fitAnalysis) {
+      throw new Error("analyzeStrongMatch: fitAnalysis is missing from graph state");
+    }
+    if (!state.fitScenarioSummary) {
+      throw new Error("analyzeStrongMatch: fitScenarioSummary is missing from graph state");
+    }
+    if (!state.atsScenarioSummary) {
+      throw new Error("analyzeStrongMatch: atsScenarioSummary is missing from graph state");
     }
 
-    // invisible_expert
-    if (!state.atsProfile) {
+    const isInvisibleExpert = state.scenarioId === "invisible_expert";
+
+    if (isInvisibleExpert && !state.atsProfile) {
       throw new Error(
         "analyzeStrongMatch: atsProfile is missing from graph state — " +
           "required for invisible_expert scenario",
       );
     }
-    if (!state.fitAnalysis) {
-      throw new Error("analyzeStrongMatch: fitAnalysis is missing from graph state");
-    }
 
     const llmOutput = await invisibleExpertChain.invoke(
       {
+        scenario: state.scenarioId,
         fit_analysis: JSON.stringify(state.fitAnalysis, null, 2),
-        ats_ranking: JSON.stringify(state.atsProfile.machineRanking, null, 2),
+        ats_ranking: isInvisibleExpert
+          ? JSON.stringify(state.atsProfile!.machineRanking, null, 2)
+          : "[]",
+        fit_scenario_summary: state.fitScenarioSummary,
+        ats_scenario_summary: state.atsScenarioSummary,
       },
-      { runName: "analyze-strong-match-invisible-expert" },
+      { runName: `analyze-strong-match-${state.scenarioId}` },
     );
 
+    const { closingSummary, verdictAha, ...fitAdviceFields } = llmOutput;
+
     return {
-      fitAdvice: {
-        scenarioId: "invisible_expert" as const,
-        ...llmOutput,
-      },
+      fitAdvice: isInvisibleExpert
+        ? {
+            scenarioId: "invisible_expert" as const,
+            standoutStrengths: fitAdviceFields.standoutStrengths,
+            atsRealityCheck: fitAdviceFields.atsRealityCheck,
+            terminologySwaps: fitAdviceFields.terminologySwaps,
+            keywordsToAdd: fitAdviceFields.keywordsToAdd,
+          }
+        : {
+            scenarioId: "confirmed_fit" as const,
+            leadWithThese: fitAdviceFields.leadWithThese,
+            expectTheseQuestions: fitAdviceFields.expectTheseQuestions,
+            watchOutFor: fitAdviceFields.watchOutFor,
+          },
+      closingSummary,
+      verdictAha,
     };
   };
 }

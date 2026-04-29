@@ -10,6 +10,15 @@ export function makeAtsAnalysisNode(model: BaseChatModel) {
       { resume_text: state.resumeText, job_text: state.jobText },
       { runName: "ats-analysis" }
     );
-    return { atsProfile: result };
+    return {
+      atsProfile: {
+        atsScore: result.atsScore,
+        machineParsing: result.machineParsing,
+        machineRanking: result.machineRanking,
+      },
+      atsScore: result.atsScore,
+      atsScenarioSummary: result.atsScenarioSummary,
+      atsAha: result.atsAha,
+    };
   };
 }

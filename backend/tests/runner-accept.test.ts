@@ -30,19 +30,30 @@ vi.mock("../langsmith.js", () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Shared fixtures
+// Shared fixtures — must match current graph state shape and PublicMatchResponseSchema
 // ---------------------------------------------------------------------------
 
-const checkpointedMatchResult = {
+const checkpointedState = {
+  scenarioId: "honest_verdict",
   fitScore: 42,
-  matchedSkills: ["TypeScript"],
-  missingSkills: ["Kubernetes", "Docker"],
-  narrativeAlignment: "Decent frontend background but missing DevOps.",
-  gaps: ["No cloud infrastructure experience"],
-  resumeAdvice: ["Add a section on cloud deployments"],
-  contextPrompt: null,
-  weakMatch: true,
-  weakMatchReason: "Missing key infrastructure skills.",
+  headline: "Frontend Developer without the backend depth this role requires",
+  battleCardBullets: [
+    "Role requires 5+ years backend systems — candidate has 3 years frontend.",
+    "No distributed architecture ownership in history.",
+  ],
+  fitAdvice: {
+    scenarioId: "honest_verdict",
+    honestAssessment: ["Three of the five required skills are absent."],
+    closingSteps: ["Build and ship a production backend service end-to-end."],
+    acknowledgement: null,
+  },
+  atsProfile: {
+    atsScore: 55,
+    machineParsing: ["// TODO: replace with programmatic resume parsing analysis"],
+    machineRanking: ["missing keyword: 'distributed systems'"],
+  },
+  closingSummary: "The gap is real and the score stands — this is a 2–3 year path to close.",
+  threadId: "thread-123",
 };
 
 function buildAcceptOptions(overrides: Partial<Parameters<typeof runMatchGraph>[0]> = {}) {
@@ -70,15 +81,7 @@ describe("runMatchGraph — kind: accept", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetState.mockResolvedValue({
-      values: {
-        matchResult: checkpointedMatchResult,
-        atsProfile: {
-          atsScore: 84,
-          missingKeywords: [],
-          layoutFlags: [],
-          terminologyGaps: [],
-        },
-      },
+      values: checkpointedState,
       next: [],
     });
   });
@@ -93,13 +96,15 @@ describe("runMatchGraph — kind: accept", () => {
 
     const { result } = completedEvents[0].data as { result: Record<string, unknown> };
     expect(result.fitScore).toBe(42);
-    expect(result.matchedSkills).toEqual(["TypeScript"]);
-    expect(result.missingSkills).toEqual(["Kubernetes", "Docker"]);
+    expect(result.scenarioId).toBe("honest_verdict");
     expect(result.threadId).toBe("thread-123");
+    expect((result.scenarioSummary as Record<string, unknown>).text).toBe(
+      checkpointedState.closingSummary,
+    );
     expect(closed).toHaveBeenCalledOnce();
   });
 
-  it("does not include resumeData or jobData in the completed event", async () => {
+  it("does not include internal graph fields in the completed event", async () => {
     const { options, emitted } = buildAcceptOptions();
 
     await runMatchGraph(options);
@@ -109,6 +114,8 @@ describe("runMatchGraph — kind: accept", () => {
     };
     expect(result.resumeData).toBeUndefined();
     expect(result.jobData).toBeUndefined();
+    expect(result.fitAnalysis).toBeUndefined();
+    expect(result.closingSummary).toBeUndefined();
   });
 
   it("never invokes the graph (no scoring or gap analysis)", async () => {
@@ -129,9 +136,9 @@ describe("runMatchGraph — kind: accept", () => {
     });
   });
 
-  it("emits an error event when matchResult is missing from the snapshot", async () => {
+  it("emits an error event when fitScore is missing from the snapshot", async () => {
     mockGetState.mockResolvedValue({
-      values: { matchResult: undefined },
+      values: { ...checkpointedState, fitScore: undefined, scenarioId: undefined },
       next: [],
     });
     const { options, emitted, closed } = buildAcceptOptions();
@@ -156,15 +163,14 @@ describe("runMatchGraph — kind: accept", () => {
     expect(closed).toHaveBeenCalledOnce();
   });
 
-  it("includes _meta with traceUrl null and a durationMs in the completed payload", async () => {
+  it("includes _meta with a durationMs in the completed payload", async () => {
     const { options, emitted } = buildAcceptOptions();
 
     await runMatchGraph(options);
 
     const { result } = (emitted.find((e) => e.event === "completed")!.data) as {
-      result: { _meta: { traceUrl: unknown; durationMs: number } };
+      result: { _meta: { durationMs: number } };
     };
-    expect(result._meta.traceUrl).toBeNull();
     expect(typeof result._meta.durationMs).toBe("number");
     expect(result._meta.durationMs).toBeGreaterThanOrEqual(0);
   });

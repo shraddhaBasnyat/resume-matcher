@@ -38,6 +38,17 @@ export const HonestVerdictLLMSchema = z.object({
         "Set to null if the gap is so fundamental that no context would change the verdict, " +
         "or if human context has already been provided.",
     ),
+  closingSummary: z.string().min(1).describe(
+    "Scenario-aware synthesis of the fit and ATS pictures — the most emotionally important piece of writing in the output. " +
+      "Direct and respectful, mentor not rejection machine. " +
+      "If HITL fired and context shifted the assessment, acknowledge it here. " +
+      "Use fit_scenario_summary and ats_scenario_summary as source material.",
+  ),
+  verdictAha: z.string().min(1).describe(
+    "One sentence. On first pass: points to the HITL context question. " +
+      "On second pass: reflects whether context shifted the assessment. " +
+      "Points the candidate to the most important thing to look at.",
+  ),
 });
 
 export type HonestVerdictLLMOutput = z.infer<typeof HonestVerdictLLMSchema>;
@@ -51,6 +62,8 @@ Rules:
 - closingSteps: specific steps to close the gap. Each step must be tied to an actual gap identified in this match — not generic advice. If human context was provided (see below), closingSteps should reflect that you considered it: not generic next steps, but why this specific gap persists after what they shared and what closing it would genuinely require.
 - acknowledgement: if human context was provided, write bullet points acknowledging what the candidate shared and why the score still stands after considering it. Tone: collaborative — they tried to help, meet them with respect. Do not repeat the human context back to them. If no human context was provided, set acknowledgement to null.
 - contextPrompt: if NO human context has been provided yet, and there is a specific question you could ask that might change the assessment — set this to that question. It must be genuinely answerable and must be capable of changing the verdict. If the gap is so fundamental that no context would change it, set contextPrompt to null. If human context is already present, always set contextPrompt to null.
+- closingSummary: synthesise fit_scenario_summary and ats_scenario_summary into the closing statement. Direct and respectful — mentor tone, not rejection machine. If human context was provided and shifted the assessment, acknowledge it here. One or two sentences.
+- verdictAha: one sentence. On first pass: point to the HITL context question as the next step. On second pass: reflect whether context shifted the assessment.
 
 Do not manufacture hope. Do not pad. Clarity over comfort.`;
 
@@ -59,6 +72,12 @@ const HUMAN = `Fit Analysis:
 
 Weak Match Reason:
 {weak_match_reason}
+
+Human Fit Summary:
+{fit_scenario_summary}
+
+ATS Summary:
+{ats_scenario_summary}
 
 {human_context}Deliver an honest verdict for this candidate.`;
 
@@ -75,6 +94,8 @@ export function buildHonestVerdictChain(model: BaseChatModel) {
       input: {
         fit_analysis: string;
         weak_match_reason: string;
+        fit_scenario_summary: string;
+        ats_scenario_summary: string;
         human_context: string;
       },
       config?: { runName?: string },

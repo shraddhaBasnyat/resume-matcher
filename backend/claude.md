@@ -185,7 +185,7 @@ function deriveScenario(fitScore: number, atsScore: number | null): ScenarioId {
 Fires for: `confirmed_fit` and `invisible_expert`
 Reads: `fitScore`, `scenarioId`, `fitAnalysis`, `atsProfile`, `terminologyDiffs`, `fitScenarioSummary`, `atsScenarioSummary`
 
-For `confirmed_fit`: sparse output is correct. ATS panel is clean, fit is strong. Empty `fitAdvice` is the right answer. Do not manufacture advice.
+For `confirmed_fit`: the LLM call produces interview preparation advice — what to lead with, what questions to expect, where the interviewer may probe harder. Not ATS remediation. `watchOutFor` is honest — confirmed fit does not mean perfect fit, and naming the thinner areas is more useful than pretending they don't exist.
 
 For `invisible_expert`: fit analysis confirms qualification. ATS panel and `terminologyDiffs` already contain the mechanical fix. The verdict node provides human framing only — it does not restate terminology gaps already shown in Station 3.
 
@@ -194,10 +194,13 @@ Output schema:
 // confirmed_fit
 {
   scenarioId: "confirmed_fit"
-  fitAdvice: []
-  verdictAha: string            // one sentence even for confirmed_fit
-  closingSummary: string        // brief and validating — synthesises both draft summaries
-                                // confirms the two-signal match without padding
+  fitAdvice: {
+    leadWithThese: string[]         // 2-3 specific experiences to open the interview with
+    expectTheseQuestions: string[]  // likely questions based on this JD + this candidate
+    watchOutFor: string[]           // 1-2 areas where interviewer may probe harder
+  }
+  verdictAha: string
+  closingSummary: string            // brief and validating
 }
 
 // invisible_expert
@@ -397,7 +400,11 @@ Lives in `runner.ts`.
 
 ```ts
 // confirmed_fit
-[]
+[
+  { key: "lead_with_these",        bulletPoints: fitAdvice.leadWithThese        },
+  { key: "expect_these_questions", bulletPoints: fitAdvice.expectTheseQuestions },
+  { key: "watch_out_for",          bulletPoints: fitAdvice.watchOutFor          },
+]
 
 // invisible_expert
 [

@@ -37,9 +37,10 @@ const validAnalyzeFitLLMOutput = {
     "Led frontend architecture at a 50-person startup",
     "Built component libraries consumed by 4 product teams",
   ],
-  scenarioSummary:
+  fitScenarioSummary:
     "This candidate has a direct frontend background with the TypeScript and React depth the role requires. " +
     "Their trajectory from IC to lead maps to the seniority level advertised.",
+  fitAha: "Five years of TypeScript across production SPAs maps directly to what this role requires.",
   sourceRole: "frontend_swe",
   targetRole: "frontend_swe",
   fitAnalysis: {
@@ -53,7 +54,8 @@ const validAnalyzeFitLLMOutput = {
 const weakAnalyzeFitLLMOutput = {
   ...validAnalyzeFitLLMOutput,
   fitScore: 38,
-  scenarioSummary: "This candidate's background does not map to the role requirements.",
+  fitScenarioSummary: "This candidate's background does not map to the role requirements.",
+  fitAha: "The core required skills are absent — this is a genuine gap, not a framing problem.",
   fitAnalysis: {
     ...validAnalyzeFitLLMOutput.fitAnalysis,
     experienceGaps: ["No production TypeScript experience", "No React experience at scale"],
@@ -65,6 +67,8 @@ const weakAnalyzeFitLLMOutput = {
 const validAtsLLMOutput = {
   atsScore: 82,
   machineRanking: [],
+  atsScenarioSummary: "Resume is parseable with clean formatting. No knockout risks. Good keyword coverage.",
+  atsAha: "Keyword coverage is strong — the machine picture is not a barrier here.",
 };
 
 const lowAtsLLMOutput = {
@@ -73,6 +77,8 @@ const lowAtsLLMOutput = {
     "resume uses 'front-end development'; job posting requires 'React'",
     "missing keyword: 'TypeScript'",
   ],
+  atsScenarioSummary: "Resume uses different terminology than the job posting requires. Missing two of the four key search terms.",
+  atsAha: "Resume uses 'front-end development' but ATS filters for 'React' — a translation problem, not a talent gap.",
 };
 
 const validInvisibleExpertLLMOutput = {
@@ -83,12 +89,19 @@ const validInvisibleExpertLLMOutput = {
   ],
   terminologySwaps: ['Replace "front-end development" with "React"'],
   keywordsToAdd: ["TypeScript", "component library"],
+  leadWithThese: [],
+  expectTheseQuestions: [],
+  watchOutFor: [],
+  closingSummary: "Your background is exactly what this role needs — the gap is in how your resume reads to machines, not to humans.",
+  verdictAha: "Your reframing cards show exactly how to retell the experience as the machine expects to read it.",
 };
 
 const validNarrativeGapLLMOutput = {
   transferableStrengths: ["TypeScript", "React", "component systems"],
   reframingSuggestions: ["Lead with the production SPA work in the summary section."],
   missingSkills: [],
+  closingSummary: "The experience is right — the framing is wrong. Your SPA work maps directly once retold in the role's terms.",
+  verdictAha: "Start with the reframing cards — once the framing is fixed, the score follows.",
 };
 
 const validHonestVerdictLLMOutput = {
@@ -102,6 +115,8 @@ const validHonestVerdictLLMOutput = {
   ],
   acknowledgement: null,
   contextPrompt: null,
+  closingSummary: "The gap is real and the score stands. Three of the five required skills are absent — this is a 12–18 month gap to close.",
+  verdictAha: "The honest assessment cards explain specifically why — start there before deciding whether to apply.",
 };
 
 const honestVerdictWithContextPrompt = {
@@ -179,7 +194,12 @@ describe("buildScoringGraph — full run with mocked chains", () => {
     expect(typeof state.fitScore).toBe("number");
     expect(state.headline).toBeDefined();
     expect(Array.isArray(state.battleCardBullets)).toBe(true);
-    expect(state.scenarioSummary).toBeDefined();
+    expect(state.fitScenarioSummary).toBeDefined();
+    expect(state.fitAha).toBeDefined();
+    expect(state.atsScenarioSummary).toBeDefined();
+    expect(state.atsAha).toBeDefined();
+    expect(state.closingSummary).toBeDefined();
+    expect(state.verdictAha).toBeDefined();
     expect(state.fitAnalysis).toBeDefined();
 
     // Old state fields no longer exist
@@ -196,7 +216,7 @@ describe("buildScoringGraph — full run with mocked chains", () => {
     expect(snapshot.next).toHaveLength(0);
   });
 
-  it("confirmed_fit — fitAdvice is empty array, no LLM call for advice", async () => {
+  it("confirmed_fit — fitAdvice is empty array, closingSummary and verdictAha in state", async () => {
     const model = buildMockModel();
     const compiledGraph = buildScoringGraph(model as unknown as BaseChatModel);
 
@@ -214,8 +234,15 @@ describe("buildScoringGraph — full run with mocked chains", () => {
     expect(state.scenarioId).toBe("confirmed_fit");
     const advice = state.fitAdvice as Record<string, unknown>;
     expect(advice.scenarioId).toBe("confirmed_fit");
-    expect(Array.isArray(advice.fitAdvice)).toBe(true);
-    expect((advice.fitAdvice as unknown[]).length).toBe(0);
+    // Interview prep fields are present (empty arrays from mock fixture, correct shape)
+    expect(Array.isArray(advice.leadWithThese)).toBe(true);
+    expect(Array.isArray(advice.expectTheseQuestions)).toBe(true);
+    expect(Array.isArray(advice.watchOutFor)).toBe(true);
+    expect(state.closingSummary).toBeDefined();
+    expect(state.verdictAha).toBeDefined();
+    // ATS advice fields must NOT appear in fitAdvice for confirmed_fit
+    expect(advice.standoutStrengths).toBeUndefined();
+    expect(advice.atsRealityCheck).toBeUndefined();
   });
 
   it("invisible_expert — fitScore >= 75 and atsScore < 75 routes to analyzeStrongMatch", async () => {
@@ -355,6 +382,34 @@ describe("buildAnalyzeFitChain — validation failure", () => {
 
     expect(langsmith.logValidationFailure).toHaveBeenCalledWith(
       expect.objectContaining({ nodeName: "analyze-fit", rawOutput: invalidOutput }),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Validation failure — AtsAnalysisSchema (new fields)
+// ---------------------------------------------------------------------------
+
+describe("buildAtsAnalysisChain — validation failure on missing new fields", () => {
+  it("throws ZodError when atsScenarioSummary is missing", async () => {
+    const { buildAtsAnalysisChain, AtsAnalysisSchema } = await import("../chains/ats-analysis-chain.js");
+    const invalidOutput = { atsScore: 80, machineRanking: [], atsAha: "Something" };
+
+    const mockModel = {
+      bind: vi.fn().mockReturnThis(),
+      withStructuredOutput: vi.fn().mockReturnValue({
+        invoke: vi.fn().mockResolvedValue(invalidOutput),
+      }),
+    };
+
+    const chain = buildAtsAnalysisChain(mockModel as unknown as BaseChatModel);
+
+    await expect(
+      chain.invoke({ resume_text: "resume", job_text: "job" }),
+    ).rejects.toThrow(expect.objectContaining({ name: "ZodError" }));
+
+    expect(langsmith.logValidationFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ nodeName: "ats-analysis", rawOutput: invalidOutput }),
     );
   });
 });

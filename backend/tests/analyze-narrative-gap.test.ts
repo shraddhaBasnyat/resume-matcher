@@ -28,6 +28,8 @@ const validLLMOutput = {
   ],
   transferableStrengths: ["Python at scale", "Distributed streaming (Kafka)", "SQL query optimisation"],
   missingSkills: [],
+  closingSummary: "The experience is right — the framing is wrong. Your pipeline work maps directly once retold in ML infrastructure terms.",
+  verdictAha: "Start with the reframing cards — once the framing is fixed, the score follows.",
 };
 
 const validFitAnalysis = {
@@ -44,7 +46,11 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     fitScore: 62,
     headline: "Data Engineer with strong infrastructure background",
     battleCardBullets: ["5 years of Python", "Kafka consumer ownership"],
-    scenarioSummary: "Strong pipeline background maps to ML platform work.",
+    fitScenarioSummary: "Strong pipeline background maps to ML platform work.",
+    fitAha: "Your Kafka consumer work maps directly to a feature store consumer — the experience is there, the framing is not.",
+    atsScore: null,
+    atsScenarioSummary: "Resume is parseable. Missing two ML-specific terms the recruiter filters for.",
+    atsAha: "Missing 'model serving' and 'ML infrastructure' — terms that would surface this resume in a recruiter search.",
     sourceRole: "data_engineer",
     targetRole: "ml_platform_swe",
     fitAnalysis: validFitAnalysis,
@@ -58,6 +64,8 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     atsProfile: undefined,
     scenarioId: "narrative_gap",
     fitAdvice: undefined,
+    closingSummary: undefined,
+    verdictAha: undefined,
     ...overrides,
   } as unknown as GraphStateType;
 }
@@ -79,7 +87,7 @@ function buildMockModel() {
 // ---------------------------------------------------------------------------
 
 describe("analyzeNarrativeGap — output shape", () => {
-  it("returns fitAdvice with scenarioId narrative_gap and all required fields", async () => {
+  it("returns fitAdvice with scenarioId narrative_gap and all required fields, closingSummary and verdictAha at top level", async () => {
     const node = makeAnalyzeNarrativeGapNode(buildMockModel());
     const result = await node(buildBaseState());
     const advice = result.fitAdvice as Record<string, unknown>;
@@ -88,6 +96,12 @@ describe("analyzeNarrativeGap — output shape", () => {
     expect(Array.isArray(advice.reframingSuggestions)).toBe(true);
     expect(Array.isArray(advice.transferableStrengths)).toBe(true);
     expect(Array.isArray(advice.missingSkills)).toBe(true);
+    // closingSummary and verdictAha must NOT be inside fitAdvice
+    expect(advice.closingSummary).toBeUndefined();
+    expect(advice.verdictAha).toBeUndefined();
+    // They must be top-level state fields
+    expect((result as Record<string, unknown>).closingSummary).toBeDefined();
+    expect((result as Record<string, unknown>).verdictAha).toBeDefined();
   });
 
   it("reframingSuggestions is non-empty", async () => {
@@ -124,6 +138,20 @@ describe("analyzeNarrativeGap — guards", () => {
     await expect(
       node(buildBaseState({ scenarioId: "confirmed_fit" })),
     ).rejects.toThrow('expected scenarioId "narrative_gap"');
+  });
+
+  it("throws when fitScenarioSummary is missing", async () => {
+    const node = makeAnalyzeNarrativeGapNode(buildMockModel());
+    await expect(
+      node(buildBaseState({ fitScenarioSummary: undefined })),
+    ).rejects.toThrow("fitScenarioSummary is missing");
+  });
+
+  it("throws when atsScenarioSummary is missing", async () => {
+    const node = makeAnalyzeNarrativeGapNode(buildMockModel());
+    await expect(
+      node(buildBaseState({ atsScenarioSummary: undefined })),
+    ).rejects.toThrow("atsScenarioSummary is missing");
   });
 
   it("throws ZodError and calls logValidationFailure when LLM returns invalid shape", async () => {

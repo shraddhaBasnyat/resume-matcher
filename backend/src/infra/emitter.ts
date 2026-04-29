@@ -9,6 +9,7 @@ const GRAPH_NODES = new Set([
   "analyzeStrongMatch",
   "analyzeNarrativeGap",
   "analyzeSkepticalReconciliation",
+  "generateTerminologyFixes", // future node — tracked but no aha
 ]);
 
 /** Callback handler that emits SSE node_start / node_done events. */
@@ -43,7 +44,25 @@ export class NodeProgressEmitter extends BaseCallbackHandler {
     const run = this.nodeRuns.get(runId);
     if (!run) return;
     const ts = Date.now();
-    this.emit("node_done", { node: run.name, durationMs: ts - run.startTime, timestamp: ts });
+
+    const base = { node: run.name, durationMs: ts - run.startTime, timestamp: ts };
+
+    // Aha fields — at most one will be present depending on which node fired.
+    // Use explicit spread so the key is omitted entirely when undefined (not emitted as aha: undefined).
+    const aha = _outputs.fitAha ?? _outputs.atsAha ?? _outputs.verdictAha;
+
+    // routeVerdicts beat — carries routing data instead of an aha string.
+    const fitScore = _outputs.fitScore;
+    const atsScore = _outputs.atsScore;
+    const scenarioId = _outputs.scenarioId;
+
+    this.emit("node_done", {
+      ...base,
+      ...(aha !== undefined ? { aha } : {}),
+      ...(fitScore !== undefined ? { fitScore } : {}),
+      ...(atsScore !== undefined ? { atsScore } : {}),
+      ...(scenarioId !== undefined ? { scenarioId } : {}),
+    });
     this.nodeRuns.delete(runId);
   }
 

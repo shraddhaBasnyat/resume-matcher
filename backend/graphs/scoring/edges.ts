@@ -9,11 +9,15 @@ export function routeVerdicts(state: GraphStateType) {
     throw new Error("routeVerdicts: fitScore is missing — analyzeFit node did not complete successfully");
   }
 
-  const atsScore = state.atsProfile?.atsScore ?? undefined;
+  // state.atsScore is the first-class field written by atsAnalysis node
+  const atsScore = state.atsScore ?? undefined;
   const { scenarioId, verdictNode } = deriveScenario(state.fitScore, atsScore);
 
   return new Command({
-    update: { scenarioId },
+    // Include fitScore and atsScore in update so NodeProgressEmitter can read them
+    // from _outputs in handleChainEnd for the routeVerdicts node_done payload.
+    // These are re-writes of existing state values — safe with replace reducers.
+    update: { scenarioId, fitScore: state.fitScore, atsScore: state.atsScore ?? null },
     goto: [verdictNode],
   });
 }

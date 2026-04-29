@@ -41,7 +41,7 @@ itself via LangGraph `interrupt()`.
 | `atsAnalysis` | `resumeText`, `jobText` | `atsProfile`, `atsScenarioSummary`, `atsAha` | Three-layer output: `machineParsing` (formatting), `knockoutQuestions` (hard filters), `recruiterSearch` (keyword discoverability). `atsScore` composite weighted 60% recruiter search / 25% knockout / 15% formatting. `atsScenarioSummary`: machine picture in isolation — 2–3 sentences, plain-language synthesis of what the three layers found collectively, no fit context. `atsAha`: one sentence, the most important ATS observation — emitted in `node_done` payload. Pure observation only — no card content, no fix language. |
 | `generateTerminologyFixes` | `resumeText`, `atsProfile.recruiterSearch.terminologyMismatches` | `terminologyDiffs` | Fans out from `atsAnalysis`. Finds the exact resume sentence for each terminology mismatch and rewrites only that sentence. Runs automatically — no user prompt needed. Tracked in `progress` but normalised to `atsAnalysis` in the stepper UI. No aha — its output is already surfaced in the ATS panel cards. |
 | `routeVerdicts` | `fitScore`, `atsScore` | `scenarioId` | Pure fn, no LLM. Emits `fitScore`, `atsScore`, `scenarioId` in `node_done` payload — the deterministic "therefore" beat in the provenance trail. No aha field — the routing logic IS the observation. |
-| `analyzeStrongMatch` | `scenarioId`, `fitAnalysis`, `atsProfile`, `terminologyDiffs`, `fitScenarioSummary`, `atsScenarioSummary` | `fitAdvice`, `verdictAha`, `closingSummary` | Fires for `confirmed_fit` and `invisible_expert`. For `confirmed_fit`, `fitAdvice` is empty — sparse output is correct. Does not restate `terminologyDiffs` already shown in the ATS panel. `closingSummary`: scenario-aware synthesis of both draft summaries — for confirmed_fit brief and validating, for invisible_expert names the two-signal contrast explicitly. |
+| `analyzeStrongMatch` | `scenarioId`, `fitAnalysis`, `atsProfile`, `terminologyDiffs`, `fitScenarioSummary`, `atsScenarioSummary` | `fitAdvice`, `verdictAha`, `closingSummary` | Fires for `confirmed_fit` and `invisible_expert`. For `confirmed_fit`, `fitAdvice` contains interview preparation advice — `leadWithThese`, `expectTheseQuestions`, `watchOutFor` — not ATS remediation. For `invisible_expert`, `fitAdvice` contains ATS remediation fields. Does not restate `terminologyDiffs` already shown in the ATS panel. |
 | `analyzeNarrativeGap` | `scenarioId`, `fitAnalysis`, `fitScenarioSummary`, `atsScenarioSummary` | `fitAdvice`, `verdictAha`, `closingSummary` | Fires for `narrative_gap`. ATS panel may be clean — the gap is narrative, not mechanical. `closingSummary`: synthesises both drafts, closes with the reframe opportunity — names the experience-is-right-framing-is-wrong insight explicitly. |
 | `analyzeSkepticalReconciliation` | `scenarioId`, `fitAnalysis`, `humanContext`, `hitlFired`, `fitScenarioSummary`, `atsScenarioSummary` | `fitAdvice`, `verdictAha`, `closingSummary`, `humanContext` (on interrupt), `hitlFired` | Fires for `honest_verdict`. `closingSummary`: the most emotionally important piece of writing in the output — direct and respectful, mentor not rejection machine. If HITL fired and context shifted the assessment, `closingSummary` acknowledges it. No second interrupt. |
 
@@ -331,7 +331,7 @@ if the LLM did not generate a question — the frontend always renders fallback 
 ```
 
 `fitAdvice` keys by scenario:
-- `confirmed_fit`: `[]`
+- `confirmed_fit`: `lead_with_these`, `expect_these_questions`, `watch_out_for`
 - `invisible_expert`: `standout_strengths`, `ats_reality_check`, `terminology_swaps`, `keywords_to_add`
 - `narrative_gap`: `transferable_strengths`, `reframing_suggestions`, `missing_skills`
 - `honest_verdict`: `honest_assessment`, `closing_steps`, `acknowledgement` (optional — present if HITL context changed the assessment)
@@ -492,6 +492,34 @@ independent instances.
 Attaches Zod schema failures to the LangSmith trace via `client.updateRun()`. Tags the run
 with `["validation-failed", nodeName]` for filtering. Short-circuits if tracing is disabled
 or `runId` is undefined — safe no-op in tests.
+
+### Known limitation — routeVerdicts node_done payload
+
+`routeVerdicts` returns a LangGraph `Command` object rather than a plain state update.
+LangGraph does not pass the `Command`'s `update` object through to `handleChainEnd._outputs`
+in the callback — it routes the update internally. As a result, the `routeVerdicts`
+`node_done` SSE event carries only the base payload `{ node, durationMs, timestamp }` —
+`fitScore`, `atsScore`, and `scenarioId` are absent despite being written to the Command
+update in `edges.ts`.
+
+**Frontend handling:** The logic pill renders the `routeVerdicts` beat in two phases:
+
+1. `node_done` fires → beat 3 appears as done with placeholder text (timing only, no
+   score data yet)
+2. `completed` fires → beat 3 is backfilled with real data from `result.fitScore`,
+   `result.atsProfile.atsScore`, and `result.scenarioId`
+
+The gap between `routeVerdicts` `node_done` and `completed` is the verdict node duration
+(~5–10s) — the backfill is effectively simultaneous with the results cards rendering from
+the user's perspective.
+
+**Do not attempt to fix this by changing the emitter or edges.ts** — the Command routing
+is LangGraph-internal and not accessible via callback `_outputs`. The two-phase pill
+rendering is the correct solution.
+
+The `node_done` per-node payload spec in the SSE events section describes the intended
+target state. The `routeVerdicts` entry there reflects the design intent, not the current
+runtime behaviour. This discrepancy is intentional and documented here.
 
 ---
 
