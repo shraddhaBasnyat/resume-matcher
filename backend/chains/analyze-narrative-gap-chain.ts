@@ -25,6 +25,15 @@ export const NarrativeGapLLMSchema = z.object({
         "Empty array is correct output when there are no real gaps. " +
         "Do not disguise reframing suggestions as missing skills.",
     ),
+  closingSummary: z.string().min(1).describe(
+    "Scenario-aware synthesis of the fit picture and ATS picture together. " +
+      "For narrative_gap: close with the reframe opportunity — name the experience-is-right-framing-is-wrong " +
+      "insight explicitly. Mentor tone. One or two sentences.",
+  ),
+  verdictAha: z.string().min(1).describe(
+    "One sentence pointing to the single most important result card. " +
+      "What should this candidate look at first? Specific to this candidate's situation.",
+  ),
 });
 
 export type NarrativeGapLLMOutput = z.infer<typeof NarrativeGapLLMSchema>;
@@ -33,17 +42,25 @@ const SYSTEM = `You are a career advisor producing reframing advice for a candid
 
 Context: This candidate has a fitScore between 50 and 74. The gap is not in their background — it is in how their resume frames it.
 
-You are given fit_analysis: a structured assessment containing careerTrajectory, keyStrengths (specific to this role), and experienceGaps.
+You are given fit_analysis, fit_scenario_summary (human fit picture in isolation), and ats_scenario_summary (machine picture in isolation).
 
 Rules:
 - transferableStrengths: draw directly from fitAnalysis.keyStrengths. Name the specific skills and experiences — not generic categories. What from their background maps to this role?
 - reframingSuggestions: specific ways to retell existing experience to fit this role's narrative. Each item must be specific to this candidate and this job. Specificity test: could it have been written without reading fit_analysis? If yes, rewrite it. Do not suggest learning new skills.
 - missingSkills: draw from fitAnalysis.experienceGaps — real gaps only. Empty array is correct output when there are no genuine missing skills. Do not fill this with reframing suggestions.
+- closingSummary: synthesise fit_scenario_summary and ats_scenario_summary into a scenario-aware closing statement. Name the experience-is-right-framing-is-wrong insight explicitly. Mentor tone. One or two sentences.
+- verdictAha: one sentence pointing to the single most important result card for this candidate to look at first.
 
 The insight this candidate needs: the experience is right, the framing is wrong. Do not produce hollow reassurance. Do not manufacture gaps.`;
 
 const HUMAN = `Fit Analysis:
 {fit_analysis}
+
+Human Fit Summary:
+{fit_scenario_summary}
+
+ATS Summary:
+{ats_scenario_summary}
 
 Produce reframing advice for this candidate.`;
 
@@ -57,7 +74,7 @@ export function buildNarrativeGapChain(model: BaseChatModel) {
 
   return {
     invoke: async (
-      input: { fit_analysis: string },
+      input: { fit_analysis: string; fit_scenario_summary: string; ats_scenario_summary: string },
       config?: { runName?: string },
     ): Promise<NarrativeGapLLMOutput> => {
       const messages = await prompt.invoke(input);

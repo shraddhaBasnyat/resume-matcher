@@ -16,6 +16,12 @@ export function makeAnalyzeSkepticalReconciliationNode(model: BaseChatModel) {
     if (!state.fitAnalysis) {
       throw new Error("analyzeSkepticalReconciliation: fitAnalysis is missing from graph state");
     }
+    if (!state.fitScenarioSummary) {
+      throw new Error("analyzeSkepticalReconciliation: fitScenarioSummary is missing from graph state");
+    }
+    if (!state.atsScenarioSummary) {
+      throw new Error("analyzeSkepticalReconciliation: atsScenarioSummary is missing from graph state");
+    }
 
     const humanContextBlock = state.humanContext
       ? `Additional Context from Candidate:\n${state.humanContext}\n\n`
@@ -25,6 +31,8 @@ export function makeAnalyzeSkepticalReconciliationNode(model: BaseChatModel) {
       {
         fit_analysis: JSON.stringify(state.fitAnalysis, null, 2),
         weak_match_reason: state.weakMatchReason ?? "Not provided",
+        fit_scenario_summary: state.fitScenarioSummary,
+        ats_scenario_summary: state.atsScenarioSummary,
         human_context: humanContextBlock,
       },
       { runName: "analyze-skeptical-reconciliation" },
@@ -32,13 +40,14 @@ export function makeAnalyzeSkepticalReconciliationNode(model: BaseChatModel) {
 
     if (!state.hitlFired && llmOutput.contextPrompt != null) {
       const humanContext = interrupt(llmOutput.contextPrompt);
+      // closingSummary and verdictAha are not written on first pass — node interrupts before this point
       return new Command({
         update: { humanContext: humanContext as string, hitlFired: true },
         goto: "analyzeSkepticalReconciliation",
       });
     }
 
-    const { contextPrompt: _cp, ...fitAdviceFields } = llmOutput;
+    const { contextPrompt: _cp, closingSummary, verdictAha, ...fitAdviceFields } = llmOutput;
 
     return {
       fitAdvice: {
@@ -46,6 +55,8 @@ export function makeAnalyzeSkepticalReconciliationNode(model: BaseChatModel) {
         hitlFired: state.hitlFired,
         ...fitAdviceFields,
       },
+      closingSummary,
+      verdictAha,
     };
   };
 }

@@ -4,8 +4,9 @@ import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { RootRunCapture, logValidationFailure } from "../langsmith.js";
 
 // -----------------------------------------------------------------------
-// invisible_expert — fitScore >= 75, atsScore < 75
-// confirmed_fit makes no LLM call — the node returns fitAdvice: [] directly.
+// Both confirmed_fit and invisible_expert use this chain.
+// For confirmed_fit: ATS advice fields are empty arrays, closingSummary is brief and validating.
+// For invisible_expert: full ATS remediation content.
 // -----------------------------------------------------------------------
 
 export const InvisibleExpertLLMSchema = z.object({
@@ -13,7 +14,8 @@ export const InvisibleExpertLLMSchema = z.object({
     .array(z.string())
     .describe(
       "2–4 specific strengths from this candidate's background relative to this role. " +
-        "Each item must name actual skills or experience from fitAnalysis.keyStrengths. Maximum 4 items.",
+        "Each item must name actual skills or experience from fitAnalysis.keyStrengths. Maximum 4 items. " +
+        "Empty array for confirmed_fit.",
     ),
   atsRealityCheck: z
     .array(z.string())
@@ -21,48 +23,76 @@ export const InvisibleExpertLLMSchema = z.object({
       "Bullet points explaining why this candidate is invisible to automated filters despite strong fit. " +
         "Each bullet must reference specific items from the ats_ranking list provided. " +
         "Core insight: the problem is a translation issue between how they describe their work " +
-        "and how the machine reads it — not a talent gap. Maximum 4 bullets.",
+        "and how the machine reads it — not a talent gap. Maximum 4 bullets. " +
+        "Empty array for confirmed_fit.",
     ),
   terminologySwaps: z
     .array(z.string())
     .describe(
       "Specific terminology substitutions drawn from ats_ranking. " +
         "Format each as: 'Replace \"X\" with \"Y\"' where X is the resume's current language " +
-        "and Y is the job posting's required term.",
+        "and Y is the job posting's required term. " +
+        "Empty array for confirmed_fit.",
     ),
   keywordsToAdd: z
     .array(z.string())
     .describe(
       "Keywords from the job posting that are missing from the resume. " +
-        "Drawn from ats_ranking. Each item is a single keyword or short phrase to add.",
+        "Drawn from ats_ranking. Each item is a single keyword or short phrase to add. " +
+        "Empty array for confirmed_fit.",
     ),
+  closingSummary: z.string().min(1).describe(
+    "Scenario-aware synthesis of the fit and ATS pictures. " +
+      "For confirmed_fit: brief and validating — one or two sentences confirming the match is solid. " +
+      "For invisible_expert: names the two-signal contrast explicitly (strong human fit, machine visibility gap). " +
+      "Use fit_scenario_summary and ats_scenario_summary as source material.",
+  ),
+  verdictAha: z.string().min(1).describe(
+    "One sentence pointing to the single most important result card for this candidate to look at first. " +
+      "For confirmed_fit: surface the strongest signal. For invisible_expert: point to ATS remediation.",
+  ),
 });
 
 export type InvisibleExpertLLMOutput = z.infer<typeof InvisibleExpertLLMSchema>;
 
-const SYSTEM = `You are a career advisor producing ATS remediation advice for a highly qualified candidate who is invisible to automated resume filters.
+const SYSTEM = `You are a career advisor producing fit advice for a highly qualified candidate (fitScore >= 75).
 
-Context: This candidate has strong semantic fit (fitScore >= 75) but a low ATS score. They are qualified — their resume language does not match what automated systems scan for.
+Two scenarios use this chain:
+- confirmed_fit (fitScore >= 75, atsScore >= 75 or null): strong match on both dimensions. Return empty arrays for all ATS advice fields. Focus closingSummary on validating the match.
+- invisible_expert (fitScore >= 75, atsScore < 75): strong human fit but low machine visibility. Produce full ATS remediation content.
 
 You are given:
 - fit_analysis: structured assessment of their strengths and gaps relative to the role
-- ats_ranking: the specific keyword and terminology gaps the ATS detected
+- ats_ranking: the specific keyword and terminology gaps the ATS detected (empty for confirmed_fit)
+- fit_scenario_summary: human fit picture in isolation
+- ats_scenario_summary: ATS picture in isolation
+- scenario: "confirmed_fit" or "invisible_expert"
 
 Rules:
-- standoutStrengths: 2–4 bullets. Each must reference actual content from fit_analysis.keyStrengths relative to this role. Maximum 4. Do not pad to reach a count.
-- atsRealityCheck: bullet points (not prose) explaining why they're invisible to ATS. Each bullet must reference specific items from ats_ranking. The insight to convey: this is a translation problem, not a talent problem.
-- terminologySwaps: for each terminology mismatch in ats_ranking, produce one "Replace X with Y" item.
-- keywordsToAdd: for each missing keyword in ats_ranking, produce one item naming the keyword to add.
+- standoutStrengths: for invisible_expert — 2–4 bullets referencing actual content from fit_analysis.keyStrengths. Maximum 4. Empty array for confirmed_fit.
+- atsRealityCheck: for invisible_expert — bullet points explaining ATS invisibility, each referencing specific items from ats_ranking. The insight: translation problem, not a talent problem. Empty array for confirmed_fit.
+- terminologySwaps: for invisible_expert — "Replace X with Y" per mismatch. Empty array for confirmed_fit.
+- keywordsToAdd: for invisible_expert — one item per missing keyword. Empty array for confirmed_fit.
+- closingSummary: synthesise fit_scenario_summary and ats_scenario_summary. For confirmed_fit: brief and validating. For invisible_expert: name the two-signal contrast explicitly.
+- verdictAha: one sentence pointing to the single most important result card.
 
 Specificity test: could any item be written without reading fit_analysis and ats_ranking? If yes, rewrite it.`;
 
-const HUMAN = `Fit Analysis:
+const HUMAN = `Scenario: {scenario}
+
+Fit Analysis:
 {fit_analysis}
 
 ATS Ranking (keyword and terminology gaps detected):
 {ats_ranking}
 
-Produce ATS remediation advice for this candidate.`;
+Human Fit Summary:
+{fit_scenario_summary}
+
+ATS Summary:
+{ats_scenario_summary}
+
+Produce fit advice for this candidate.`;
 
 export function buildInvisibleExpertChain(model: BaseChatModel) {
   const prompt = ChatPromptTemplate.fromMessages([
@@ -74,7 +104,13 @@ export function buildInvisibleExpertChain(model: BaseChatModel) {
 
   return {
     invoke: async (
-      input: { fit_analysis: string; ats_ranking: string },
+      input: {
+        scenario: string;
+        fit_analysis: string;
+        ats_ranking: string;
+        fit_scenario_summary: string;
+        ats_scenario_summary: string;
+      },
       config?: { runName?: string },
     ): Promise<InvisibleExpertLLMOutput> => {
       const messages = await prompt.invoke(input);

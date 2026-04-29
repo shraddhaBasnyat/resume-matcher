@@ -15,19 +15,31 @@ export function makeAnalyzeNarrativeGapNode(model: BaseChatModel) {
     if (!state.fitAnalysis) {
       throw new Error("analyzeNarrativeGap: fitAnalysis is missing from graph state");
     }
+    if (!state.fitScenarioSummary) {
+      throw new Error("analyzeNarrativeGap: fitScenarioSummary is missing from graph state");
+    }
+    if (!state.atsScenarioSummary) {
+      throw new Error("analyzeNarrativeGap: atsScenarioSummary is missing from graph state");
+    }
 
     const llmOutput = await chain.invoke(
       {
         fit_analysis: JSON.stringify(state.fitAnalysis, null, 2),
+        fit_scenario_summary: state.fitScenarioSummary,
+        ats_scenario_summary: state.atsScenarioSummary,
       },
       { runName: "analyze-narrative-gap" },
     );
 
+    const { closingSummary, verdictAha, ...fitAdviceFields } = llmOutput;
+
     return {
       fitAdvice: {
         scenarioId: "narrative_gap" as const,
-        ...llmOutput,
+        ...fitAdviceFields,
       },
+      closingSummary,
+      verdictAha,
     };
   };
 }

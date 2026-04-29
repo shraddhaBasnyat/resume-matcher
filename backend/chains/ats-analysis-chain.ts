@@ -13,12 +13,27 @@ export const AtsAnalysisSchema = z.object({
         "'resume uses \"front-end development\"; job posting requires \"React\"' or " +
         "'missing keyword: \"Kubernetes\"'. Empty array if no gaps found.",
     ),
+  atsScenarioSummary: z.string().min(1).describe(
+    "2–3 sentences plain-language synthesis of what the ATS analysis found collectively. " +
+      "No fit context. No scenario tone. No fix language. " +
+      "Example: 'Resume is parseable with minor formatting issues. " +
+      "One knockout risk around production deployment language. " +
+      "Missing 3 of 4 key search terms the recruiter would filter on.'",
+  ),
+  atsAha: z.string().min(1).describe(
+    "One sentence — the single most important ATS observation. " +
+      "Pure finding only — no advice, no fix language, no card content. " +
+      "Example: 'Your resume surfaces for Python and LangGraph but misses RAG and agentic systems — " +
+      "the terms the recruiter is filtering for.'",
+  ),
 });
 
 export type AtsAnalysisOutput = {
   atsScore: number;
   machineParsing: string[];
   machineRanking: string[];
+  atsScenarioSummary: string;
+  atsAha: string;
 };
 
 const SYSTEM_PROMPT = `You are an ATS (Applicant Tracking System) compatibility analyser. Evaluate how well a resume will be parsed and ranked by automated recruiting systems.
@@ -34,7 +49,11 @@ machineRanking: list every keyword gap and terminology mismatch you detect. Each
 - "missing keyword: 'TypeScript'"
 - "resume uses 'machine learning projects'; job posting requires 'production ML systems'"
 
-Empty array is correct output when the resume covers the job's terminology well.`;
+Empty array is correct output when the resume covers the job's terminology well.
+
+atsScenarioSummary: 2–3 sentences, plain language. Synthesise what the three layers found collectively. No fit context. No scenario tone. State what is true about the machine picture: parseability, knockout risks, and keyword discoverability.
+
+atsAha: one sentence. The single most important thing you found. Pure observation — no advice, no fix language.`;
 
 const HUMAN_PROMPT = `Resume Text:
 {resume_text}
@@ -84,6 +103,8 @@ export function buildAtsAnalysisChain(model: BaseChatModel) {
         atsScore: validated.data.atsScore,
         machineParsing: ["// TODO: replace with programmatic resume parsing analysis"],
         machineRanking: validated.data.machineRanking,
+        atsScenarioSummary: validated.data.atsScenarioSummary,
+        atsAha: validated.data.atsAha,
       };
     },
   };

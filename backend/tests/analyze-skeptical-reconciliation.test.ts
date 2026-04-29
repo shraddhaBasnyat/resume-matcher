@@ -40,6 +40,8 @@ const validLLMOutput = {
   ],
   acknowledgement: null,
   contextPrompt: null,
+  closingSummary: "The gap is real and the score stands — this is a 2–3 year development path, not a framing problem.",
+  verdictAha: "The honest assessment cards explain specifically why — start there before deciding whether to apply.",
 };
 
 const validLLMOutputWithContextPrompt = {
@@ -72,13 +74,17 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     fitScore: 38,
     headline: "Frontend Developer without backend systems depth",
     battleCardBullets: ["3 years of React", "Strong CSS fundamentals"],
-    scenarioSummary: "Frontend background does not map to this senior backend role.",
+    fitScenarioSummary: "Frontend background does not map to this senior backend role.",
+    fitAha: "Three years of frontend work — the core backend skills this role requires are absent.",
     sourceRole: "frontend_swe",
     targetRole: "backend_swe",
     fitAnalysis: validFitAnalysis,
     weakMatch: true,
     weakMatchReason:
       "Three of five required skills are absent and the candidate's experience level is too junior for a senior backend role.",
+    atsScore: null,
+    atsScenarioSummary: "Resume is parseable. No knockout risks. Low keyword match on backend infrastructure terms.",
+    atsAha: "Missing 'distributed systems' and 'infrastructure ownership' — terms the recruiter filters for.",
     threadId: undefined,
     intent: undefined,
     intentContext: undefined,
@@ -87,6 +93,8 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     atsProfile: undefined,
     scenarioId: "honest_verdict",
     fitAdvice: undefined,
+    closingSummary: undefined,
+    verdictAha: undefined,
     ...overrides,
   } as unknown as GraphStateType;
 }
@@ -123,6 +131,11 @@ describe("analyzeSkepticalReconciliation — contextPrompt null path", () => {
     expect(advice.acknowledgement).toBeNull();
     // contextPrompt must not be written to fitAdvice
     expect(advice.contextPrompt).toBeUndefined();
+    // closingSummary and verdictAha are top-level state fields, not inside fitAdvice
+    expect(advice.closingSummary).toBeUndefined();
+    expect(advice.verdictAha).toBeUndefined();
+    expect((result as Record<string, unknown>).closingSummary).toBeDefined();
+    expect((result as Record<string, unknown>).verdictAha).toBeDefined();
   });
 });
 
@@ -167,6 +180,10 @@ describe("analyzeSkepticalReconciliation — interrupt path", () => {
     });
     // fitAdvice must not be written when interrupt fires
     expect((result as Record<string, unknown>).fitAdvice).toBeUndefined();
+    // closingSummary and verdictAha must NOT be in the Command update — node interrupts before writing them
+    const update = (result as Record<string, unknown>).update as Record<string, unknown>;
+    expect(update.closingSummary).toBeUndefined();
+    expect(update.verdictAha).toBeUndefined();
   });
 
   it("no interrupt when hitlFired is already true, even if chain returns contextPrompt", async () => {
@@ -247,5 +264,19 @@ describe("analyzeSkepticalReconciliation — guards", () => {
     await expect(
       node(buildBaseState({ scenarioId: "narrative_gap" })),
     ).rejects.toThrow('expected scenarioId "honest_verdict"');
+  });
+
+  it("throws when fitScenarioSummary is missing", async () => {
+    const node = makeAnalyzeSkepticalReconciliationNode(buildMockModel());
+    await expect(
+      node(buildBaseState({ fitScenarioSummary: undefined })),
+    ).rejects.toThrow("fitScenarioSummary is missing");
+  });
+
+  it("throws when atsScenarioSummary is missing", async () => {
+    const node = makeAnalyzeSkepticalReconciliationNode(buildMockModel());
+    await expect(
+      node(buildBaseState({ atsScenarioSummary: undefined })),
+    ).rejects.toThrow("atsScenarioSummary is missing");
   });
 });

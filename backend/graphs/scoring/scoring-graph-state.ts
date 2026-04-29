@@ -30,7 +30,11 @@ export const GraphState = Annotation.Root({
     default: () => undefined,
     reducer: (_prev, next) => next,
   }),
-  scenarioSummary: Annotation<string | undefined>({
+  fitScenarioSummary: Annotation<string | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  fitAha: Annotation<string | undefined>({
     default: () => undefined,
     reducer: (_prev, next) => next,
   }),
@@ -85,6 +89,28 @@ export const GraphState = Annotation.Root({
     machineParsing: string[];
     machineRanking: string[];
   } | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  // Derived from atsProfile.atsScore — first-class field so routeVerdicts and emitter can read it.
+  atsScore: Annotation<number | null | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  atsScenarioSummary: Annotation<string | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  atsAha: Annotation<string | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  // Verdict node outputs — closingSummary remapped to scenarioSummary.text in PublicMatchResponse.
+  closingSummary: Annotation<string | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  verdictAha: Annotation<string | undefined>({
     default: () => undefined,
     reducer: (_prev, next) => next,
   }),

@@ -117,7 +117,7 @@ function buildPublicResponse(
       machineParsing: state.atsProfile?.machineParsing ?? [],
       machineRanking: state.atsProfile?.machineRanking ?? [],
     },
-    scenarioSummary: { text: state.scenarioSummary ?? "" },
+    scenarioSummary: { text: state.closingSummary ?? "" },
     threadId,
     _meta: { durationMs },
   };
@@ -144,6 +144,10 @@ async function emitResult(
     }
     if (!state.atsProfile) {
       throw new Error("runner: atsProfile missing after graph completion — atsAnalysis node did not write to state");
+    }
+    if (!state.closingSummary) {
+      emit("error", { error: "Incomplete graph result", message: "closingSummary missing — verdict node did not write to state" });
+      return;
     }
     const durationMs = Date.now() - runStartTime;
     const response = buildPublicResponse(state, threadId, durationMs);
