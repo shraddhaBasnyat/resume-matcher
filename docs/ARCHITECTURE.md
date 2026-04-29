@@ -37,13 +37,13 @@ itself via LangGraph `interrupt()`.
 
 | Node | Reads | Writes | Notes |
 |------|-------|--------|-------|
-| `analyzeFit` | `resumeText`, `jobText` | `fitScore`, `headline`, `battleCardBullets`, `scenarioSummary`, `sourceRole`, `targetRole`, `fitAnalysis`, `weakMatch` | `weakMatch = fitScore < 50`, derived in node. `fitAnalysis.weakMatchReason` normalised: `"NONE"` → `null`. No mechanical advice — keyword gaps and terminology belong to `atsAnalysis`. |
-| `atsAnalysis` | `resumeText`, `jobText` | `atsProfile` | Three-layer output: `machineParsing` (formatting), `knockoutQuestions` (hard filters), `recruiterSearch` (keyword discoverability). `atsScore` is composite weighted 60% recruiter search / 25% knockout / 15% formatting. |
-| `generateTerminologyFixes` | `resumeText`, `atsProfile.recruiterSearch.terminologyMismatches` | `terminologyDiffs` | Fans out from `atsAnalysis`. Finds the exact resume sentence for each terminology mismatch and rewrites only that sentence. Runs automatically — no user prompt needed. Tracked in `progress` but normalised to `atsAnalysis` in the stepper UI. |
-| `routeVerdicts` | `fitScore`, `atsScore` | `scenarioId` | Pure fn, no LLM — see routing thresholds below |
-| `analyzeStrongMatch` | `scenarioId`, `fitAnalysis`, `atsProfile`, `terminologyDiffs` | `fitAdvice` | Fires for `confirmed_fit` and `invisible_expert`. For `confirmed_fit`, `fitAdvice` is empty — sparse output is correct. Does not restate `terminologyDiffs` already shown in the ATS panel. |
-| `analyzeNarrativeGap` | `scenarioId`, `fitAnalysis` | `fitAdvice` | Fires for `narrative_gap`. ATS panel may be clean — the gap is narrative, not mechanical. |
-| `analyzeSkepticalReconciliation` | `scenarioId`, `fitAnalysis`, `humanContext`, `hitlFired` | `fitAdvice`, `humanContext` (on interrupt), `hitlFired` | Fires for `honest_verdict`. Calls `interrupt(contextPrompt)` on first pass if LLM returns a question. Second pass uses `humanContext` from HITL resume. |
+| `analyzeFit` | `resumeText`, `jobText` | `fitScore`, `headline`, `battleCardBullets`, `scenarioSummary`, `sourceRole`, `targetRole`, `fitAnalysis`, `weakMatch`, `fitAha` | `weakMatch = fitScore < 50`, derived in node. `fitAnalysis.weakMatchReason` normalised: `"NONE"` → `null`. No mechanical advice — keyword gaps and terminology belong to `atsAnalysis`. `fitAha`: one sentence, the sharpest human fit observation from reading resume + JD — emitted in `node_done` payload. |
+| `atsAnalysis` | `resumeText`, `jobText` | `atsProfile`, `atsAha` | Three-layer output: `machineParsing` (formatting), `knockoutQuestions` (hard filters), `recruiterSearch` (keyword discoverability). `atsScore` composite weighted 60% recruiter search / 25% knockout / 15% formatting. `atsAha`: one sentence, the most important ATS observation — emitted in `node_done` payload. Pure observation only — no card content, no fix language. |
+| `generateTerminologyFixes` | `resumeText`, `atsProfile.recruiterSearch.terminologyMismatches` | `terminologyDiffs` | Fans out from `atsAnalysis`. Finds the exact resume sentence for each terminology mismatch and rewrites only that sentence. Runs automatically — no user prompt needed. Tracked in `progress` but normalised to `atsAnalysis` in the stepper UI. No aha — its output is already surfaced in the ATS panel cards. |
+| `routeVerdicts` | `fitScore`, `atsScore` | `scenarioId` | Pure fn, no LLM. Emits `fitScore`, `atsScore`, `scenarioId` in `node_done` payload — the deterministic "therefore" beat in the provenance trail. No aha field — the routing logic IS the observation. |
+| `analyzeStrongMatch` | `scenarioId`, `fitAnalysis`, `atsProfile`, `terminologyDiffs` | `fitAdvice`, `verdictAha` | Fires for `confirmed_fit` and `invisible_expert`. For `confirmed_fit`, `fitAdvice` is empty — sparse output is correct. Does not restate `terminologyDiffs` already shown in the ATS panel. `verdictAha`: one LLM sentence pointing the user to the single most important thing in their results. |
+| `analyzeNarrativeGap` | `scenarioId`, `fitAnalysis` | `fitAdvice`, `verdictAha` | Fires for `narrative_gap`. ATS panel may be clean — the gap is narrative, not mechanical. `verdictAha`: one LLM sentence pointing to the most important result card. |
+| `analyzeSkepticalReconciliation` | `scenarioId`, `fitAnalysis`, `humanContext`, `hitlFired` | `fitAdvice`, `verdictAha`, `humanContext` (on interrupt), `hitlFired` | Fires for `honest_verdict`. Calls `interrupt(contextPrompt)` on first pass if LLM returns a question. Second pass uses `humanContext` from HITL resume. `verdictAha`: one LLM sentence — on first pass points to the HITL context; on second pass reflects whether context changed the assessment. |
 
 ### Scenario routing (deriveScenario — pure fn)
 
@@ -75,8 +75,11 @@ dependencies explicit. Before adding a node, declare its reads and writes here.
 | `fitAnalysis` | `FitAnalysis \| undefined` | `undefined` | `analyzeFit` | all verdict nodes |
 | `fitAnalysis.weakMatchReason` | `string \| null` | — | `analyzeFit` (normalised: `"NONE"` → `null`) | `analyzeSkepticalReconciliation`, runner |
 | `weakMatch` | `boolean \| undefined` | `undefined` | `analyzeFit` (derived) | `routeVerdicts` |
+| `fitAha` | `string \| undefined` | `undefined` | `analyzeFit` | runner (emitted in `node_done`) |
 | `atsProfile` | `AtsProfile \| undefined` | `undefined` | `atsAnalysis` | `generateTerminologyFixes`, `analyzeStrongMatch`, runner |
+| `atsAha` | `string \| undefined` | `undefined` | `atsAnalysis` | runner (emitted in `node_done`) |
 | `terminologyDiffs` | `TerminologyDiff[] \| undefined` | `undefined` | `generateTerminologyFixes` | `analyzeStrongMatch`, runner |
+| `verdictAha` | `string \| undefined` | `undefined` | verdict nodes | runner (emitted in `node_done`) |
 | `scenarioId` | `ScenarioId \| undefined` | `undefined` | `routeVerdicts` | all verdict nodes, runner |
 | `fitAdvice` | `Record<string, unknown> \| undefined` | `undefined` | verdict nodes | runner |
 | `hitlFired` | `boolean` | `false` | `analyzeSkepticalReconciliation` | `analyzeSkepticalReconciliation` |
@@ -186,10 +189,81 @@ interface ExploringGapContext {
 |-------|---------|------|
 | `meta` | `{ threadId, rootRunId, runStartTime }` | Before graph invocation (LangSmith enabled only) |
 | `node_start` | `{ node, timestamp }` | Tracked node begins |
-| `node_done` | `{ node, durationMs, timestamp }` | Tracked node completes |
+| `node_done` | see per-node payload below | Tracked node completes |
 | `completed` | `{ result: PublicMatchResponse }` | Graph ran to completion |
 | `interrupted` | `{ fitScore, threadId, contextPrompt }` | HITL interrupt fired |
 | `error` | `{ error, message }` | Any execution error |
+
+#### `node_done` payload — per node
+
+Each node emits a base payload plus node-specific fields. The `aha` field is the provenance trail beat for that node — one sentence, human-readable, surfaced in the logic pill UI.
+
+```typescript
+// base (all nodes)
+{ node: string, durationMs: number, timestamp: string }
+
+// atsAnalysis
+{
+  node: "atsAnalysis", durationMs, timestamp,
+  aha: string    // one sentence — most important ATS observation, pure finding only
+                 // e.g. "Your resume surfaces for Python and LangGraph but misses
+                 //       RAG and agentic systems — the terms the recruiter is filtering for."
+}
+
+// generateTerminologyFixes
+{ node: "generateTerminologyFixes", durationMs, timestamp }
+// no aha — output already surfaced in ATS panel cards, no duplication
+
+// analyzeFit
+{
+  node: "analyzeFit", durationMs, timestamp,
+  aha: string    // one sentence — sharpest human fit observation
+                 // e.g. "Your Wayfair replatforming work maps directly to fulfillment
+                 //       automation — but your resume frames it as storefront engineering."
+}
+
+// routeVerdicts
+{
+  node: "routeVerdicts", durationMs: 0, timestamp,
+  fitScore: number,
+  atsScore: number | null,
+  scenarioId: ScenarioId
+  // no aha — the routing data IS the observation, rendered deterministically in the pill
+}
+
+// verdict nodes (analyzeStrongMatch | analyzeNarrativeGap | analyzeSkepticalReconciliation)
+{
+  node: "analyzeStrongMatch" | "analyzeNarrativeGap" | "analyzeSkepticalReconciliation",
+  durationMs, timestamp,
+  aha: string    // one LLM sentence — points user to the single most important result card
+                 // e.g. "Your reframing cards show exactly how to retell the Wayfair
+                 //       story as fulfillment-native — start there."
+                 // For honest_verdict first pass: points to the HITL context question
+                 // For honest_verdict second pass: reflects whether context shifted assessment
+}
+```
+
+#### Provenance trail — pill content spec
+
+The logic pill in the frontend assembles its provenance trail from `node_done` events in arrival order. Four beats, rendered sequentially as nodes complete:
+
+```
+Beat 1 — atsAnalysis node_done
+  aha string (LLM-generated, one sentence)
+
+Beat 2 — analyzeFit node_done
+  aha string (LLM-generated, one sentence)
+
+Beat 3 — routeVerdicts node_done
+  Deterministic render: "fit {fitScore} · ATS {atsScore} → {scenarioId label}"
+  Different visual treatment from beats 1 and 2 — mechanical, smaller, muted
+
+Beat 4 — verdict node node_done
+  aha string (LLM-generated, one sentence)
+  Followed by: "Results ready — collapse to view" (static closing line, not LLM)
+```
+
+The pill auto-expands when "Analyze Match" is pressed. It does not auto-collapse on `completed` — the user closes it manually. The static "Results ready — collapse to view" line appears as the final beat when the verdict node fires, cueing the user that the results are ready without forcing them to close.
 
 `contextPrompt` in the interrupted payload is the question string generated by
 `analyzeSkepticalReconciliation` and passed to LangGraph's `interrupt()`. May be `null`
@@ -235,6 +309,16 @@ if the LLM did not generate a question — the frontend always renders fallback 
     after: string
   }[]
 
+  provenanceTrail: {
+    node: string
+    durationMs: number
+    aha: string | null          // null for generateTerminologyFixes; routeVerdicts uses
+                                // fitScore/atsScore/scenarioId instead
+    fitScore?: number           // routeVerdicts beat only
+    atsScore?: number | null    // routeVerdicts beat only
+    scenarioId?: ScenarioId     // routeVerdicts beat only
+  }[]
+
   scenarioSummary: { text: string }
   threadId: string
   _meta: { durationMs: number }
@@ -247,10 +331,18 @@ if the LLM did not generate a question — the frontend always renders fallback 
 - `narrative_gap`: `transferable_strengths`, `reframing_suggestions`, `missing_skills`
 - `honest_verdict`: `honest_assessment`, `closing_steps`, `acknowledgement` (optional — present if HITL context changed the assessment)
 
+`provenanceTrail` is assembled by the runner from `node_done` events in arrival order. It is
+always present in `PublicMatchResponse` — the frontend logic pill consumes it directly.
+`generateTerminologyFixes` is included as a beat with `aha: null` so the pill can show its
+duration without a text observation. `routeVerdicts` beat renders deterministically from
+`fitScore`, `atsScore`, and `scenarioId` — the pill formats this as
+`"fit {fitScore} · ATS {atsScore} → {scenarioLabel}"` without an aha string.
+
 `PublicMatchResponseSchema` (Zod) validates the mapped result before emission. If validation
 fails, an `error` event is emitted instead of malformed data.
 
-Internal fields never emitted: `fitAnalysis`, `headline` (remapped to `battleCard.headline`),
+Internal fields never emitted: `fitAnalysis`, `atsAha`, `fitAha`, `verdictAha`
+(remapped into `provenanceTrail`), `headline` (remapped to `battleCard.headline`),
 `battleCardBullets` (remapped to `battleCard.bulletPoints`), `scenarioSummary` (remapped to
 `scenarioSummary.text`), `sourceRole`, `targetRole`, `weakMatch`, `humanContext`, `hitlFired`,
 `contextPrompt`.
@@ -471,6 +563,25 @@ or `runId` is undefined — safe no-op in tests.
 ---
 
 ## Breaking changes log
+
+### Provenance trail + aha observations added (2026-04-28)
+
+`aha` fields added to `atsAnalysis`, `analyzeFit`, and all verdict node output schemas.
+Each is a single LLM-generated sentence — the most important observation from that node's
+analysis. `generateTerminologyFixes` and `routeVerdicts` do not produce aha fields.
+
+`node_done` SSE payload is now node-specific rather than uniform. `atsAnalysis` and
+`analyzeFit` emit `{ node, durationMs, timestamp, aha }`. `routeVerdicts` emits
+`{ node, durationMs: 0, timestamp, fitScore, atsScore, scenarioId }`. Verdict nodes emit
+`{ node, durationMs, timestamp, aha }`. `generateTerminologyFixes` emits base payload only.
+
+`provenanceTrail` added to `PublicMatchResponse` — assembled by runner from `node_done`
+events in arrival order. The frontend logic pill consumes this field directly to render
+the four-beat provenance trail. Internal aha state fields (`atsAha`, `fitAha`,
+`verdictAha`) are remapped into `provenanceTrail` by the runner and never emitted raw.
+
+State field ownership table updated: `atsAha`, `fitAha`, `verdictAha` added as fields
+written by their respective nodes and read only by the runner for remapping.
 
 ### `generateTerminologyFixes` node added; `atsProfile` schema expanded (2026-04-28)
 

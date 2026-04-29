@@ -442,14 +442,60 @@ Unchanged from prior design. HITL fires inside `analyzeSkepticalReconciliation` 
 
 ## SSE events
 
-| Event | Payload |
-|---|---|
-| `meta` | `threadId`, `rootRunId`, `runStartTime` |
-| `node_start` | `node`, `timestamp` |
-| `node_done` | `node`, `durationMs`, `timestamp` |
-| `completed` | `result: PublicMatchResponse` |
-| `interrupted` | `fitScore`, `threadId`, `contextPrompt` |
-| `error` | `error`, `message` |
+| Event | Payload | When |
+|---|---|---|
+| `meta` | `threadId`, `rootRunId`, `runStartTime` | Before graph invocation |
+| `node_start` | `node`, `timestamp` | Tracked node begins |
+| `node_done` | see per-node spec below | Tracked node completes |
+| `completed` | `result: PublicMatchResponse` | Graph ran to completion |
+| `interrupted` | `fitScore`, `threadId`, `contextPrompt` | HITL interrupt fired |
+| `error` | `error`, `message` | Any execution error |
+
+### `node_done` payload — per node
+
+```typescript
+// atsAnalysis
+{ node: "atsAnalysis", durationMs, timestamp,
+  aha: string }    // one sentence — most important ATS observation, pure finding only
+
+// generateTerminologyFixes
+{ node: "generateTerminologyFixes", durationMs, timestamp }
+// no aha — output surfaced in ATS panel cards
+
+// analyzeFit
+{ node: "analyzeFit", durationMs, timestamp,
+  aha: string }    // one sentence — sharpest human fit observation
+
+// routeVerdicts
+{ node: "routeVerdicts", durationMs: 0, timestamp,
+  fitScore: number, atsScore: number | null, scenarioId: ScenarioId }
+// no aha — routing data IS the observation, rendered deterministically
+
+// verdict nodes
+{ node: string, durationMs, timestamp,
+  aha: string }    // one LLM sentence pointing to most important result card
+```
+
+### Provenance trail — logic pill content
+
+The frontend logic pill assembles four beats from `node_done` events as they arrive:
+
+```
+Beat 1  atsAnalysis done     → aha string (LLM)
+Beat 2  analyzeFit done      → aha string (LLM)
+Beat 3  routeVerdicts done   → "fit {score} · ATS {score} → {scenario}" (deterministic,
+                                different visual treatment — mechanical, muted)
+Beat 4  verdict node done    → aha string (LLM)
+                               + static closing line: "Results ready — collapse to view"
+```
+
+Pill behaviour:
+- Auto-expands when "Analyze Match" is pressed
+- Does NOT auto-collapse on `completed` — user closes manually
+- "Results ready — collapse to view" appears as the final beat when verdict node fires
+- Pill persists as a floating pin during scrolling after user closes it
+- For `honest_verdict`: pill acts as the "Why" anchor explaining the HITL requirement;
+  HITL drawer is the "How" and is self-explanatory — does not require pill to be open
 
 ---
 

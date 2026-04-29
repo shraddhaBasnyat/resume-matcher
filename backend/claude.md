@@ -56,6 +56,11 @@ LLM output schema (all fields required):
     experienceGaps: string[]
     weakMatchReason: string     // REQUIRED — use "NONE" if fitScore >= 50
   }
+  fitAha: string                // one sentence — sharpest human fit observation
+                                // e.g. "Your Wayfair replatforming work maps directly
+                                // to fulfillment automation — but your resume frames
+                                // it as storefront engineering."
+                                // Pure observation only. Emitted in node_done payload.
 }
 ```
 
@@ -113,6 +118,10 @@ LLM output schema:
   }
 
   machineRanking: string[]      // keyword gap summary strings for UI
+
+  atsAha: string                // one sentence — most important ATS observation
+                                // pure finding only — no fix language, no card content
+                                // emitted in node_done SSE payload
 }
 ```
 
@@ -169,7 +178,14 @@ For `invisible_expert`: fit analysis confirms qualification. ATS panel and `term
 Output schema:
 ```ts
 // confirmed_fit
-{ scenarioId: "confirmed_fit", fitAdvice: [] }
+{
+  scenarioId: "confirmed_fit"
+  fitAdvice: []
+  verdictAha: string            // one sentence even for confirmed_fit
+                                // e.g. "Your microservices background is a direct match
+                                // — check the battle card for the specific strengths
+                                // the hiring manager will notice first."
+}
 
 // invisible_expert
 {
@@ -180,6 +196,7 @@ Output schema:
     terminologySwaps: string[]
     keywordsToAdd: string[]
   }
+  verdictAha: string            // points to the terminology diff cards
 }
 ```
 
@@ -201,6 +218,7 @@ Output schema:
     reframingSuggestions: string[]
     missingSkills: string[]
   }
+  verdictAha: string            // points to the most important reframing card
 }
 ```
 
@@ -222,6 +240,12 @@ Output schema:
     closingSteps: string[]
     acknowledgement: string[] | null
   }
+  verdictAha: string            // first pass: explains why HITL is needed
+                                // e.g. "The gap is real — answer the question below
+                                // to see if additional context changes the picture."
+                                // second pass: reflects whether context shifted assessment
+                                // e.g. "Your context clarified the production experience —
+                                // the assessment is updated in the cards below."
 }
 ```
 
@@ -242,9 +266,12 @@ Output schema:
 | `targetRole` | `analyzeFit` | `detectArchetype` (future) |
 | `fitAnalysis` | `analyzeFit` | all verdict nodes |
 | `fitAnalysis.weakMatchReason` | `analyzeFit` (normalised) | `analyzeSkepticalReconciliation`, runner |
+| `fitAha` | `analyzeFit` | runner (emitted in `node_done`, remapped to `provenanceTrail`) |
 | `atsScore` | `atsAnalysis` | `routeVerdicts` |
 | `atsProfile` | `atsAnalysis` | `analyzeStrongMatch`, runner |
+| `atsAha` | `atsAnalysis` | runner (emitted in `node_done`, remapped to `provenanceTrail`) |
 | `terminologyDiffs` | `generateTerminologyFixes` | runner, `analyzeStrongMatch` |
+| `verdictAha` | verdict nodes | runner (emitted in `node_done`, remapped to `provenanceTrail`) |
 | `scenarioId` | `routeVerdicts` | all verdict nodes, runner |
 | `fitAdvice` | verdict nodes | runner |
 | `hitlFired` | `analyzeSkepticalReconciliation` | `analyzeSkepticalReconciliation` |
@@ -308,6 +335,15 @@ Emitted by `runner.ts` on the `completed` SSE event under `result`. Validated by
     after: string
   }[]
 
+  provenanceTrail: {
+    node: string
+    durationMs: number
+    aha: string | null          // null for generateTerminologyFixes and routeVerdicts
+    fitScore?: number           // routeVerdicts beat only
+    atsScore?: number | null    // routeVerdicts beat only
+    scenarioId?: ScenarioId     // routeVerdicts beat only
+  }[]
+
   scenarioSummary: {
     text: string
   }
@@ -316,6 +352,11 @@ Emitted by `runner.ts` on the `completed` SSE event under `result`. Validated by
   _meta: { durationMs: number }
 }
 ```
+
+`provenanceTrail` is assembled by the runner from `node_done` events in arrival order.
+Internal aha fields (`atsAha`, `fitAha`, `verdictAha`) are remapped here and never emitted
+raw. The frontend logic pill consumes `provenanceTrail` directly — it does not reconstruct
+the trail from individual SSE events.
 
 ---
 
