@@ -1,4 +1,8 @@
 export const ACCORDION_CONFIG: Record<string, { question: string; subtitle: string }> = {
+  // confirmed_fit
+  lead_with_these:        { question: "What should you lead with?",      subtitle: "strengths" },
+  expect_these_questions: { question: "What will they ask you?",         subtitle: "questions" },
+  watch_out_for:          { question: "Where might they push harder?",   subtitle: "watch out" },
   // invisible_expert
   standout_strengths: { question: "What makes you stand out?",         subtitle: "strengths" },
   ats_reality_check:  { question: "Why aren't you getting interviews?", subtitle: "signals" },

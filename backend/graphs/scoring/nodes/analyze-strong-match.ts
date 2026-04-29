@@ -48,10 +48,20 @@ export function makeAnalyzeStrongMatchNode(model: BaseChatModel) {
     const { closingSummary, verdictAha, ...fitAdviceFields } = llmOutput;
 
     return {
-      fitAdvice: {
-        scenarioId: state.scenarioId,
-        ...(isInvisibleExpert ? fitAdviceFields : { fitAdvice: [] }),
-      },
+      fitAdvice: isInvisibleExpert
+        ? {
+            scenarioId: "invisible_expert" as const,
+            standoutStrengths: fitAdviceFields.standoutStrengths,
+            atsRealityCheck: fitAdviceFields.atsRealityCheck,
+            terminologySwaps: fitAdviceFields.terminologySwaps,
+            keywordsToAdd: fitAdviceFields.keywordsToAdd,
+          }
+        : {
+            scenarioId: "confirmed_fit" as const,
+            leadWithThese: fitAdviceFields.leadWithThese,
+            expectTheseQuestions: fitAdviceFields.expectTheseQuestions,
+            watchOutFor: fitAdviceFields.watchOutFor,
+          },
       closingSummary,
       verdictAha,
     };

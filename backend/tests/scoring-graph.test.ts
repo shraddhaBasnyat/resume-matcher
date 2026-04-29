@@ -89,6 +89,9 @@ const validInvisibleExpertLLMOutput = {
   ],
   terminologySwaps: ['Replace "front-end development" with "React"'],
   keywordsToAdd: ["TypeScript", "component library"],
+  leadWithThese: [],
+  expectTheseQuestions: [],
+  watchOutFor: [],
   closingSummary: "Your background is exactly what this role needs — the gap is in how your resume reads to machines, not to humans.",
   verdictAha: "Your reframing cards show exactly how to retell the experience as the machine expects to read it.",
 };
@@ -231,9 +234,10 @@ describe("buildScoringGraph — full run with mocked chains", () => {
     expect(state.scenarioId).toBe("confirmed_fit");
     const advice = state.fitAdvice as Record<string, unknown>;
     expect(advice.scenarioId).toBe("confirmed_fit");
-    expect(Array.isArray(advice.fitAdvice)).toBe(true);
-    expect((advice.fitAdvice as unknown[]).length).toBe(0);
-    // LLM call now produces closingSummary and verdictAha for confirmed_fit
+    // Interview prep fields are present (empty arrays from mock fixture, correct shape)
+    expect(Array.isArray(advice.leadWithThese)).toBe(true);
+    expect(Array.isArray(advice.expectTheseQuestions)).toBe(true);
+    expect(Array.isArray(advice.watchOutFor)).toBe(true);
     expect(state.closingSummary).toBeDefined();
     expect(state.verdictAha).toBeDefined();
     // ATS advice fields must NOT appear in fitAdvice for confirmed_fit

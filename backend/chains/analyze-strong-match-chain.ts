@@ -41,6 +41,27 @@ export const InvisibleExpertLLMSchema = z.object({
         "Drawn from ats_ranking. Each item is a single keyword or short phrase to add. " +
         "Empty array for confirmed_fit.",
     ),
+  leadWithThese: z
+    .array(z.string().min(1))
+    .describe(
+      "2–3 specific experiences from this resume to open the interview with. " +
+        "Reference actual roles and achievements — not generic advice. " +
+        "Empty array for invisible_expert.",
+    ),
+  expectTheseQuestions: z
+    .array(z.string().min(1))
+    .describe(
+      "Likely interview questions the hiring manager will ask given this JD and this candidate's background. " +
+        "Specific to both documents — not generic behavioural questions. " +
+        "Empty array for invisible_expert.",
+    ),
+  watchOutFor: z
+    .array(z.string().min(1))
+    .describe(
+      "1–2 areas where the interviewer may probe harder given the role requirements. " +
+        "Confirmed fit does not mean perfect fit — name the thinner areas honestly. " +
+        "Empty array for invisible_expert.",
+    ),
   closingSummary: z.string().min(1).describe(
     "Scenario-aware synthesis of the fit and ATS pictures. " +
       "For confirmed_fit: brief and validating — one or two sentences confirming the match is solid. " +
@@ -73,6 +94,9 @@ Rules:
 - atsRealityCheck: for invisible_expert — bullet points explaining ATS invisibility, each referencing specific items from ats_ranking. The insight: translation problem, not a talent problem. Empty array for confirmed_fit.
 - terminologySwaps: for invisible_expert — "Replace X with Y" per mismatch. Empty array for confirmed_fit.
 - keywordsToAdd: for invisible_expert — one item per missing keyword. Empty array for confirmed_fit.
+- leadWithThese: for confirmed_fit — 2–3 specific experiences from this resume to open the interview with. Reference actual roles and achievements — not generic advice. Empty array for invisible_expert.
+- expectTheseQuestions: for confirmed_fit — likely interview questions the hiring manager will ask given this JD and this candidate's background. Specific to both documents — not generic behavioural questions. Empty array for invisible_expert.
+- watchOutFor: for confirmed_fit — 1–2 areas where the interviewer may probe harder. Confirmed fit does not mean perfect fit — name the thinner areas honestly. Empty array for invisible_expert.
 - closingSummary: synthesise fit_scenario_summary and ats_scenario_summary. For confirmed_fit: brief and validating. For invisible_expert: name the two-signal contrast explicitly.
 - verdictAha: one sentence pointing to the single most important result card.
 

@@ -72,7 +72,11 @@ function mapFitAdvice(
   if (!fitAdvice) return [];
   switch (fitAdvice.scenarioId as string) {
     case "confirmed_fit":
-      return [];
+      return [
+        { key: "lead_with_these",        bulletPoints: (fitAdvice.leadWithThese        as string[]) ?? [] },
+        { key: "expect_these_questions", bulletPoints: (fitAdvice.expectTheseQuestions as string[]) ?? [] },
+        { key: "watch_out_for",          bulletPoints: (fitAdvice.watchOutFor          as string[]) ?? [] },
+      ];
     case "invisible_expert":
       return [
         { key: "standout_strengths", bulletPoints: (fitAdvice.standoutStrengths as string[]) ?? [] },

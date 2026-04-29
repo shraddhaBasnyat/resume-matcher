@@ -27,8 +27,32 @@ const validInvisibleExpertLLMOutput = {
   ],
   terminologySwaps: ['Replace "ML" with "machine learning"'],
   keywordsToAdd: ["TensorFlow", "production ML systems"],
+  leadWithThese: [],
+  expectTheseQuestions: [],
+  watchOutFor: [],
   closingSummary: "Your background is exactly what this role needs — the gap is in how your resume reads to machines, not to humans.",
   verdictAha: "Your reframing cards show exactly how to retell the experience as the machine expects to read it.",
+};
+
+const validConfirmedFitLLMOutput = {
+  standoutStrengths: [],
+  atsRealityCheck: [],
+  terminologySwaps: [],
+  keywordsToAdd: [],
+  leadWithThese: [
+    "Lead with the FastAPI service you took from greenfield to 50k RPM — names the scale directly.",
+    "Your ML infrastructure work at the logistics company maps exactly to what this role owns.",
+  ],
+  expectTheseQuestions: [
+    "Walk me through a time you owned a production service end-to-end.",
+    "How did you approach the Python performance work at scale?",
+    "What would you change about the ML infrastructure you built?",
+  ],
+  watchOutFor: [
+    "Team leadership — the JD mentions mentoring. Be ready with a specific example.",
+  ],
+  closingSummary: "Strong match across the board — prepare to show depth on the ML infrastructure work and be ready on the mentoring question.",
+  verdictAha: "Your FastAPI and ML infra work maps directly — lead with the scale numbers.",
 };
 
 const validFitAnalysis = {
@@ -128,16 +152,30 @@ describe("InvisibleExpertLLMSchema", () => {
 // ---------------------------------------------------------------------------
 
 describe("analyzeStrongMatch — confirmed_fit", () => {
-  it("calls LLM and returns empty fitAdvice, with closingSummary and verdictAha in state", async () => {
-    const model = buildMockModel();
-    const node = makeAnalyzeStrongMatchNode(model);
+  it("returns interview prep fields in fitAdvice, closingSummary and verdictAha at top level", async () => {
+    const confirmedFitModel = {
+      bind: vi.fn().mockReturnThis(),
+      withStructuredOutput: vi.fn().mockImplementation((schema: unknown) => {
+        if (schema === InvisibleExpertLLMSchema) {
+          return { invoke: vi.fn().mockResolvedValue(validConfirmedFitLLMOutput) };
+        }
+        return { invoke: vi.fn().mockResolvedValue({}) };
+      }),
+    } as unknown as BaseChatModel;
 
+    const node = makeAnalyzeStrongMatchNode(confirmedFitModel);
     const result = await node(buildBaseState({ scenarioId: "confirmed_fit" }));
     const advice = result.fitAdvice as Record<string, unknown>;
 
     expect(advice.scenarioId).toBe("confirmed_fit");
-    expect(Array.isArray(advice.fitAdvice)).toBe(true);
-    expect((advice.fitAdvice as unknown[]).length).toBe(0);
+
+    // Interview prep fields must be present and non-empty
+    expect(Array.isArray(advice.leadWithThese)).toBe(true);
+    expect((advice.leadWithThese as unknown[]).length).toBeGreaterThan(0);
+    expect(Array.isArray(advice.expectTheseQuestions)).toBe(true);
+    expect((advice.expectTheseQuestions as unknown[]).length).toBeGreaterThan(0);
+    expect(Array.isArray(advice.watchOutFor)).toBe(true);
+    expect((advice.watchOutFor as unknown[]).length).toBeGreaterThan(0);
 
     // ATS fields must NOT appear in fitAdvice for confirmed_fit
     expect(advice.standoutStrengths).toBeUndefined();
@@ -145,7 +183,9 @@ describe("analyzeStrongMatch — confirmed_fit", () => {
     expect(advice.terminologySwaps).toBeUndefined();
     expect(advice.keywordsToAdd).toBeUndefined();
 
-    // closingSummary and verdictAha are top-level state fields
+    // closingSummary and verdictAha are top-level state fields, not inside fitAdvice
+    expect(advice.closingSummary).toBeUndefined();
+    expect(advice.verdictAha).toBeUndefined();
     expect((result as Record<string, unknown>).closingSummary).toBeDefined();
     expect((result as Record<string, unknown>).verdictAha).toBeDefined();
   });
@@ -304,5 +344,20 @@ describe("analyzeStrongMatch — validation failure", () => {
         rawOutput: invalidOutput,
       }),
     );
+  });
+
+  it("throws ZodError when leadWithThese is missing from output", async () => {
+    const { leadWithThese: _, ...withoutLeadWithThese } = validConfirmedFitLLMOutput;
+    expect(InvisibleExpertLLMSchema.safeParse(withoutLeadWithThese).success).toBe(false);
+  });
+
+  it("throws ZodError when expectTheseQuestions is missing from output", async () => {
+    const { expectTheseQuestions: _, ...without } = validConfirmedFitLLMOutput;
+    expect(InvisibleExpertLLMSchema.safeParse(without).success).toBe(false);
+  });
+
+  it("throws ZodError when watchOutFor is missing from output", async () => {
+    const { watchOutFor: _, ...without } = validConfirmedFitLLMOutput;
+    expect(InvisibleExpertLLMSchema.safeParse(without).success).toBe(false);
   });
 });
