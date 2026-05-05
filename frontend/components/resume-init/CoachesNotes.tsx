@@ -20,14 +20,6 @@ interface CoachesNotesProps {
   };
 }
 
-function BeatSkeleton() {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="w-[200px] h-3 bg-muted rounded" />
-      <div className="w-[140px] h-3 bg-muted rounded" />
-    </div>
-  );
-}
 
 interface BeatProps {
   status: BeatStatus;
@@ -59,16 +51,10 @@ function Beat({ status, isLast, badge, children }: BeatProps) {
       </div>
 
       <div className="flex-1 flex flex-col gap-1">
-        {status === "done" ? (
-          <>
-            <span className="bg-secondary text-primary font-brand text-[10px] leading-5 px-2 py-0.5 rounded-[4px] self-start">
-              {badge}
-            </span>
-            {children}
-          </>
-        ) : (
-          <BeatSkeleton />
-        )}
+        <span className="bg-secondary text-primary font-brand text-[10px] leading-5 px-2 py-0.5 rounded-[4px] self-start">
+          {badge}
+        </span>
+        {status === "done" && children}
       </div>
     </div>
   );
