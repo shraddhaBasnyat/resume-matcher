@@ -138,13 +138,18 @@ shadow-card
 
 ### MainResultsStage (`components/resume-init/MainResultsStage.tsx`)
 - Owns `activeTab` state; accepts `className` prop
-- Outer container: `bg-background border border-border/50 shadow-card flex flex-col min-h-[600px]`
-- Tab switcher inlined at top (height 66px, `border-b border-border/50`, left-aligned, no right-side progress bar)
-  — `TabId` type and `TABS` constant are defined locally in this file (not exported)
-- resume-init slot: `<div className="p-6 flex flex-col gap-6">` renders `<CoachesNotes>` + `<BattleCard>` + (once result arrives) `<FitAdviceAccordion>` + `<ScenarioSummary>`
-  — shown whenever `appState === "running"` or `result !== null`
-- company-init / arc-init slots: each wrapped in `<div className="flex flex-col flex-1">` so the paywall fills remaining height below the header
+- Outer container: no background, no border, no shadow — transparent `flex flex-col min-h-[600px]`
+- `TabId` type and `TABS` constant defined locally in this file (not exported from any other file)
+- **Tab bar** — `ResultsHeader` removed; tab switcher inlined directly:
+  - Wrapped in `<div className="w-fit border-t border-l border-r border-border rounded-t-[6px]">` (folder tab — three-sided border, no bottom)
+  - `TabsList`: `bg-muted rounded-t-[6px] rounded-b-none pt-[5px] pb-0 px-1 flex flex-row gap-1 w-fit`
+  - Active trigger: `data-[active]:bg-background data-[active]:shadow-sm data-[active]:text-foreground data-[active]:pb-[9px] data-[active]:rounded-b-none`
+- **Results-Content-V2** (`<div className="bg-background w-full flex flex-col px-6 py-4 gap-3 items-center min-h-[600px]">`) — always renders when `activeTab === "resume-init"`; it is the empty sheet even in idle state
+  - `CoachesNotes` + `BattleCard`: rendered when `appState === "running" || result !== null`
+  - `FitAdviceAccordion` + `ScenarioSummary`: rendered only when `result !== null`
+- company-init / arc-init slots: each wrapped in `<div className="flex flex-col flex-1">` so the paywall fills remaining height
 - Props: `{ className?, result, progress, appState }` — all sourced live from `useMatchRunner`
+- `deriveBeatStatus(isDone, progressStatus)` helper derives per-beat status for `CoachesNotes`
 
 ### BattleCard (`components/resume-init/BattleCard.tsx`)
 - Container: `flex flex-row items-center py-8 px-6 gap-4 bg-muted border border-border rounded-[24px]`
@@ -159,18 +164,21 @@ shadow-card
 
 ### CoachesNotes (`components/resume-init/CoachesNotes.tsx`)
 - Full-width flex-column strip sitting above BattleCard in the resume-init slot
-- Props: `{ isLoading, atsSignal?, fitSignal?, fitScore?, atsScore?, scenarioId?, nextStep? }`
-- 4 beats stacked vertically, each: indicator circle (left, `w-6`) + content column (`flex-1 ml-3`):
-  - Beat 1 — badge `ATS SIGNAL`, text: `atsSignal` prop (from `progress["atsAnalysis"]?.aha`)
-  - Beat 2 — badge `FIT SIGNAL`, text: `fitSignal` prop (from `progress["analyzeFit"]?.aha`)
-  - Beat 3 — badge `VERDICT`, flex row: `"fit {fitScore} · ATS {atsScore}"` + scenario pill
-  - Beat 4 — badge `NEXT STEP`, text: `nextStep` prop (from `progress["analyzeMatch"]?.aha`, which is the normalized key for all three verdict branch nodes)
-- **Per-beat independent loading**: each beat switches from skeleton (`bg-muted` bars) to live content as soon as its own data prop becomes defined — beats can be in different states simultaneously as SSE `node_done` events arrive
-- Indicator done state: `bg-success rounded-full` circle with `<Check size={16} className="text-white" />` + `bg-success` connector line below
-- Indicator loading state: `bg-muted border border-border rounded-full` + `bg-muted` connector line
-- Connector height: `h-[80px]`; no connector below the last beat
-- Badge style: `bg-secondary text-primary font-brand text-[10px] px-2 py-0.5 rounded-[4px]`
-- Scenario pill style: `bg-primary text-primary-foreground font-brand text-sm px-3 py-0.5 rounded-[6px]`
+- Props: `{ isLoading, atsSignal?, fitSignal?, fitScore?, atsScore?, scenarioId?, nextStep?, beatStatuses? }`
+  - `beatStatuses`: `{ beat1, beat2, beat3, beat4 }` each `"idle" | "running" | "done"` — derived in MainResultsStage from `progress`
+- 4 beats stacked vertically, each: `flex flex-row gap-3 items-start` with indicator column (`w-6`) + content column (`flex-1`)
+  - Beat 1 — badge `ATS SIGNAL`, text: `atsSignal` (from `progress["atsAnalysis"]?.aha`)
+  - Beat 2 — badge `FIT SIGNAL`, text: `fitSignal` (from `progress["analyzeFit"]?.aha`)
+  - Beat 3 — badge `VERDICT`, flex row: score string `"fit {fitScore} · ATS {atsScore}"` + scenario pill; data from `progress["routeVerdicts"]` (fitScore from `progress["analyzeFit"]`, atsScore from `progress["atsAnalysis"]`, scenarioId from `progress["routeVerdicts"]?.scenarioId`)
+  - Beat 4 — badge `NEXT STEP`, text: `nextStep` (from `progress["analyzeMatch"]?.aha` — normalized key for all three verdict branch nodes)
+- **Badges always render** regardless of beat status — no skeleton bars; content below the badge only renders when `status === "done"`
+- **Beat status** drives indicator only (not badge visibility):
+  - done: `bg-success rounded-full` + `<Check size={16} className="text-white" />` + `bg-success` connector
+  - running: `bg-primary rounded-full` + `<LoaderCircle size={16} className="text-primary-foreground animate-spin" />` + `bg-muted` connector
+  - idle: `bg-muted border border-border rounded-full` + `bg-muted` connector
+- Connector: `w-0.5 h-[80px]`; omitted on last beat
+- Badge style: `bg-secondary text-primary font-brand text-[10px] leading-5 px-2 py-0.5 rounded-[4px]` (height = 24px: 20px line-height + 4px padding)
+- Scenario pill: `bg-primary text-primary-foreground font-brand text-sm px-[10px] py-[3px] rounded-[6px]` (height = 26px: 20px line-height + 6px padding)
 
 ### FitAdviceAccordion (`components/resume-init/FitAdviceAccordion.tsx`)
 - Container: `flex flex-col p-6 bg-white w-full`
@@ -283,13 +291,18 @@ Use `bg-muted` for lighter bars, `bg-muted-foreground/10` for very subtle bars o
 interface NodeProgress {
   status: "waiting" | "running" | "done";
   durationMs?: number;
-  aha?: string;        // populated from node_done.aha (atsAnalysis, analyzeFit, verdict nodes)
-  fitScore?: number;   // routeVerdicts node only
-  atsScore?: number;   // routeVerdicts node only
+  aha?: string;        // atsAnalysis, analyzeFit, and verdict nodes emit this
+  fitScore?: number;   // analyzeFit node (also re-emitted by routeVerdicts)
+  atsScore?: number;   // atsAnalysis node (also re-emitted by routeVerdicts)
   scenarioId?: string; // routeVerdicts node only
 }
 ```
 All three verdict branch nodes (`analyzeStrongMatch`, `analyzeNarrativeGap`, `analyzeSkepticalReconciliation`) are normalized to the key `"analyzeMatch"` by `normalizeNodeName` — so `progress["analyzeMatch"]?.aha` is the nextStep text regardless of which branch fired.
+
+### routeVerdicts node_done payload
+`routeVerdicts` emits `fitScore`, `atsScore`, and `scenarioId` in its `node_done` SSE event. These are available in `progress["routeVerdicts"]` before the `completed` event fires — Beat 3 (VERDICT) uses `progress["routeVerdicts"]?.scenarioId` directly so the scenario pill populates mid-stream.
+
+**Backend note**: `routeVerdicts` was refactored from `Command`-based routing to a plain state-update return so these fields appear in `_outputs` and reach the emitter. Routing is now via `addConditionalEdges` + `selectVerdictNode` in `scoring-graph.ts`.
 
 ## 4 Scenarios (drive ResumeInit results UI)
 | Scenario | fitScore | atsScore |
@@ -308,11 +321,9 @@ All three verdict branch nodes (`analyzeStrongMatch`, `analyzeNarrativeGap`, `an
 CompanyInit and ArcInit show a paywall/waitlist gate (PaywallGateResult). All three tabs are clickable.
 
 ## What's Next
-- Wire real SSE data from `useMatchRunner` `completed` event — replace all `dummy-data.ts` 
-  imports in `MainResultsStage` with live state from the hook
-- Delete `dummy-data.ts` once real data is connected
-- Skeleton loading state: `isLoading={true}` on ResultsTop/FitAdviceAccordion until 
-  `completed` event fires; `isLoading={false}` once it does
+- Delete `dummy-data.ts` — `MainResultsStage` is now fully wired to live `useMatchRunner` state; no dummy imports remain
+- Wire `FitAdviceAccordion` and `ScenarioSummary` skeleton state for the running phase if needed
+- ATS panel (Station 3) — surface `atsProfile`, `terminologyDiffs` once backend schema is finalised
 
 ## Do Not Touch
 - `frontend/app/page.tsx` (legacy)
@@ -333,7 +344,7 @@ Body background stays white (default) — do not add `background-color` to body 
 
 ## Base UI Gotchas
 
-- **Tabs active state**: attribute is `data-active`, not `data-selected`. Selector: `data-[active]:...`
+- **Tabs active state**: attribute is `data-active`, not `data-selected`. Selector: `data-[active]:...` — in MainResultsStage the active trigger uses `data-[active]:bg-background` (cream `#FDFCF5`), not `data-[active]:bg-card` (white)
 - **Accordion chevron**: `data-panel-open` lives on `Accordion.Trigger`. Use `group` + 
   `group-data-[panel-open]:...` on children — direct `data-[panel-open]:...` on a child won't fire.
 - **Accordion default**: `multiple` defaults `false` (single-open). Pass `defaultValue={[]}` for 
