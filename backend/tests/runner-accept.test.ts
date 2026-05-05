@@ -38,8 +38,8 @@ const checkpointedState = {
   fitScore: 42,
   headline: "Frontend Developer without the backend depth this role requires",
   battleCardBullets: [
-    "Role requires 5+ years backend systems — candidate has 3 years frontend.",
-    "No distributed architecture ownership in history.",
+    { requirement: "5+ years backend systems", evidence: "3 years frontend only", verdict: "hard_gap" as const },
+    { requirement: "Distributed architecture ownership", evidence: "No distributed architecture in history", verdict: "hard_gap" as const },
   ],
   fitAdvice: {
     scenarioId: "honest_verdict",

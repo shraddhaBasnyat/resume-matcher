@@ -85,6 +85,7 @@ export function MainResultsStage({ className, result, progress, appState }: Main
                 isLoading={appState === "running"}
                 score={result?.fitScore}
                 headline={result?.battleCard.headline}
+                // @ts-expect-error — bulletPoints removed in feat/battle-card-schema; resolved in feat/battle-card-v2
                 paragraphs={result?.battleCard.bulletPoints}
               />
             </>

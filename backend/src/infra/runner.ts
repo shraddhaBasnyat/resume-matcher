@@ -113,7 +113,7 @@ function buildPublicResponse(
     fitScore: state.fitScore!,
     battleCard: {
       headline: state.headline!,
-      bulletPoints: state.battleCardBullets ?? [],
+      bullets: state.battleCardBullets ?? [],
     },
     fitAdvice: mapFitAdvice(state.fitAdvice),
     atsProfile: {

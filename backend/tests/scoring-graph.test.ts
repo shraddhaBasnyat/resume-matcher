@@ -33,9 +33,9 @@ const validAnalyzeFitLLMOutput = {
   fitScore: 82,
   headline: "Senior Frontend Engineer with strong TypeScript and React track record",
   battleCardBullets: [
-    "5 years of TypeScript across production SPAs",
-    "Led frontend architecture at a 50-person startup",
-    "Built component libraries consumed by 4 product teams",
+    { requirement: "TypeScript depth", evidence: "5 years of TypeScript across production SPAs", verdict: "strong_match" as const },
+    { requirement: "Architecture leadership", evidence: "Led frontend architecture at a 50-person startup", verdict: "strong_match" as const },
+    { requirement: "Component system design", evidence: "Built component libraries consumed by 4 product teams", verdict: "strong_match" as const },
   ],
   fitScenarioSummary:
     "This candidate has a direct frontend background with the TypeScript and React depth the role requires. " +
