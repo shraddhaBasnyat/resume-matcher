@@ -50,41 +50,45 @@ export function MainResultsStage({ className, result, progress, appState }: Main
   };
 
   return (
-    <div className={cn("bg-background border border-border/50 shadow-card flex flex-col min-h-[600px]", className)}>
-      <div className="h-[66px] w-full flex flex-row items-center px-4 border-b border-border/50">
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabId)}>
-          <TabsList className="bg-muted rounded-[6px] p-[5px] flex flex-row gap-1">
-            {TABS.map((tab) => (
-              <TabsTrigger
-                key={tab.id}
-                value={tab.id}
-                className="font-brand font-medium text-xs px-3 py-1 rounded-[4px] transition-colors text-muted-foreground data-[active]:bg-card data-[active]:shadow-sm data-[active]:text-foreground"
-              >
-                {tab.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+    <div className={cn("flex flex-col min-h-[600px]", className)}>
+      <div className="w-fit border-t border-l border-r border-border rounded-t-[6px]">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabId)}>
+        <TabsList className="bg-muted rounded-t-[6px] rounded-b-none pt-[5px] pb-0 px-1 flex flex-row gap-1 w-fit">
+          {TABS.map((tab) => (
+            <TabsTrigger
+              key={tab.id}
+              value={tab.id}
+              className="font-brand font-medium text-xs px-3 py-1 rounded-[4px] transition-colors text-muted-foreground data-[active]:bg-card data-[active]:shadow-sm data-[active]:text-foreground data-[active]:pb-[9px] data-[active]:rounded-b-none"
+            >
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
       </div>
 
-      {activeTab === "resume-init" && (appState === "running" || result !== null) && (
-        <div className="p-6 flex flex-col gap-6">
-          <CoachesNotes
-            isLoading={appState === "running"}
-            atsSignal={progress["atsAnalysis"]?.aha}
-            fitSignal={progress["analyzeFit"]?.aha}
-            fitScore={progress["analyzeFit"]?.fitScore}
-            atsScore={progress["atsAnalysis"]?.atsScore}
-            scenarioId={progress["analyzeMatch"]?.scenarioId ?? result?.scenarioId}
-            nextStep={progress["analyzeMatch"]?.aha}
-            beatStatuses={beatStatuses}
-          />
-          <BattleCard
-            isLoading={appState === "running"}
-            score={result?.fitScore}
-            headline={result?.battleCard.headline}
-            paragraphs={result?.battleCard.bulletPoints}
-          />
+      {activeTab === "resume-init" && (
+        <div className="bg-card w-full flex flex-col px-6 py-4 gap-3 items-center min-h-[600px]">
+          {(appState === "running" || result !== null) && (
+            <>
+              <CoachesNotes
+                isLoading={appState === "running"}
+                atsSignal={progress["atsAnalysis"]?.aha}
+                fitSignal={progress["analyzeFit"]?.aha}
+                fitScore={progress["analyzeFit"]?.fitScore}
+                atsScore={progress["atsAnalysis"]?.atsScore}
+                scenarioId={progress["analyzeMatch"]?.scenarioId ?? result?.scenarioId}
+                nextStep={progress["analyzeMatch"]?.aha}
+                beatStatuses={beatStatuses}
+              />
+              <BattleCard
+                isLoading={appState === "running"}
+                score={result?.fitScore}
+                headline={result?.battleCard.headline}
+                paragraphs={result?.battleCard.bulletPoints}
+              />
+            </>
+          )}
           {result !== null && (
             <>
               <FitAdviceAccordion isLoading={false} items={result.fitAdvice} />
