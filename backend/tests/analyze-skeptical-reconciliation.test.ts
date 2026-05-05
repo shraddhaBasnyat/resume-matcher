@@ -73,7 +73,10 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     humanContext: "",
     fitScore: 38,
     headline: "Frontend Developer without backend systems depth",
-    battleCardBullets: ["3 years of React", "Strong CSS fundamentals"],
+    battleCardBullets: [
+      { requirement: "React experience", evidence: "3 years of React", verdict: "strong_match" as const },
+      { requirement: "CSS proficiency", evidence: "Strong CSS fundamentals", verdict: "strong_match" as const },
+    ],
     fitScenarioSummary: "Frontend background does not map to this senior backend role.",
     fitAha: "Three years of frontend work — the core backend skills this role requires are absent.",
     sourceRole: "frontend_swe",

@@ -45,7 +45,10 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     humanContext: "",
     fitScore: 62,
     headline: "Data Engineer with strong infrastructure background",
-    battleCardBullets: ["5 years of Python", "Kafka consumer ownership"],
+    battleCardBullets: [
+      { requirement: "Python experience", evidence: "5 years of Python", verdict: "strong_match" as const },
+      { requirement: "Streaming systems", evidence: "Kafka consumer ownership", verdict: "strong_match" as const },
+    ],
     fitScenarioSummary: "Strong pipeline background maps to ML platform work.",
     fitAha: "Your Kafka consumer work maps directly to a feature store consumer — the experience is there, the framing is not.",
     atsScore: null,

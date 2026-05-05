@@ -77,7 +77,10 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     humanContext: "",
     fitScore: 82,
     headline: "Backend Engineer with strong ML background",
-    battleCardBullets: ["5 years of Python", "FastAPI service design"],
+    battleCardBullets: [
+      { requirement: "Python backend experience", evidence: "5 years of Python", verdict: "strong_match" as const },
+      { requirement: "API design", evidence: "FastAPI service design", verdict: "strong_match" as const },
+    ],
     fitScenarioSummary: "Strong backend background maps to this role.",
     fitAha: "Five years of Python at scale maps directly to what this role requires.",
     atsScore: null,

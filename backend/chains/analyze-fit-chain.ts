@@ -3,10 +3,27 @@ import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { RootRunCapture, logValidationFailure } from "../langsmith.js";
 
+export const BattleCardVerdictSchema = z.enum([
+  "hard_gap",
+  "framing_gap",
+  "terminology_gap",
+  "strong_match",
+]);
+
+export type BattleCardBullet = {
+  requirement: string;
+  evidence: string;
+  verdict: z.infer<typeof BattleCardVerdictSchema>;
+};
+
 export const AnalyzeFitLLMSchema = z.object({
   fitScore: z.number().min(0).max(100),
   headline: z.string().min(1),
-  battleCardBullets: z.array(z.string().min(1)),
+  battleCardBullets: z.array(z.object({
+    requirement: z.string().min(1),
+    evidence:    z.string().min(1),
+    verdict:     BattleCardVerdictSchema,
+  })),
   fitScenarioSummary: z.string().min(1),
   fitAha: z.string().min(1),
   sourceRole: z.string().min(1),
@@ -28,7 +45,15 @@ Your output is factual and cold. No advice, no encouragement, no reframing sugge
 Rules:
 - fitScore: semantic fit from 0–100. Score based on career trajectory, transferable skills, and experience relative to the role. Not based on keyword overlap.
 - headline: one short phrase capturing the core fit story — what this candidate is relative to what this role needs. It must encode both the match AND the gap if one exists. Not a summary of the candidate. Not a job title. Example for a 72: "Strong distributed systems background, domain gap from storefront to fulfillment." Example for a 90: "Direct match — platform engineering at scale with team leadership." 
-- battleCardBullets: 3–5 bullets. Each bullet must lead with what the ROLE requires, then evaluate the candidate's evidence against that requirement, then state the confidence level or caveat honestly. Format: "[role requirement] — [candidate evidence] — [honest assessment]". The bullets collectively must explain why the score is not higher. If the score is below 85, at least one bullet must name what is missing or weak. Specificity test: could this bullet have been written without reading both the resume AND the job description? If yes, rewrite it.
+- battleCardBullets: 3–5 structured bullets. Each bullet has three fields:
+    requirement: what this role specifically requires — lead with the role, not the candidate
+    evidence: the candidate's direct evidence against that requirement — specific, drawn from the resume
+    verdict: one of four classifications:
+      hard_gap        — the candidate genuinely lacks this qualification or experience
+      framing_gap     — the experience exists but is described in a way that misses the role signal
+      terminology_gap — the skill is present but named differently than the JD expects
+      strong_match    — the candidate directly meets or exceeds this requirement
+  The bullets collectively must explain why the score is not higher. If fitScore < 85, at least one bullet must be hard_gap, framing_gap, or terminology_gap. No motivational language. Specificity test: could this bullet have been written without reading both the resume AND the job description? If yes, rewrite it.
 - fitScenarioSummary: one paragraph summarising the human fit picture in isolation — factual, no ATS context, no scenario tone yet. What is the core story — does the background map, partially map, or not map to this role and why? Direct and specific. No motivational language. This is read by verdict nodes which synthesise it with the ATS picture into the final closing summary.
 - fitAha: one sentence — the sharpest human fit observation. Pure observation only, no advice, no fix language. Must be specific to this candidate and this role. Example: "Your Wayfair replatforming work maps directly to fulfillment automation — but your resume frames it as storefront engineering."
 - sourceRole: the candidate's current or most recent role category. Use one of: backend_swe | frontend_swe | fullstack_swe | ai_agent_dev | ml_engineer | data_scientist | devops_engineer | product_manager | unknown.

@@ -56,12 +56,20 @@ export type ScenarioId =
   | "narrative_gap"
   | "honest_verdict";
 
+export type BattleCardVerdict = "hard_gap" | "framing_gap" | "terminology_gap" | "strong_match";
+
+export interface BattleCardBullet {
+  requirement: string;
+  evidence: string;
+  verdict: BattleCardVerdict;
+}
+
 export interface MatchResponse {
   scenarioId: ScenarioId;
   fitScore: number;
   battleCard: {
     headline: string;
-    bulletPoints: string[];
+    bullets: BattleCardBullet[];
   };
   fitAdvice: { key: string; bulletPoints: string[] }[];
   atsProfile: {

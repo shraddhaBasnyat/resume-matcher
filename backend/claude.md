@@ -49,10 +49,16 @@ LLM output schema (all fields required):
                                 // e.g. for 72: "Strong distributed systems background,
                                 // domain gap from storefront to fulfillment"
                                 // NOT a candidate summary or job title
-  battleCardBullets: string[]   // role-first format: [role requirement] — [candidate
-                                // evidence] — [honest assessment]. Must collectively
-                                // explain why score is not higher. If score < 85,
-                                // at least one bullet names what is absent or weak.
+  battleCardBullets: {          // structured bullets — each has:
+    requirement: string         //   what the role requires (role-first)
+    evidence: string            //   candidate's evidence against that requirement
+    verdict: 'hard_gap'         //   hard_gap: genuinely missing qualification
+           | 'framing_gap'      //   framing_gap: experience exists, framing misses the signal
+           | 'terminology_gap'  //   terminology_gap: same skill, different vocabulary
+           | 'strong_match'     //   strong_match: candidate meets or exceeds requirement
+  }[]                           // Must collectively explain why score is not higher.
+                                // If fitScore < 85, at least one bullet must be hard_gap,
+                                // framing_gap, or terminology_gap.
   fitScenarioSummary: string    // human fit picture in isolation — factual paragraph,
                                 // no ATS context, no scenario tone yet. Read by verdict
                                 // nodes which synthesise this with atsScenarioSummary
@@ -292,13 +298,13 @@ Output schema:
 | `targetRole` | `analyzeFit` | `detectArchetype` (future) |
 | `fitAnalysis` | `analyzeFit` | all verdict nodes |
 | `fitAnalysis.weakMatchReason` | `analyzeFit` (normalised) | `analyzeSkepticalReconciliation`, runner |
-| `fitAha` | `analyzeFit` | runner (emitted in `node_done`, remapped to `provenanceTrail`) |
+| `fitAha` | `analyzeFit` | runner (emitted in `node_done`) |
 | `atsScore` | `atsAnalysis` | `routeVerdicts` |
 | `atsProfile` | `atsAnalysis` | `analyzeStrongMatch`, runner |
 | `atsScenarioSummary` | `atsAnalysis` | verdict nodes |
-| `atsAha` | `atsAnalysis` | runner (emitted in `node_done`, remapped to `provenanceTrail`) |
+| `atsAha` | `atsAnalysis` | runner (emitted in `node_done`) |
 | `terminologyDiffs` | `generateTerminologyFixes` | runner, `analyzeStrongMatch` |
-| `verdictAha` | verdict nodes | runner (emitted in `node_done`, remapped to `provenanceTrail`) |
+| `verdictAha` | verdict nodes | runner (emitted in `node_done`) |
 | `closingSummary` | verdict nodes | runner (remapped to `scenarioSummary.text`) |
 | `scenarioId` | `routeVerdicts` | all verdict nodes, runner |
 | `fitAdvice` | verdict nodes | runner |
@@ -320,7 +326,11 @@ Emitted by `runner.ts` on the `completed` SSE event under `result`. Validated by
 
   battleCard: {
     headline: string
-    bulletPoints: string[]
+    bullets: {
+      requirement: string
+      evidence: string
+      verdict: 'hard_gap' | 'framing_gap' | 'terminology_gap' | 'strong_match'
+    }[]
   }
 
   fitAdvice: {
@@ -363,15 +373,6 @@ Emitted by `runner.ts` on the `completed` SSE event under `result`. Validated by
     after: string
   }[]
 
-  provenanceTrail: {
-    node: string
-    durationMs: number
-    aha: string | null          // null for generateTerminologyFixes and routeVerdicts
-    fitScore?: number           // routeVerdicts beat only
-    atsScore?: number | null    // routeVerdicts beat only
-    scenarioId?: ScenarioId     // routeVerdicts beat only
-  }[]
-
   scenarioSummary: {
     text: string              // populated from closingSummary (verdict node output)
                               // scenario-aware synthesis of fitScenarioSummary +
@@ -383,11 +384,6 @@ Emitted by `runner.ts` on the `completed` SSE event under `result`. Validated by
   _meta: { durationMs: number }
 }
 ```
-
-`provenanceTrail` is assembled by the runner from `node_done` events in arrival order.
-Internal aha fields (`atsAha`, `fitAha`, `verdictAha`) are remapped here and never emitted
-raw. The frontend logic pill consumes `provenanceTrail` directly — it does not reconstruct
-the trail from individual SSE events.
 
 `scenarioSummary.text` is remapped from `closingSummary` (verdict node). Internal draft
 fields `fitScenarioSummary` and `atsScenarioSummary` are never emitted.
@@ -437,9 +433,8 @@ Lives in `runner.ts`.
 
 `fitAnalysis`, `fitScenarioSummary`, `atsScenarioSummary`, `closingSummary` (remapped to
 `scenarioSummary.text`), `headline` (remapped to `battleCard.headline`), `battleCardBullets`
-(remapped to `battleCard.bulletPoints`), `atsAha`, `fitAha`, `verdictAha` (remapped into
-`provenanceTrail`), `sourceRole`, `targetRole`, `weakMatch`, `humanContext`, `hitlFired`,
-`contextPrompt`
+(remapped to `battleCard.bullets`), `atsAha`, `fitAha`, `verdictAha`, `sourceRole`,
+`targetRole`, `weakMatch`, `humanContext`, `hitlFired`, `contextPrompt`
 
 `PublicMatchResponseSchema.safeParse()` runs on the mapped result before emission. If validation fails → emit error event, never emit malformed data.
 
