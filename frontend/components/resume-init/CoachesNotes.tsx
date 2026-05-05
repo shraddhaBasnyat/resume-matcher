@@ -1,6 +1,8 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { Check, LoaderCircle } from "lucide-react";
+
+type BeatStatus = "idle" | "running" | "done";
 
 interface CoachesNotesProps {
   isLoading: boolean;
@@ -10,6 +12,12 @@ interface CoachesNotesProps {
   atsScore?: number;
   scenarioId?: string;
   nextStep?: string;
+  beatStatuses?: {
+    beat1: BeatStatus;
+    beat2: BeatStatus;
+    beat3: BeatStatus;
+    beat4: BeatStatus;
+  };
 }
 
 function BeatSkeleton() {
@@ -22,30 +30,36 @@ function BeatSkeleton() {
 }
 
 interface BeatProps {
-  isDone: boolean;
+  status: BeatStatus;
   isLast?: boolean;
   badge: string;
   children: React.ReactNode;
 }
 
-function Beat({ isDone, isLast, badge, children }: BeatProps) {
+function Beat({ status, isLast, badge, children }: BeatProps) {
   return (
     <div className="flex flex-row gap-3 items-start">
       <div className="w-6 flex flex-col items-center">
-        {isDone ? (
+        {status === "done" && (
           <div className="w-6 h-6 bg-success rounded-full flex items-center justify-center flex-shrink-0">
             <Check size={16} className="text-white" />
           </div>
-        ) : (
+        )}
+        {status === "running" && (
+          <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
+            <LoaderCircle size={16} className="text-primary-foreground animate-spin" />
+          </div>
+        )}
+        {status === "idle" && (
           <div className="w-6 h-6 bg-muted border border-border rounded-full flex-shrink-0" />
         )}
         {!isLast && (
-          <div className={`w-0.5 h-[80px] ${isDone ? "bg-success" : "bg-muted"}`} />
+          <div className={`w-0.5 h-[80px] ${status === "done" ? "bg-success" : "bg-muted"}`} />
         )}
       </div>
 
       <div className="flex-1 flex flex-col gap-1">
-        {isDone ? (
+        {status === "done" ? (
           <>
             <span className="bg-secondary text-primary font-brand text-[10px] leading-5 px-2 py-0.5 rounded-[4px] self-start">
               {badge}
@@ -67,10 +81,16 @@ export function CoachesNotes({
   atsScore,
   scenarioId,
   nextStep,
+  beatStatuses,
 }: CoachesNotesProps) {
   const scenarioLabel = scenarioId
     ? scenarioId.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
     : undefined;
+
+  const s1 = beatStatuses?.beat1 ?? (atsSignal !== undefined ? "done" : "idle");
+  const s2 = beatStatuses?.beat2 ?? (fitSignal !== undefined ? "done" : "idle");
+  const s3 = beatStatuses?.beat3 ?? (fitScore !== undefined ? "done" : "idle");
+  const s4 = beatStatuses?.beat4 ?? (nextStep !== undefined ? "done" : "idle");
 
   return (
     <div className="flex flex-col w-full items-start">
@@ -78,15 +98,15 @@ export function CoachesNotes({
         COACH&apos;S NOTES
       </span>
 
-      <Beat isDone={atsSignal !== undefined} badge="ATS SIGNAL">
+      <Beat status={s1} badge="ATS SIGNAL">
         <p className="text-sm text-foreground font-normal">{atsSignal}</p>
       </Beat>
 
-      <Beat isDone={fitSignal !== undefined} badge="FIT SIGNAL">
+      <Beat status={s2} badge="FIT SIGNAL">
         <p className="text-sm text-foreground font-normal">{fitSignal}</p>
       </Beat>
 
-      <Beat isDone={fitScore !== undefined} badge="VERDICT">
+      <Beat status={s3} badge="VERDICT">
         <div className="flex flex-row items-center gap-2">
           <span className="font-brand text-sm text-muted-foreground">
             fit {fitScore} · ATS {atsScore}
@@ -99,7 +119,7 @@ export function CoachesNotes({
         </div>
       </Beat>
 
-      <Beat isDone={nextStep !== undefined} isLast badge="NEXT STEP">
+      <Beat status={s4} isLast badge="NEXT STEP">
         <p className="text-sm text-foreground font-normal">{nextStep}</p>
       </Beat>
     </div>

@@ -27,8 +27,24 @@ interface MainResultsStageProps {
   appState: AppState;
 }
 
+function deriveBeatStatus(
+  isDone: boolean,
+  progressStatus: string | undefined
+): "idle" | "running" | "done" {
+  if (isDone) return "done";
+  if (progressStatus === "running") return "running";
+  return "idle";
+}
+
 export function MainResultsStage({ className, result, progress, appState }: MainResultsStageProps) {
   const [activeTab, setActiveTab] = useState<TabId>("resume-init");
+
+  const beatStatuses = {
+    beat1: deriveBeatStatus(progress["atsAnalysis"]?.aha !== undefined, progress["atsAnalysis"]?.status),
+    beat2: deriveBeatStatus(progress["analyzeFit"]?.aha !== undefined, progress["analyzeFit"]?.status),
+    beat3: deriveBeatStatus(progress["routeVerdicts"]?.fitScore !== undefined, progress["routeVerdicts"]?.status),
+    beat4: deriveBeatStatus(progress["analyzeMatch"]?.aha !== undefined, progress["analyzeMatch"]?.status),
+  };
 
   return (
     <div className={cn("bg-background border border-border/50 shadow-card flex flex-col min-h-[600px]", className)}>
@@ -58,6 +74,7 @@ export function MainResultsStage({ className, result, progress, appState }: Main
             atsScore={progress["routeVerdicts"]?.atsScore}
             scenarioId={progress["routeVerdicts"]?.scenarioId}
             nextStep={progress["analyzeMatch"]?.aha}
+            beatStatuses={beatStatuses}
           />
           <BattleCard
             isLoading={appState === "running"}
