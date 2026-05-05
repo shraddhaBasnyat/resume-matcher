@@ -1,23 +1,26 @@
-import { Command } from "@langchain/langgraph";
-import { deriveScenario } from "./scenario/derive-scenario.js";
+import { deriveScenario, SCENARIO_VERDICT_MAP } from "./scenario/derive-scenario.js";
 import type { GraphStateType } from "./scoring-graph-state.js";
 
-// Command-based routing node: calls deriveScenario (fitScore + atsScore only),
-// writes scenarioId to state, and dispatches to the single verdict node.
 export function routeVerdicts(state: GraphStateType) {
   if (state.fitScore === undefined) {
     throw new Error("routeVerdicts: fitScore is missing — analyzeFit node did not complete successfully");
   }
 
-  // state.atsScore is the first-class field written by atsAnalysis node
   const atsScore = state.atsScore ?? undefined;
-  const { scenarioId, verdictNode } = deriveScenario(state.fitScore, atsScore);
+  const { scenarioId } = deriveScenario(state.fitScore, atsScore);
 
-  return new Command({
-    // Include fitScore and atsScore in update so NodeProgressEmitter can read them
-    // from _outputs in handleChainEnd for the routeVerdicts node_done payload.
-    // These are re-writes of existing state values — safe with replace reducers.
-    update: { scenarioId, fitScore: state.fitScore, atsScore: state.atsScore ?? null },
-    goto: [verdictNode],
-  });
+  // Return a plain state update so the emitter can read fitScore, atsScore, scenarioId
+  // from _outputs in handleChainEnd. Routing is handled via addConditionalEdges in
+  // the graph using selectVerdictNode below.
+  return { scenarioId, fitScore: state.fitScore, atsScore: state.atsScore ?? null };
+}
+
+// Conditional edge routing function — reads scenarioId written by routeVerdicts and
+// returns the target verdict node name.
+export function selectVerdictNode(state: GraphStateType): string {
+  const scenarioId = state.scenarioId;
+  if (!scenarioId) {
+    throw new Error("selectVerdictNode: state.scenarioId is undefined — routeVerdicts did not write it to state");
+  }
+  return SCENARIO_VERDICT_MAP[scenarioId];
 }

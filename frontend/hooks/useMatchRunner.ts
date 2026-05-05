@@ -133,6 +133,10 @@ export function useMatchRunner(): UseMatchRunnerReturn {
             [normalizeNodeName(payload.node as string)]: {
               status: "done",
               durationMs: payload.durationMs as number,
+              ...(payload.aha !== undefined ? { aha: payload.aha as string } : {}),
+              ...(payload.fitScore !== undefined ? { fitScore: payload.fitScore as number } : {}),
+              ...(payload.atsScore !== undefined ? { atsScore: payload.atsScore as number } : {}),
+              ...(payload.scenarioId !== undefined ? { scenarioId: payload.scenarioId as string } : {}),
             },
           }));
           break;

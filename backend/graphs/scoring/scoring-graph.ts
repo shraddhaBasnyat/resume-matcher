@@ -7,7 +7,7 @@ import { makeAtsAnalysisNode } from "./nodes/ats-analysis.js";
 import { makeAnalyzeStrongMatchNode } from "./nodes/analyze-strong-match.js";
 import { makeAnalyzeNarrativeGapNode } from "./nodes/analyze-narrative-gap.js";
 import { makeAnalyzeSkepticalReconciliationNode } from "./nodes/analyze-skeptical-reconciliation.js";
-import { routeVerdicts } from "./edges.js";
+import { routeVerdicts, selectVerdictNode } from "./edges.js";
 
 const NODES = {
   ATS_ANALYSIS: "atsAnalysis",
@@ -61,14 +61,7 @@ export function buildScoringGraph(model: BaseChatModel) {
   const workflow = new StateGraph(GraphState)
     .addNode(NODES.ATS_ANALYSIS, atsAnalysis)
     .addNode(NODES.ANALYZE_FIT, analyzeFit)
-    .addNode(NODES.ROUTE_VERDICTS, routeVerdicts, {
-      ends: [
-        NODES.ANALYZE_STRONG_MATCH,
-        NODES.ANALYZE_NARRATIVE_GAP,
-        NODES.ANALYZE_SKEPTICAL_RECONCILIATION,
-        "__end__",
-      ],
-    })
+    .addNode(NODES.ROUTE_VERDICTS, routeVerdicts)
     .addNode(NODES.ANALYZE_STRONG_MATCH, analyzeStrongMatch)
     .addNode(NODES.ANALYZE_NARRATIVE_GAP, analyzeNarrativeGap)
     .addNode(NODES.ANALYZE_SKEPTICAL_RECONCILIATION, analyzeSkepticalReconciliation, {
@@ -79,6 +72,11 @@ export function buildScoringGraph(model: BaseChatModel) {
     .addEdge("__start__", NODES.ANALYZE_FIT)
     .addEdge(NODES.ATS_ANALYSIS, NODES.ROUTE_VERDICTS)
     .addEdge(NODES.ANALYZE_FIT, NODES.ROUTE_VERDICTS)
+    .addConditionalEdges(NODES.ROUTE_VERDICTS, selectVerdictNode, {
+      [NODES.ANALYZE_STRONG_MATCH]: NODES.ANALYZE_STRONG_MATCH,
+      [NODES.ANALYZE_NARRATIVE_GAP]: NODES.ANALYZE_NARRATIVE_GAP,
+      [NODES.ANALYZE_SKEPTICAL_RECONCILIATION]: NODES.ANALYZE_SKEPTICAL_RECONCILIATION,
+    })
     // Verdict nodes terminate at END independently
     .addEdge(NODES.ANALYZE_STRONG_MATCH, "__end__")
     .addEdge(NODES.ANALYZE_NARRATIVE_GAP, "__end__")
