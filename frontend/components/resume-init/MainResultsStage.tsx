@@ -77,7 +77,7 @@ export function MainResultsStage({ className, result, progress, appState }: Main
                 fitSignal={progress["analyzeFit"]?.aha}
                 fitScore={progress["analyzeFit"]?.fitScore}
                 atsScore={progress["atsAnalysis"]?.atsScore}
-                scenarioId={progress["analyzeMatch"]?.scenarioId ?? result?.scenarioId}
+                scenarioId={progress["routeVerdicts"]?.scenarioId}
                 nextStep={progress["analyzeMatch"]?.aha}
                 beatStatuses={beatStatuses}
               />
