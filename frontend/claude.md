@@ -73,13 +73,17 @@ Tailwind config maps them as `hsl(var(--token) / <alpha-value>)` for opacity mod
 bg-background, bg-foreground
 bg-primary, bg-primary/10, bg-primary/40, text-primary, text-primary-foreground
 bg-muted, bg-muted/30, bg-muted/50, text-muted-foreground
-bg-muted-foreground/10 (used for skeleton bars in BattleCard)
+bg-muted-foreground/10
 bg-card, text-card-foreground
 bg-border, border-border, border-border/50
 bg-secondary, text-secondary-foreground
 bg-accent, text-accent-foreground
 bg-destructive, text-destructive-foreground
 bg-success, text-success, text-success-foreground
+bg-success-bg (≈ #F0F0D0 — used for strong_match pill + confirmed_fit badge)
+bg-warning, text-warning (≈ #8A6020 — amber/dark gold)
+bg-warning-bg (≈ #FAEEDA — used for framing_gap/terminology_gap pills + narrative_gap badge)
+bg-destructive-bg (≈ #FCEBEB — used for hard_gap pill + honest_verdict badge)
 shadow-card
 ```
 
@@ -145,22 +149,44 @@ shadow-card
   - `TabsList`: `bg-muted rounded-t-[6px] rounded-b-none pt-[5px] pb-0 px-1 flex flex-row gap-1 w-fit`
   - Active trigger: `data-[active]:bg-background data-[active]:shadow-sm data-[active]:text-foreground data-[active]:pb-[9px] data-[active]:rounded-b-none`
 - **Results-Content-V2** (`<div className="bg-background w-full flex flex-col px-6 py-4 gap-3 items-center min-h-[600px]">`) — always renders when `activeTab === "resume-init"`; it is the empty sheet even in idle state
-  - `CoachesNotes` + `BattleCard`: rendered when `appState === "running" || result !== null`
-  - `FitAdviceAccordion` + `ScenarioSummary`: rendered only when `result !== null`
+  - `CoachesNotes`: rendered when `appState === "running" || result !== null`
+  - `BattleCard` + `FitAdviceAccordion` + `ScenarioSummary`: rendered only when `result !== null`
 - company-init / arc-init slots: each wrapped in `<div className="flex flex-col flex-1">` so the paywall fills remaining height
 - Props: `{ className?, result, progress, appState }` — all sourced live from `useMatchRunner`
 - `deriveBeatStatus(isDone, progressStatus)` helper derives per-beat status for `CoachesNotes`
 
+### VerdictPill (`components/resume-init/VerdictPill.tsx`)
+- Props: `{ verdict: "hard_gap" | "framing_gap" | "terminology_gap" | "strong_match" }`
+- Renders a coloured inline pill using `VERDICT_CONFIG` lookup — no `font-brand`, uses default Inter
+- Style: `px-2 py-0.5 rounded-[20px] text-[11px] leading-5 font-normal` (height = 24px)
+- Colour mapping:
+  ```
+  hard_gap        → bg-destructive-bg  text-destructive
+  framing_gap     → bg-warning-bg      text-warning
+  terminology_gap → bg-warning-bg      text-warning
+  strong_match    → bg-success-bg      text-success
+  ```
+
 ### BattleCard (`components/resume-init/BattleCard.tsx`)
-- Container: `flex flex-row items-center py-8 px-6 gap-4 bg-muted border border-border rounded-[24px]`
-  + `style={{ width: "650px", height: "314px", boxShadow: "0px 4px 4px rgba(229, 229, 202, 0.5)" }}`
-  (card shadow uses warm beige rgba — not the standard shadow-card token)
-- **Skeleton** (`isLoading`): `bg-muted-foreground/10` circle + `bg-primary/40` title bar + 
-  3 groups of 2 `bg-muted-foreground/10` bars (`SKELETON_GROUPS = [0,1,2]`)
-- **Content**: score circle `w-[100px] h-[100px] rounded-full bg-primary overflow-hidden` +
-  `font-semibold text-5xl leading-none text-primary-foreground` score number
-  + headline + paragraphs column
-- `overflow-hidden` on score circle is required — without it, large text clips outside the circle
+- **No loading state** — renders only with real data; no skeleton, no `isLoading` prop
+- Props: `{ fitScore?, atsScore?, scenarioId?, scenario?, headline?, bullets? }`
+  - `scenarioId`: raw `ScenarioId` enum value used for `SCENARIO_BADGE_CONFIG` lookup
+  - `scenario`: title-cased display string (derived in MainResultsStage)
+  - `bullets`: `BattleCardBullet[]` from `result.battleCard.bullets`
+- Container: `bg-card border border-border rounded-[12px] flex flex-col w-full gap-4 p-6`
+- **Top row** (`flex flex-row gap-4 items-start border-b border-border/50 pb-3`):
+  - Score circle: `w-16 h-16 bg-primary rounded-full` + `font-bold text-2xl text-primary-foreground`
+  - Right column: scenario badge (colour from `SCENARIO_BADGE_CONFIG[scenarioId]`) + headline + score chips (`font-brand text-[11px]`, Fit in `text-foreground`, ATS in `text-destructive`)
+- **Bullet rows** (`border-b border-border/50 last:border-b-0 py-3`):
+  - Requirement: `font-brand font-bold text-[11px] tracking-[0.08em] text-muted-foreground uppercase`
+  - Evidence + `<VerdictPill>` in a `flex flex-row gap-3 items-start` row
+- `SCENARIO_BADGE_CONFIG` colours:
+  ```
+  confirmed_fit    → bg-success-bg    text-success
+  invisible_expert → bg-secondary     text-primary
+  narrative_gap    → bg-warning-bg    text-warning
+  honest_verdict   → bg-destructive-bg text-destructive
+  ```
 
 ### CoachesNotes (`components/resume-init/CoachesNotes.tsx`)
 - Full-width flex-column strip sitting above BattleCard in the resume-init slot

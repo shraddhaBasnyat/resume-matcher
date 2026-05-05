@@ -70,28 +70,27 @@ export function MainResultsStage({ className, result, progress, appState }: Main
       {activeTab === "resume-init" && (
         <div className="bg-background w-full flex flex-col px-6 py-4 gap-3 items-center min-h-[600px]">
           {(appState === "running" || result !== null) && (
-            <>
-              <CoachesNotes
-                isLoading={appState === "running"}
-                atsSignal={progress["atsAnalysis"]?.aha}
-                fitSignal={progress["analyzeFit"]?.aha}
-                fitScore={progress["analyzeFit"]?.fitScore}
-                atsScore={progress["atsAnalysis"]?.atsScore}
-                scenarioId={progress["routeVerdicts"]?.scenarioId}
-                nextStep={progress["analyzeMatch"]?.aha}
-                beatStatuses={beatStatuses}
-              />
-              <BattleCard
-                isLoading={appState === "running"}
-                score={result?.fitScore}
-                headline={result?.battleCard.headline}
-                // @ts-expect-error — bulletPoints removed in feat/battle-card-schema; resolved in feat/battle-card-v2
-                paragraphs={result?.battleCard.bulletPoints}
-              />
-            </>
+            <CoachesNotes
+              isLoading={appState === "running"}
+              atsSignal={progress["atsAnalysis"]?.aha}
+              fitSignal={progress["analyzeFit"]?.aha}
+              fitScore={progress["analyzeFit"]?.fitScore}
+              atsScore={progress["atsAnalysis"]?.atsScore}
+              scenarioId={progress["routeVerdicts"]?.scenarioId}
+              nextStep={progress["analyzeMatch"]?.aha}
+              beatStatuses={beatStatuses}
+            />
           )}
           {result !== null && (
             <>
+              <BattleCard
+                fitScore={result.fitScore}
+                atsScore={result.atsProfile.atsScore ?? undefined}
+                scenarioId={result.scenarioId}
+                scenario={result.scenarioId.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                headline={result.battleCard.headline}
+                bullets={result.battleCard.bullets}
+              />
               <FitAdviceAccordion isLoading={false} items={result.fitAdvice} />
               <ScenarioSummary
                 scenario={result.scenarioId.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
