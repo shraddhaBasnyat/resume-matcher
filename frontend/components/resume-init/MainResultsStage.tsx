@@ -58,7 +58,7 @@ export function MainResultsStage({ className, result, progress, appState }: Main
             <TabsTrigger
               key={tab.id}
               value={tab.id}
-              className="font-brand font-medium text-xs px-3 py-1 rounded-[4px] transition-colors text-muted-foreground data-[active]:bg-card data-[active]:shadow-sm data-[active]:text-foreground data-[active]:pb-[9px] data-[active]:rounded-b-none"
+              className="font-brand font-medium text-xs px-3 py-1 rounded-[4px] transition-colors text-muted-foreground data-[active]:bg-background data-[active]:shadow-sm data-[active]:text-foreground data-[active]:pb-[9px] data-[active]:rounded-b-none"
             >
               {tab.label}
             </TabsTrigger>
@@ -68,7 +68,7 @@ export function MainResultsStage({ className, result, progress, appState }: Main
       </div>
 
       {activeTab === "resume-init" && (
-        <div className="bg-card w-full flex flex-col px-6 py-4 gap-3 items-center min-h-[600px]">
+        <div className="bg-background w-full flex flex-col px-6 py-4 gap-3 items-center min-h-[600px]">
           {(appState === "running" || result !== null) && (
             <>
               <CoachesNotes
