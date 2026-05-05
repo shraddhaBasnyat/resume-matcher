@@ -15,6 +15,10 @@ export const normalizeNodeName = (node: string): string =>
 export interface NodeProgress {
   status: StepStatus;
   durationMs?: number;
+  aha?: string;
+  fitScore?: number;
+  atsScore?: number;
+  scenarioId?: string;
 }
 
 export type { MatchResponse };

@@ -136,33 +136,15 @@ shadow-card
 - `Progress.Indicator` width driven by `style={{ width: \`${value}%\` }}` — NOT a CSS var
 - Track: `bg-secondary`, fill: `bg-primary`
 
-### ResultsHeader (`components/resume-init/ResultsHeader.tsx`)
-- Exports `TabId = "resume-init" | "company-init" | "arc-init"`
-- Height 66px, `border-b border-border/50`, flex row, `px-4`
-- Left: tab pill switcher (`bg-muted rounded-[6px]` list, `font-brand font-medium text-xs` triggers)
-- Right: `w-[414px]` progress section — `progressLabel` text + `ProgressBar`
-- TABS config drives both the switcher and progress display:
-  ```ts
-  { id: "resume-init",  label: "ResumeInit",   locked: false, progress: 33,  progressLabel: "Technical Alignment: Get the Interview" }
-  { id: "company-init", label: "CompanyInit",  locked: true,  progress: 66,  progressLabel: "Tactical Intelligence: Win the Offer" }
-  { id: "arc-init",     label: "ArcInit",      locked: true,  progress: 100, progressLabel: "Strategic Roadmap: Own the Career Path" }
-  ```
-
 ### MainResultsStage (`components/resume-init/MainResultsStage.tsx`)
 - Owns `activeTab` state; accepts `className` prop
 - Outer container: `bg-background border border-border/50 shadow-card flex flex-col min-h-[600px]`
-- resume-init slot: wrapped in `<div className="p-6">`, renders `<ResultsTop>` + `<FitAdviceAccordion>` + `<ScenarioSummary>`
+- Tab switcher inlined at top (height 66px, `border-b border-border/50`, left-aligned, no right-side progress bar)
+  — `TabId` type and `TABS` constant are defined locally in this file (not exported)
+- resume-init slot: `<div className="p-6 flex flex-col gap-6">` renders `<CoachesNotes>` + `<BattleCard>` + (once result arrives) `<FitAdviceAccordion>` + `<ScenarioSummary>`
+  — shown whenever `appState === "running"` or `result !== null`
 - company-init / arc-init slots: each wrapped in `<div className="flex flex-col flex-1">` so the paywall fills remaining height below the header
-- All data sourced from `dummy-data.ts` with `// TODO` — replace with `useMatchRunner` completed event
-
-### Stepper (`components/resume-init/Stepper.tsx`)
-- Container: `flex flex-col w-[218px] border-r border-success pt-6 pb-6 pl-6 pr-4`
-- 3 node statuses with distinct visuals:
-  - **done**: `CircleCheck` icon (`text-success`) + green connector + `text-success` label + duration in seconds
-  - **active**: `w-6 h-6 bg-primary rounded-full` with `LoaderCircle` inside + muted connector + `font-bold text-primary` label
-  - **idle**: `w-6 h-6 bg-muted border border-border rounded-full` + muted connector + `text-success` label (olive, per spec)
-- Last node has no connector div (checked via `isLast = index === nodes.length - 1`)
-- `durationMs` formatted as `((ms ?? 0) / 1000).toFixed(1) + "s"`
+- Props: `{ className?, result, progress, appState }` — all sourced live from `useMatchRunner`
 
 ### BattleCard (`components/resume-init/BattleCard.tsx`)
 - Container: `flex flex-row items-center py-8 px-6 gap-4 bg-muted border border-border rounded-[24px]`
@@ -175,11 +157,20 @@ shadow-card
   + headline + paragraphs column
 - `overflow-hidden` on score circle is required — without it, large text clips outside the circle
 
-### ResultsTop (`components/resume-init/ResultsTop.tsx`)
-- `flex flex-row justify-center items-center gap-[72px] mx-auto`
-  + `style={{ width: "940px", height: "314px" }}`
-- Props: `{ nodes, isLoading, score?, headline?, bulletPoints? }` — all threaded to BattleCard
-- `mx-auto` centers within the `p-6` content area of MainResultsStage
+### CoachesNotes (`components/resume-init/CoachesNotes.tsx`)
+- Full-width flex-column strip sitting above BattleCard in the resume-init slot
+- Props: `{ isLoading, atsSignal?, fitSignal?, fitScore?, atsScore?, scenarioId?, nextStep? }`
+- 4 beats stacked vertically, each: indicator circle (left, `w-6`) + content column (`flex-1 ml-3`):
+  - Beat 1 — badge `ATS SIGNAL`, text: `atsSignal` prop (from `progress["atsAnalysis"]?.aha`)
+  - Beat 2 — badge `FIT SIGNAL`, text: `fitSignal` prop (from `progress["analyzeFit"]?.aha`)
+  - Beat 3 — badge `VERDICT`, flex row: `"fit {fitScore} · ATS {atsScore}"` + scenario pill
+  - Beat 4 — badge `NEXT STEP`, text: `nextStep` prop (from `progress["analyzeMatch"]?.aha`, which is the normalized key for all three verdict branch nodes)
+- **Per-beat independent loading**: each beat switches from skeleton (`bg-muted` bars) to live content as soon as its own data prop becomes defined — beats can be in different states simultaneously as SSE `node_done` events arrive
+- Indicator done state: `bg-success rounded-full` circle with `<Check size={16} className="text-white" />` + `bg-success` connector line below
+- Indicator loading state: `bg-muted border border-border rounded-full` + `bg-muted` connector line
+- Connector height: `h-[80px]`; no connector below the last beat
+- Badge style: `bg-secondary text-primary font-brand text-[10px] px-2 py-0.5 rounded-[4px]`
+- Scenario pill style: `bg-primary text-primary-foreground font-brand text-sm px-3 py-0.5 rounded-[6px]`
 
 ### FitAdviceAccordion (`components/resume-init/FitAdviceAccordion.tsx`)
 - Container: `flex flex-col p-6 bg-white w-full`
@@ -282,10 +273,23 @@ Use `bg-muted` for lighter bars, `bg-muted-foreground/10` for very subtle bars o
 |---|---|
 | `meta` | threadId, rootRunId, runStartTime |
 | `node_start` | node, timestamp |
-| `node_done` | node, durationMs, timestamp |
+| `node_done` | node, durationMs, timestamp, aha?, fitScore?, atsScore?, scenarioId? |
 | `completed` | full MatchResponse under `result` |
 | `interrupted` | fitScore, contextPrompt, threadId |
 | `error` | error, message |
+
+### NodeProgress type (`lib/match-constants.ts`)
+```ts
+interface NodeProgress {
+  status: "waiting" | "running" | "done";
+  durationMs?: number;
+  aha?: string;        // populated from node_done.aha (atsAnalysis, analyzeFit, verdict nodes)
+  fitScore?: number;   // routeVerdicts node only
+  atsScore?: number;   // routeVerdicts node only
+  scenarioId?: string; // routeVerdicts node only
+}
+```
+All three verdict branch nodes (`analyzeStrongMatch`, `analyzeNarrativeGap`, `analyzeSkepticalReconciliation`) are normalized to the key `"analyzeMatch"` by `normalizeNodeName` — so `progress["analyzeMatch"]?.aha` is the nextStep text regardless of which branch fired.
 
 ## 4 Scenarios (drive ResumeInit results UI)
 | Scenario | fitScore | atsScore |
