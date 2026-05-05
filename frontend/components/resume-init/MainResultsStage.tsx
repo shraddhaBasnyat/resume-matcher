@@ -42,7 +42,10 @@ export function MainResultsStage({ className, result, progress, appState }: Main
   const beatStatuses = {
     beat1: deriveBeatStatus(progress["atsAnalysis"]?.aha !== undefined, progress["atsAnalysis"]?.status),
     beat2: deriveBeatStatus(progress["analyzeFit"]?.aha !== undefined, progress["analyzeFit"]?.status),
-    beat3: deriveBeatStatus(progress["routeVerdicts"]?.fitScore !== undefined, progress["routeVerdicts"]?.status),
+    // routeVerdicts returns a Command — LangGraph doesn't expose Command.update through
+    // _outputs, so fitScore/atsScore/scenarioId never arrive in its node_done payload.
+    // isDone = the node itself completed; data props are read from the nodes that own them.
+    beat3: deriveBeatStatus(progress["routeVerdicts"]?.status === "done", progress["routeVerdicts"]?.status),
     beat4: deriveBeatStatus(progress["analyzeMatch"]?.aha !== undefined, progress["analyzeMatch"]?.status),
   };
 
@@ -70,9 +73,9 @@ export function MainResultsStage({ className, result, progress, appState }: Main
             isLoading={appState === "running"}
             atsSignal={progress["atsAnalysis"]?.aha}
             fitSignal={progress["analyzeFit"]?.aha}
-            fitScore={progress["routeVerdicts"]?.fitScore}
-            atsScore={progress["routeVerdicts"]?.atsScore}
-            scenarioId={progress["routeVerdicts"]?.scenarioId}
+            fitScore={progress["analyzeFit"]?.fitScore}
+            atsScore={progress["atsAnalysis"]?.atsScore}
+            scenarioId={progress["analyzeMatch"]?.scenarioId ?? result?.scenarioId}
             nextStep={progress["analyzeMatch"]?.aha}
             beatStatuses={beatStatuses}
           />
