@@ -22,6 +22,11 @@
     --destructive-foreground:  60 67% 97%;
     --success:                 60 42% 35%;
     --success-foreground:      60 67% 97%;
+    --success-bg:              60 56% 88%;
+    --warning:                 35 68% 33%;
+    --warning-foreground:      60 67% 97%;
+    --warning-bg:              40 89% 88%;
+    --destructive-bg:          0 84% 95%;
     --ring:                    289 42% 35%;
     --shadow-card:             0px 4px 4px rgba(0, 0, 0, 0.10);
     --radius:                  0.5rem;
