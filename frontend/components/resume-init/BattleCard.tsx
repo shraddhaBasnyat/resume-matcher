@@ -26,10 +26,10 @@ export function BattleCard({ fitScore, atsScore, scenarioId, scenario, headline,
   return (
     <div className="bg-card border border-border rounded-[12px] flex flex-col w-full gap-4 p-6">
       {/* Top row */}
-      <div className="flex flex-row gap-4 items-start border-b border-border/50 pb-3">
+      <div className="flex flex-row gap-4 items-start border-b border-border/50 py-3">
         {/* Score circle */}
         <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center shrink-0">
-          <span className="font-bold text-2xl text-primary-foreground">{fitScore}</span>
+          <span className="font-bold text-2xl leading-5 text-primary-foreground">{fitScore}</span>
         </div>
 
         {/* Right column */}
@@ -51,14 +51,14 @@ export function BattleCard({ fitScore, atsScore, scenarioId, scenario, headline,
 
       {/* Bullet rows */}
       {bullets && bullets.length > 0 && (
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-4">
           {bullets.map((bullet, i) => (
-            <div key={i} className="flex flex-col gap-1 py-3 border-b border-border/50 last:border-b-0">
-              <span className="font-brand font-bold text-[11px] tracking-[0.08em] text-muted-foreground uppercase">
+            <div key={i} className="flex flex-col gap-1 pb-3 border-b border-border/50 last:border-b-0">
+              <span className="font-brand font-bold text-[11px] leading-5 tracking-[0.08em] text-muted-foreground uppercase">
                 {bullet.requirement}
               </span>
-              <div className="flex flex-row gap-3 items-start">
-                <span className="text-[13px] text-foreground font-normal flex-1">{bullet.evidence}</span>
+              <div className="flex flex-row gap-3 items-center">
+                <span className="text-[13px] leading-5 text-foreground font-normal flex-1">{bullet.evidence}</span>
                 <VerdictPill verdict={bullet.verdict} />
               </div>
             </div>

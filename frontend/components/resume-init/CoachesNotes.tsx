@@ -79,7 +79,7 @@ export function CoachesNotes({
   const s4 = beatStatuses?.beat4 ?? (nextStep !== undefined ? "done" : "idle");
 
   return (
-    <div className="flex flex-col w-full items-start">
+    <div className="flex flex-col w-full items-start p-6">
       <span className="text-[10px] leading-5 font-bold tracking-[0.08em] text-muted-foreground uppercase mb-4">
         COACH&apos;S NOTES
       </span>

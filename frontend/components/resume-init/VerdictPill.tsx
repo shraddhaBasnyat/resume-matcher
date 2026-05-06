@@ -18,8 +18,8 @@ interface VerdictPillProps {
 export function VerdictPill({ verdict }: VerdictPillProps) {
   const config = VERDICT_CONFIG[verdict];
   return (
-    <span className={cn(config.bg, config.text, "px-2 py-0.5 rounded-[20px] text-[11px] leading-5 font-normal shrink-0")}>
+    <div className={cn(config.bg, config.text, "px-2 py-0.5 rounded-[20px] text-[11px] leading-5 font-normal shrink-0")}>
       {config.label}
-    </span>
+    </div>
   );
 }
