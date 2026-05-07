@@ -206,39 +206,38 @@ shadow-card
 - Badge style: `bg-secondary text-primary font-brand text-[10px] leading-5 px-2 py-0.5 rounded-[4px]` (height = 24px: 20px line-height + 4px padding)
 - Scenario pill: `bg-primary text-primary-foreground font-brand text-sm px-[10px] py-[3px] rounded-[6px]` (height = 26px: 20px line-height + 6px padding)
 
-### FitAdviceAccordion (`components/resume-init/FitAdviceAccordion.tsx`)
-- Container: `flex flex-col p-6 bg-white w-full`
-  (uses `bg-white` not `bg-background` — spec calls for pure white here)
-- Props:
-  ```ts
-  { isLoading: boolean; items?: { key: string; bulletPoints: string[] }[] }
-  ```
-- Each item's `key` is looked up in `ACCORDION_CONFIG` (from `accordion-config.ts`) to get
-  `question` (title) and `subtitle`. Fallback: `key` as title, `"N items found"` as subtitle.
-- **Skeleton** (`isLoading`): 4 static rows, each with muted circle + 2 grey bars + ChevronDown
-- **Accordion** (`!isLoading`): `@base-ui/react/accordion`
-  ```ts
-  import { Accordion } from "@base-ui/react/accordion"
-  ```
-  - `Accordion.Root defaultValue={[]} multiple={false}` — starts collapsed, single-open
-  - `Accordion.Item value={i}` → `Accordion.Header` → `Accordion.Trigger` → `Accordion.Panel`
-  - Trigger: `bg-transparent group` — `group` enables Tailwind group-data pattern for chevron
-  - Summary line: `${item.bulletPoints.length} ${config.subtitle}`
-  - Panel: `<ul>` with `<li>` per bullet point (not a paragraph)
-- **CRITICAL — chevron rotation**: `data-panel-open` is set on `Accordion.Trigger`, not child 
-  elements. Use Tailwind `group` on the trigger + `group-data-[panel-open]:rotate-180` on ChevronDown:
-  ```tsx
-  <Accordion.Trigger className="... group">
-    <ChevronDown className="transition-transform group-data-[panel-open]:rotate-180" />
-  </Accordion.Trigger>
-  ```
-  `data-[panel-open]:rotate-180` directly on the chevron will NOT work.
+### FitAdviceCard (`components/resume-init/FitAdviceCard.tsx`)
+- Collapsible card shell used by all three fit-advice body types
+- Props: `{ icon: React.ReactNode; title: string; subtitle: string; defaultOpen?: boolean; children: React.ReactNode }`
+- State: `useState(defaultOpen ?? false)` — no Base UI accordion (avoids `group-data-[panel-open]` issues)
+- Outer card: `bg-card border border-border rounded-[12px] flex flex-col w-full`
+- Header: `<button>` with `flex flex-row items-center gap-3 px-5 py-[14px]` + `border-b border-border/50` when open
+  - Icon circle: `w-7 h-7 bg-primary rounded-full flex items-center justify-center shrink-0`
+  - Title/subtitle column: `flex flex-col gap-0.5 flex-1`; title `font-medium text-[14px]`, subtitle `font-normal text-[12px] text-muted-foreground`
+  - Chevron: `<ChevronUp>` with `rotate-180` when closed (`transition-transform`)
+- Body: `{isOpen && children}` — plain conditional render
+
+### EvidenceListBody (`components/resume-init/EvidenceListBody.tsx`)
+- Props: `{ items: EvidenceItem[] }`
+- Per item: label (`font-medium text-[14px]`) + detail (`font-normal text-[13px] text-muted-foreground`) + confidence badge
+  - `high` → `bg-success-bg text-success font-brand text-[10px] rounded-full` "high confidence"
+  - `medium` → `bg-warning-bg text-warning font-brand text-[10px] rounded-full` "medium confidence"
+
+### BeforeAfterBody (`components/resume-init/BeforeAfterBody.tsx`)
+- Props: `{ items: ReframingItem[] }`
+- Per item: before (italic, `border-l-2 border-border px-[10px]`) → `"↓ REFRAME AS"` arrow label (font-brand) → after (`border-l-2 border-primary px-[10px] font-medium`) → reason (`text-[12px] text-muted-foreground`)
+
+### TaggedListBody (`components/resume-init/TaggedListBody.tsx`)
+- Props: `{ items: TaggedItem[] }`
+- Per item: severity pill (`shrink-0 font-brand text-[10px] rounded-full`) + text (`flex-1 text-[13px]`)
+  - `material` → `bg-destructive-bg text-destructive`
+  - `notable` → `bg-warning-bg text-warning`
 
 ### ScenarioSummary (`components/resume-init/ScenarioSummary.tsx`)
-- Props: `{ scenario: string; text: string }`
-- Left `border-l-4 border-primary` accent block, `bg-white px-6 py-5`
-- Bold scenario label (`font-semibold text-sm text-foreground`) above body paragraph
-- Generic name — works for all 4 scenarios (confirmed_fit, invisible_expert, narrative_gap, honest_verdict)
+- Props: `{ scenario: string; scenarioId: string; text: string }`
+- Card layout matching FitAdviceCard header (icon circle + "Scenario summary" title + "{scenario} · closing assessment" subtitle), no chevron, not collapsible
+- Body: `px-5 py-5 flex flex-col gap-5` — splits `text` on `\n\n`; all paragraphs `font-normal text-[14px]`, last paragraph `font-semibold text-[14px]`
+- **Deleted**: `accordion-config.ts` (data moved into `FIT_ADVICE_CONFIG` in MainResultsStage); `FitAdviceAccordion.tsx`
 
 ### Field (`components/ui/field.tsx`)
 - Thin wrapper around `@base-ui/react/field`
@@ -327,21 +326,52 @@ All three verdict branch nodes (`analyzeStrongMatch`, `analyzeNarrativeGap`, `an
 
 ### fitAdvice type contract (`lib/types/api.ts`)
 
-Three primitive item types exported from `frontend/lib/types/api.ts` (mirroring backend `src/types/fit-advice.ts`):
+Three primitive item types + a discriminated union:
 ```ts
 EvidenceItem  = { label: string; detail: string; confidence: "high" | "medium" }
 ReframingItem = { before: string; after: string; reason: string }
 TaggedItem    = { severity: "material" | "notable"; text: string }
+
+// 13-variant discriminated union — key is the discriminant
+FitAdviceEntry = { key: "transferable_strengths"; items: EvidenceItem[] } | ...
 ```
 
-`MatchResponse.fitAdvice` shape:
-```ts
-fitAdvice: Array<{ key: string; items: EvidenceItem[] | ReframingItem[] | TaggedItem[] }>
-```
+`MatchResponse.fitAdvice: FitAdviceEntry[]` — TypeScript narrows `items` type automatically when switching on `key`. No `as any` casts required.
 
-`confidence` and `severity` are **deterministic** (derived in `mapFitAdvice` in `runner.ts`) — not LLM-generated. `ReframingItem` is the only fully LLM-generated primitive. `FitAdviceAccordion` still reads `item.bulletPoints` internally — that is resolved in `feat/fit-advice-cards`.
+`confidence` and `severity` are **deterministic** (derived in `mapFitAdvice` in `runner.ts`) — not LLM-generated. `ReframingItem` is the only fully LLM-generated primitive.
 
 Key-to-type mapping: `reframing_suggestions` and `terminology_swaps` → `ReframingItem[]`; `missing_skills`, `keywords_to_add`, `closing_steps` → `TaggedItem[]`; all others → `EvidenceItem[]`.
+
+`FIT_ADVICE_CONFIG` lives in `MainResultsStage.tsx`, typed as `Record<FitAdviceEntry["key"], { title, subtitle, icon }>` — if a new key is added to `FitAdviceEntry` without updating the config, TypeScript flags it at compile time.
+
+## Discriminated Union Rendering Pattern
+
+`fitAdvice` uses a TypeScript discriminated union — not a componentMap — for routing data to components.
+
+### Why discriminated union over componentMap
+
+- **Type safety at compile time**: TypeScript narrows `items` type automatically when switching on `key`. Passing `ReframingItem[]` to `EvidenceListBody` is a compile error, not a runtime bug.
+- **Exhaustiveness checking**: if a new key is added to `FitAdviceEntry` and the switch is not updated, TypeScript flags it at compile time.
+- **No `as any` casts**: the componentMap approach requires casting because TypeScript can't prove items matches the component's expected type. The switch approach requires no casts.
+- **Mirrors the backend**: `PublicMatchResponseSchema` uses `z.literal` per key — the frontend type mirrors that exactly.
+
+### Pattern
+
+```ts
+switch (entry.key) {
+  case "reframing_suggestions":
+  case "terminology_swaps":
+    return <BeforeAfterBody items={entry.items} />  // TypeScript knows: ReframingItem[]
+  case "missing_skills":
+  case "keywords_to_add":
+  case "closing_steps":
+    return <TaggedListBody items={entry.items} />    // TypeScript knows: TaggedItem[]
+  default:
+    return <EvidenceListBody items={entry.items} />  // TypeScript knows: EvidenceItem[]
+}
+```
+
+**Rule**: Never use a componentMap with `as any` for heterogeneous lists. Always use a discriminated union on `FitAdviceEntry` and a switch statement. The `key` field is the discriminant.
 
 ### routeVerdicts node_done payload
 `routeVerdicts` emits `fitScore`, `atsScore`, and `scenarioId` in its `node_done` SSE event. These are available in `progress["routeVerdicts"]` before the `completed` event fires — Beat 3 (VERDICT) uses `progress["routeVerdicts"]?.scenarioId` directly so the scenario pill populates mid-stream.

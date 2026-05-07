@@ -5,12 +5,19 @@ import { cn } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CoachesNotes } from "@/components/resume-init/CoachesNotes";
 import { BattleCard } from "@/components/resume-init/BattleCard";
-import { FitAdviceAccordion } from "@/components/resume-init/FitAdviceAccordion";
+import { FitAdviceCard } from "@/components/resume-init/FitAdviceCard";
+import { EvidenceListBody } from "@/components/resume-init/EvidenceListBody";
+import { BeforeAfterBody } from "@/components/resume-init/BeforeAfterBody";
+import { TaggedListBody } from "@/components/resume-init/TaggedListBody";
 import { ScenarioSummary } from "@/components/resume-init/ScenarioSummary";
 import { CompanyInitResult } from "@/components/company-init/CompanyInitResult";
 import { ArcInitResult } from "@/components/arc-init/ArcInitResult";
 import { type AppState, type NodeProgress } from "@/lib/match-constants";
-import type { MatchResponse } from "@/lib/types/api";
+import type { MatchResponse, FitAdviceEntry } from "@/lib/types/api";
+import {
+  ArrowRight, List, Clock, CheckSquare, Eye, HelpCircle,
+  Star, AlertCircle, FileText,
+} from "lucide-react";
 
 type TabId = "resume-init" | "company-init" | "arc-init";
 
@@ -19,6 +26,22 @@ const TABS = [
   { id: "company-init" as const, label: "CompanyInit" },
   { id: "arc-init" as const, label: "ArcInit" },
 ];
+
+const FIT_ADVICE_CONFIG: Record<FitAdviceEntry["key"], { title: string; subtitle: string; icon: React.ReactNode }> = {
+  transferable_strengths: { title: "What experience transfers directly?",       subtitle: "transferable strengths", icon: <ArrowRight size={16} /> },
+  reframing_suggestions:  { title: "How should you retell your story?",         subtitle: "reframing suggestions",  icon: <List size={16} />       },
+  missing_skills:         { title: "What gaps are genuinely there?",            subtitle: "gaps identified",        icon: <Clock size={16} />      },
+  lead_with_these:        { title: "What should you lead with?",                subtitle: "interview strengths",    icon: <Star size={16} />       },
+  expect_these_questions: { title: "What questions should you prepare for?",    subtitle: "likely questions",       icon: <HelpCircle size={16} /> },
+  watch_out_for:          { title: "Where might the interviewer probe harder?", subtitle: "risk areas",             icon: <Eye size={16} />        },
+  standout_strengths:     { title: "What makes you stand out?",                subtitle: "standout strengths",     icon: <Star size={16} />       },
+  ats_reality_check:      { title: "Why is ATS filtering you out?",            subtitle: "ATS issues",             icon: <AlertCircle size={16} />},
+  terminology_swaps:      { title: "What terminology should you swap?",        subtitle: "terminology fixes",      icon: <List size={16} />       },
+  keywords_to_add:        { title: "What keywords are you missing?",           subtitle: "keywords to add",        icon: <CheckSquare size={16} />},
+  honest_assessment:      { title: "What is the honest assessment?",           subtitle: "gap analysis",           icon: <FileText size={16} />   },
+  closing_steps:          { title: "What are your next steps?",                subtitle: "action items",           icon: <CheckSquare size={16} />},
+  acknowledgement:        { title: "What did we consider?",                    subtitle: "context considered",     icon: <Eye size={16} />        },
+};
 
 interface MainResultsStageProps {
   className?: string;
@@ -91,9 +114,40 @@ export function MainResultsStage({ className, result, progress, appState }: Main
                 headline={result.battleCard.headline}
                 bullets={result.battleCard.bullets}
               />
-              <FitAdviceAccordion isLoading={false} items={result.fitAdvice} />
+              {result.fitAdvice.map((entry, index) => {
+                const config = FIT_ADVICE_CONFIG[entry.key];
+                if (!config) return null;
+
+                let body: React.ReactNode;
+                switch (entry.key) {
+                  case "reframing_suggestions":
+                  case "terminology_swaps":
+                    body = <BeforeAfterBody items={entry.items} />;
+                    break;
+                  case "missing_skills":
+                  case "keywords_to_add":
+                  case "closing_steps":
+                    body = <TaggedListBody items={entry.items} />;
+                    break;
+                  default:
+                    body = <EvidenceListBody items={entry.items} />;
+                }
+
+                return (
+                  <FitAdviceCard
+                    key={entry.key}
+                    icon={config.icon}
+                    title={config.title}
+                    subtitle={`${entry.items.length} ${config.subtitle}`}
+                    defaultOpen={index === 0}
+                  >
+                    {body}
+                  </FitAdviceCard>
+                );
+              })}
               <ScenarioSummary
                 scenario={result.scenarioId.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                scenarioId={result.scenarioId}
                 text={result.scenarioSummary.text}
               />
             </>
