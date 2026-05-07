@@ -379,3 +379,33 @@ Body background stays white (default) — do not add `background-color` to body 
   the disabled one. If disabling: use `disabled` prop + `opacity-60 cursor-not-allowed` only — never `pointer-events-none`.
 - **ProgressBar indicator**: width must be set via `style={{ width: \`${value}%\` }}` — 
   the `--progress-value` CSS variable approach does not work with this version.
+
+## Type Contract Architecture
+
+Frontend types in `frontend/lib/types/api.ts` are the consumer end of a three-layer contract:
+
+Chain Zod schema (backend, internal)
+↓ mapped in runner.ts
+PublicMatchResponseSchema (backend — source of truth)
+↓ manually mirrored here
+frontend/lib/types/api.ts
+
+### Shared primitive types
+
+Exported from `api.ts`, mirrored from `backend/src/types/fit-advice.ts`. If either changes, both must be updated — `PublicMatchResponseSchema` on the backend is the enforcer.
+
+| Type | Shape | Used by |
+|---|---|---|
+| `EvidenceItem` | `{ label: string, detail: string, confidence: 'high' \| 'medium' }` | `EvidenceListBody` |
+| `ReframingItem` | `{ before: string, after: string, reason: string }` | `BeforeAfterBody` |
+| `TaggedItem` | `{ severity: 'material' \| 'notable', text: string }` | `TaggedListBody` |
+
+### View-model transform rule
+
+`confidence` on `EvidenceItem` and `severity` on `TaggedItem` are derived deterministically in the backend (`mapFitAdvice` in `runner.ts`), not by the LLM and not by the frontend. The frontend receives these fields as fully resolved values and renders them directly.
+
+**Rule:** Never re-derive or override `confidence` or `severity` in component files. They arrive correctly typed from the backend contract. `EvidenceListBody`, `BeforeAfterBody`, and `TaggedListBody` import these types from `frontend/lib/types/api.ts` — never redeclare inline in component files.
+
+### Why not a shared package?
+
+Backend and frontend are separate packages. A shared types package is the long-term upgrade path. For now, `PublicMatchResponseSchema.safeParse()` on the backend acts as the runtime enforcer — if the backend produces a shape the frontend doesn't expect, validation fails before emission and an error event is sent instead of malformed data.

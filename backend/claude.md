@@ -509,3 +509,41 @@ No `.bind({ temperature: 0 })` on any node currently — removed due to TypeScri
 - Delete `frontend/components/resume-init/dummy-data.ts`
 - Delete `frontend/app/page.tsx` (legacy)
 - Delete `frontend/components/match/` (legacy, entire directory)
+
+## Type Contract Architecture
+
+Three-layer pattern for LLM-backed products:
+
+Chain Zod schema (internal, prompt-coupled)
+↓ mapped in runner.ts
+PublicMatchResponseSchema (contract — source of truth)
+↓ manually mirrored
+frontend/lib/types/api.ts (frontend types)
+
+### Shared primitive types
+
+Defined in `backend/src/types/fit-advice.ts`, mirrored in `frontend/lib/types/api.ts`. If either changes, both must be updated. `PublicMatchResponseSchema.safeParse()` is the runtime enforcer.
+
+| Type | Shape | Used by |
+|---|---|---|
+| `EvidenceItem` | `{ label, detail, confidence: 'high' \| 'medium' }` | `EvidenceListBody` |
+| `ReframingItem` | `{ before, after, reason }` | `BeforeAfterBody` |
+| `TaggedItem` | `{ severity: 'material' \| 'notable', text }` | `TaggedListBody` |
+
+### View-model transform rule
+
+`mapFitAdvice` in `runner.ts` is the view-model mapper — it converts internal graph state into the public API shape. Deterministic UI concerns belong here, not in chain schemas and not in the frontend.
+
+Current deterministic derivations in `mapFitAdvice`:
+- `EvidenceItem.confidence` — derived from array index: `index === 0 ? 'high' : 'medium'`
+- `TaggedItem.severity` — derived from position: first half of array = `'material'`, second half = `'notable'`
+
+**Rule:** If a field's value can be derived without LLM reasoning, derive it in `mapFitAdvice`. Never ask the LLM to produce enum values that are purely presentational. Never move this derivation to the frontend — `PublicMatchResponseSchema.safeParse()` must be able to validate the final shape.
+
+### Why not a shared package?
+
+Backend and frontend are separate packages. A shared types package is the long-term upgrade path. For now, `PublicMatchResponseSchema.safeParse()` in `runner.ts` acts as the runtime enforcer — if the backend produces a shape the frontend doesn't expect, validation fails before emission and an error event is sent instead of malformed data.
+
+### Rule
+
+Never inline these shapes in chain files. Always import from `backend/src/types/fit-advice.ts`. Never declare them independently — if a shape needs to change, change it in `fit-advice.ts` and update `frontend/lib/types/api.ts` to match.
