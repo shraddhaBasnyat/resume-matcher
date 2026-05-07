@@ -54,6 +54,21 @@ export type EvidenceItem  = { label: string; detail: string; confidence: "high" 
 export type ReframingItem = { before: string; after: string; reason: string };
 export type TaggedItem    = { severity: "material" | "notable"; text: string };
 
+export type FitAdviceEntry =
+  | { key: "transferable_strengths"; items: EvidenceItem[]  }
+  | { key: "reframing_suggestions";  items: ReframingItem[] }
+  | { key: "missing_skills";         items: TaggedItem[]    }
+  | { key: "lead_with_these";        items: EvidenceItem[]  }
+  | { key: "expect_these_questions"; items: EvidenceItem[]  }
+  | { key: "watch_out_for";          items: EvidenceItem[]  }
+  | { key: "standout_strengths";     items: EvidenceItem[]  }
+  | { key: "ats_reality_check";      items: EvidenceItem[]  }
+  | { key: "terminology_swaps";      items: ReframingItem[] }
+  | { key: "keywords_to_add";        items: TaggedItem[]    }
+  | { key: "honest_assessment";      items: EvidenceItem[]  }
+  | { key: "closing_steps";          items: TaggedItem[]    }
+  | { key: "acknowledgement";        items: EvidenceItem[]  }
+
 export type ScenarioId =
   | "confirmed_fit"
   | "invisible_expert"
@@ -75,10 +90,7 @@ export interface MatchResponse {
     headline: string;
     bullets: BattleCardBullet[];
   };
-  fitAdvice: Array<{
-    key: string;
-    items: EvidenceItem[] | ReframingItem[] | TaggedItem[];
-  }>;
+  fitAdvice: FitAdviceEntry[];
   atsProfile: {
     atsScore: number | null;
     machineParsing: string[];
