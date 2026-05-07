@@ -23,8 +23,8 @@ vi.mock("../langsmith.js", () => ({
 
 const validLLMOutput = {
   reframingSuggestions: [
-    "Retitle 'Data Engineer' to 'ML Infrastructure Engineer' and lead with the model serving work, not the ETL.",
-    "The Kafka consumer you built for inventory events is the same pattern as a feature store consumer — name it that way.",
+    { before: "Data Engineer", after: "ML Infrastructure Engineer", reason: "Aligns resume title with ML platform role requirements." },
+    { before: "Kafka consumer for inventory events", after: "feature store consumer pattern", reason: "Names the pattern the role expects explicitly." },
   ],
   transferableStrengths: ["Python at scale", "Distributed streaming (Kafka)", "SQL query optimisation"],
   missingSkills: [],
@@ -112,7 +112,7 @@ describe("analyzeNarrativeGap — output shape", () => {
     const result = await node(buildBaseState());
     const advice = result.fitAdvice as Record<string, unknown>;
 
-    expect((advice.reframingSuggestions as string[]).length).toBeGreaterThan(0);
+    expect((advice.reframingSuggestions as object[]).length).toBeGreaterThan(0);
   });
 
   it("missingSkills as empty array passes through correctly", async () => {

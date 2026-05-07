@@ -392,39 +392,38 @@ fields `fitScenarioSummary` and `atsScenarioSummary` are never emitted.
 
 ## `mapFitAdvice` — discriminated union to flat array
 
-Lives in `runner.ts`.
+Lives in `runner.ts`. Produces `{ key, items }` objects — `bulletPoints` is gone. Three primitive item types defined in `backend/src/types/fit-advice.ts`:
 
+- `EvidenceItem`: `{ label, detail, confidence: "high" | "medium" }` — `confidence` is deterministic (index 0 = "high", rest = "medium"), NOT LLM-generated
+- `ReframingItem`: `{ before, after, reason }` — fully LLM-generated
+- `TaggedItem`: `{ severity: "material" | "notable", text }` — `severity` is deterministic (first half = "material", second half = "notable"), NOT LLM-generated
+
+Two helper functions in `runner.ts`:
+- `toEvidenceItem(text, index)` — splits on ` — `, derives `confidence` from index
+- `toTaggedItem(text, index, total)` — derives `severity` from position relative to `Math.ceil(total / 2)`
+
+Mappings:
 ```ts
-// confirmed_fit
-[
-  { key: "lead_with_these",        bulletPoints: fitAdvice.leadWithThese        },
-  { key: "expect_these_questions", bulletPoints: fitAdvice.expectTheseQuestions },
-  { key: "watch_out_for",          bulletPoints: fitAdvice.watchOutFor          },
-]
+// confirmed_fit — all EvidenceItem
+{ key: "lead_with_these",        items: fitAdvice.leadWithThese.map(toEvidenceItem)        }
+{ key: "expect_these_questions", items: fitAdvice.expectTheseQuestions.map(toEvidenceItem) }
+{ key: "watch_out_for",          items: fitAdvice.watchOutFor.map(toEvidenceItem)          }
 
 // invisible_expert
-[
-  { key: "standout_strengths",  bulletPoints: fitAdvice.standoutStrengths },
-  { key: "ats_reality_check",   bulletPoints: fitAdvice.atsRealityCheck   },
-  { key: "terminology_swaps",   bulletPoints: fitAdvice.terminologySwaps  },
-  { key: "keywords_to_add",     bulletPoints: fitAdvice.keywordsToAdd     },
-]
+{ key: "standout_strengths", items: fitAdvice.standoutStrengths.map(toEvidenceItem) }  // EvidenceItem
+{ key: "ats_reality_check",  items: fitAdvice.atsRealityCheck.map(toEvidenceItem)   }  // EvidenceItem
+{ key: "terminology_swaps",  items: fitAdvice.terminologySwaps                      }  // ReframingItem — pass through
+{ key: "keywords_to_add",    items: fitAdvice.keywordsToAdd.map(toTaggedItem)       }  // TaggedItem
 
 // narrative_gap
-[
-  { key: "transferable_strengths", bulletPoints: fitAdvice.transferableStrengths },
-  { key: "reframing_suggestions",  bulletPoints: fitAdvice.reframingSuggestions  },
-  { key: "missing_skills",         bulletPoints: fitAdvice.missingSkills         },
-]
+{ key: "transferable_strengths", items: fitAdvice.transferableStrengths.map(toEvidenceItem) }  // EvidenceItem
+{ key: "reframing_suggestions",  items: fitAdvice.reframingSuggestions                      }  // ReframingItem — pass through
+{ key: "missing_skills",         items: fitAdvice.missingSkills.map(toTaggedItem)           }  // TaggedItem
 
 // honest_verdict
-[
-  { key: "honest_assessment", bulletPoints: fitAdvice.honestAssessment },
-  { key: "closing_steps",     bulletPoints: fitAdvice.closingSteps     },
-  ...(fitAdvice.acknowledgement
-    ? [{ key: "acknowledgement", bulletPoints: fitAdvice.acknowledgement }]
-    : []),
-]
+{ key: "honest_assessment", items: fitAdvice.honestAssessment.map(toEvidenceItem)  }  // EvidenceItem
+{ key: "closing_steps",     items: fitAdvice.closingSteps.map(toTaggedItem)        }  // TaggedItem
+{ key: "acknowledgement",   items: fitAdvice.acknowledgement.map(toEvidenceItem)   }  // EvidenceItem (optional)
 ```
 
 ---
@@ -509,3 +508,41 @@ No `.bind({ temperature: 0 })` on any node currently — removed due to TypeScri
 - Delete `frontend/components/resume-init/dummy-data.ts`
 - Delete `frontend/app/page.tsx` (legacy)
 - Delete `frontend/components/match/` (legacy, entire directory)
+
+## Type Contract Architecture
+
+Three-layer pattern for LLM-backed products:
+
+Chain Zod schema (internal, prompt-coupled)
+↓ mapped in runner.ts
+PublicMatchResponseSchema (contract — source of truth)
+↓ manually mirrored
+frontend/lib/types/api.ts (frontend types)
+
+### Shared primitive types
+
+Defined in `backend/src/types/fit-advice.ts`, mirrored in `frontend/lib/types/api.ts`. If either changes, both must be updated. `PublicMatchResponseSchema.safeParse()` is the runtime enforcer.
+
+| Type | Shape | Used by |
+|---|---|---|
+| `EvidenceItem` | `{ label, detail, confidence: 'high' \| 'medium' }` | `EvidenceListBody` |
+| `ReframingItem` | `{ before, after, reason }` | `BeforeAfterBody` |
+| `TaggedItem` | `{ severity: 'material' \| 'notable', text }` | `TaggedListBody` |
+
+### View-model transform rule
+
+`mapFitAdvice` in `runner.ts` is the view-model mapper — it converts internal graph state into the public API shape. Deterministic UI concerns belong here, not in chain schemas and not in the frontend.
+
+Current deterministic derivations in `mapFitAdvice`:
+- `EvidenceItem.confidence` — derived from array index: `index === 0 ? 'high' : 'medium'`
+- `TaggedItem.severity` — derived from position: first half of array = `'material'`, second half = `'notable'`
+
+**Rule:** If a field's value can be derived without LLM reasoning, derive it in `mapFitAdvice`. Never ask the LLM to produce enum values that are purely presentational. Never move this derivation to the frontend — `PublicMatchResponseSchema.safeParse()` must be able to validate the final shape.
+
+### Why not a shared package?
+
+Backend and frontend are separate packages. A shared types package is the long-term upgrade path. For now, `PublicMatchResponseSchema.safeParse()` in `runner.ts` acts as the runtime enforcer — if the backend produces a shape the frontend doesn't expect, validation fails before emission and an error event is sent instead of malformed data.
+
+### Rule
+
+Never inline these shapes in chain files. Always import from `backend/src/types/fit-advice.ts`. Never declare them independently — if a shape needs to change, change it in `fit-advice.ts` and update `frontend/lib/types/api.ts` to match.

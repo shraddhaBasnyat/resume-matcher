@@ -325,6 +325,24 @@ interface NodeProgress {
 ```
 All three verdict branch nodes (`analyzeStrongMatch`, `analyzeNarrativeGap`, `analyzeSkepticalReconciliation`) are normalized to the key `"analyzeMatch"` by `normalizeNodeName` — so `progress["analyzeMatch"]?.aha` is the nextStep text regardless of which branch fired.
 
+### fitAdvice type contract (`lib/types/api.ts`)
+
+Three primitive item types exported from `frontend/lib/types/api.ts` (mirroring backend `src/types/fit-advice.ts`):
+```ts
+EvidenceItem  = { label: string; detail: string; confidence: "high" | "medium" }
+ReframingItem = { before: string; after: string; reason: string }
+TaggedItem    = { severity: "material" | "notable"; text: string }
+```
+
+`MatchResponse.fitAdvice` shape:
+```ts
+fitAdvice: Array<{ key: string; items: EvidenceItem[] | ReframingItem[] | TaggedItem[] }>
+```
+
+`confidence` and `severity` are **deterministic** (derived in `mapFitAdvice` in `runner.ts`) — not LLM-generated. `ReframingItem` is the only fully LLM-generated primitive. `FitAdviceAccordion` still reads `item.bulletPoints` internally — that is resolved in `feat/fit-advice-cards`.
+
+Key-to-type mapping: `reframing_suggestions` and `terminology_swaps` → `ReframingItem[]`; `missing_skills`, `keywords_to_add`, `closing_steps` → `TaggedItem[]`; all others → `EvidenceItem[]`.
+
 ### routeVerdicts node_done payload
 `routeVerdicts` emits `fitScore`, `atsScore`, and `scenarioId` in its `node_done` SSE event. These are available in `progress["routeVerdicts"]` before the `completed` event fires — Beat 3 (VERDICT) uses `progress["routeVerdicts"]?.scenarioId` directly so the scenario pill populates mid-stream.
 
@@ -379,3 +397,33 @@ Body background stays white (default) — do not add `background-color` to body 
   the disabled one. If disabling: use `disabled` prop + `opacity-60 cursor-not-allowed` only — never `pointer-events-none`.
 - **ProgressBar indicator**: width must be set via `style={{ width: \`${value}%\` }}` — 
   the `--progress-value` CSS variable approach does not work with this version.
+
+## Type Contract Architecture
+
+Frontend types in `frontend/lib/types/api.ts` are the consumer end of a three-layer contract:
+
+Chain Zod schema (backend, internal)
+↓ mapped in runner.ts
+PublicMatchResponseSchema (backend — source of truth)
+↓ manually mirrored here
+frontend/lib/types/api.ts
+
+### Shared primitive types
+
+Exported from `api.ts`, mirrored from `backend/src/types/fit-advice.ts`. If either changes, both must be updated — `PublicMatchResponseSchema` on the backend is the enforcer.
+
+| Type | Shape | Used by |
+|---|---|---|
+| `EvidenceItem` | `{ label: string, detail: string, confidence: 'high' \| 'medium' }` | `EvidenceListBody` |
+| `ReframingItem` | `{ before: string, after: string, reason: string }` | `BeforeAfterBody` |
+| `TaggedItem` | `{ severity: 'material' \| 'notable', text: string }` | `TaggedListBody` |
+
+### View-model transform rule
+
+`confidence` on `EvidenceItem` and `severity` on `TaggedItem` are derived deterministically in the backend (`mapFitAdvice` in `runner.ts`), not by the LLM and not by the frontend. The frontend receives these fields as fully resolved values and renders them directly.
+
+**Rule:** Never re-derive or override `confidence` or `severity` in component files. They arrive correctly typed from the backend contract. `EvidenceListBody`, `BeforeAfterBody`, and `TaggedListBody` import these types from `frontend/lib/types/api.ts` — never redeclare inline in component files.
+
+### Why not a shared package?
+
+Backend and frontend are separate packages. A shared types package is the long-term upgrade path. For now, `PublicMatchResponseSchema.safeParse()` on the backend acts as the runtime enforcer — if the backend produces a shape the frontend doesn't expect, validation fails before emission and an error event is sent instead of malformed data.

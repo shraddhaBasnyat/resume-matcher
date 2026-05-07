@@ -9,6 +9,7 @@ export const HonestVerdictLLMSchema = z.object({
     .describe(
       "Bullet points explaining specifically why the gap is real. Build from fitAnalysis.weakMatchReason and " +
         "fitAnalysis.experienceGaps. Direct and specific — not cruel, not generic. " +
+        "Format each as: \"[gap name] — [why it matters for this specific role]\". Most fundamental gaps first. " +
         "Specificity test: could this have been written without reading this resume and this job description? If yes, rewrite it.",
     ),
   closingSteps: z
@@ -16,6 +17,7 @@ export const HonestVerdictLLMSchema = z.object({
     .describe(
       "Specific steps to close the gap between this candidate's background and this role. " +
         "Each item must be tied to an actual gap identified in this match. Not generic career advice. " +
+        "Order most urgent steps first. " +
         "If human context was provided, reflect that you considered it — explain why the gap persists " +
         "after what they shared and what closing it would genuinely require.",
     ),

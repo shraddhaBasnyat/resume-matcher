@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { RootRunCapture, logValidationFailure } from "../langsmith.js";
+import { ReframingItemSchema } from "../src/types/fit-advice.js";
 
 // -----------------------------------------------------------------------
 // Both confirmed_fit and invisible_expert use this chain.
@@ -15,6 +16,7 @@ export const InvisibleExpertLLMSchema = z.object({
     .describe(
       "2–4 specific strengths from this candidate's background relative to this role. " +
         "Each item must name actual skills or experience from fitAnalysis.keyStrengths. Maximum 4 items. " +
+        "Format each as: \"[strength name] — [specific resume evidence]\" using \" — \" as separator. " +
         "Empty array for confirmed_fit.",
     ),
   atsRealityCheck: z
@@ -22,16 +24,19 @@ export const InvisibleExpertLLMSchema = z.object({
     .describe(
       "Bullet points explaining why this candidate is invisible to automated filters despite strong fit. " +
         "Each bullet must reference specific items from the ats_ranking list provided. " +
+        "Format each as: \"[ATS issue name] — [specific impact referencing ats_ranking]\". " +
         "Core insight: the problem is a translation issue between how they describe their work " +
         "and how the machine reads it — not a talent gap. Maximum 4 bullets. " +
         "Empty array for confirmed_fit.",
     ),
   terminologySwaps: z
-    .array(z.string())
+    .array(ReframingItemSchema)
     .describe(
       "Specific terminology substitutions drawn from ats_ranking. " +
-        "Format each as: 'Replace \"X\" with \"Y\"' where X is the resume's current language " +
-        "and Y is the job posting's required term. " +
+        "Each item is a structured object: " +
+        "before = resume term currently used; " +
+        "after = JD term that should replace it; " +
+        "reason = why this swap improves discoverability for this specific role. " +
         "Empty array for confirmed_fit.",
     ),
   keywordsToAdd: z
@@ -39,6 +44,7 @@ export const InvisibleExpertLLMSchema = z.object({
     .describe(
       "Keywords from the job posting that are missing from the resume. " +
         "Drawn from ats_ranking. Each item is a single keyword or short phrase to add. " +
+        "Most important keywords first. " +
         "Empty array for confirmed_fit.",
     ),
   leadWithThese: z
@@ -46,6 +52,7 @@ export const InvisibleExpertLLMSchema = z.object({
     .describe(
       "2–3 specific experiences from this resume to open the interview with. " +
         "Reference actual roles and achievements — not generic advice. " +
+        "Format each as: \"[experience name] — [why it leads well for this role]\". " +
         "Empty array for invisible_expert.",
     ),
   expectTheseQuestions: z
@@ -53,6 +60,7 @@ export const InvisibleExpertLLMSchema = z.object({
     .describe(
       "Likely interview questions the hiring manager will ask given this JD and this candidate's background. " +
         "Specific to both documents — not generic behavioural questions. " +
+        "Format each as: \"[interview question] — [why the interviewer will ask it given this JD and resume]\". " +
         "Empty array for invisible_expert.",
     ),
   watchOutFor: z
@@ -60,6 +68,7 @@ export const InvisibleExpertLLMSchema = z.object({
     .describe(
       "1–2 areas where the interviewer may probe harder given the role requirements. " +
         "Confirmed fit does not mean perfect fit — name the thinner areas honestly. " +
+        "Format each as: \"[risk area name] — [why it's thinner for this role]\". Most serious risks first. " +
         "Empty array for invisible_expert.",
     ),
   closingSummary: z.string().min(1).describe(
@@ -92,7 +101,7 @@ You are given:
 Rules:
 - standoutStrengths: for invisible_expert — 2–4 bullets referencing actual content from fit_analysis.keyStrengths. Maximum 4. Empty array for confirmed_fit.
 - atsRealityCheck: for invisible_expert — bullet points explaining ATS invisibility, each referencing specific items from ats_ranking. The insight: translation problem, not a talent problem. Empty array for confirmed_fit.
-- terminologySwaps: for invisible_expert — "Replace X with Y" per mismatch. Empty array for confirmed_fit.
+- terminologySwaps: for invisible_expert — structured objects, each with before (resume term currently used), after (JD term that should replace it), and reason (why this swap improves discoverability for this specific role). Empty array for confirmed_fit.
 - keywordsToAdd: for invisible_expert — one item per missing keyword. Empty array for confirmed_fit.
 - leadWithThese: for confirmed_fit — 2–3 specific experiences from this resume to open the interview with. Reference actual roles and achievements — not generic advice. Empty array for invisible_expert.
 - expectTheseQuestions: for confirmed_fit — likely interview questions the hiring manager will ask given this JD and this candidate's background. Specific to both documents — not generic behavioural questions. Empty array for invisible_expert.

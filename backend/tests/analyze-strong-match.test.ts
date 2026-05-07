@@ -25,7 +25,7 @@ const validInvisibleExpertLLMOutput = {
     "Resume uses 'ML' but the job posting requires 'machine learning' verbatim.",
     "Missing keyword 'TensorFlow' despite being referenced in project descriptions.",
   ],
-  terminologySwaps: ['Replace "ML" with "machine learning"'],
+  terminologySwaps: [{ before: "ML", after: "machine learning", reason: "JD uses full term — ATS filters on exact match." }],
   keywordsToAdd: ["TensorFlow", "production ML systems"],
   leadWithThese: [],
   expectTheseQuestions: [],

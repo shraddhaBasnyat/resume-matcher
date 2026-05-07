@@ -87,7 +87,7 @@ const validInvisibleExpertLLMOutput = {
     "Resume uses 'front-end development' but ATS scans for 'React' verbatim.",
     "Missing keyword 'TypeScript' despite being in the resume narrative.",
   ],
-  terminologySwaps: ['Replace "front-end development" with "React"'],
+  terminologySwaps: [{ before: "front-end development", after: "React", reason: "ATS scans for 'React' verbatim — exact term match required." }],
   keywordsToAdd: ["TypeScript", "component library"],
   leadWithThese: [],
   expectTheseQuestions: [],
@@ -98,7 +98,7 @@ const validInvisibleExpertLLMOutput = {
 
 const validNarrativeGapLLMOutput = {
   transferableStrengths: ["TypeScript", "React", "component systems"],
-  reframingSuggestions: ["Lead with the production SPA work in the summary section."],
+  reframingSuggestions: [{ before: "summary section", after: "production SPA work lead", reason: "Leads with the strongest signal for this role." }],
   missingSkills: [],
   closingSummary: "The experience is right — the framing is wrong. Your SPA work maps directly once retold in the role's terms.",
   verdictAha: "Start with the reframing cards — once the framing is fixed, the score follows.",

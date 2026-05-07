@@ -2,26 +2,33 @@ import { z } from "zod";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { RootRunCapture, logValidationFailure } from "../langsmith.js";
+import { ReframingItemSchema } from "../src/types/fit-advice.js";
 
 export const NarrativeGapLLMSchema = z.object({
   transferableStrengths: z
     .array(z.string())
     .describe(
       "Skills and experiences this candidate already has that map explicitly to the role requirements. " +
-        "Draw directly from fitAnalysis.keyStrengths — name them specifically, not as generic categories.",
+        "Draw directly from fitAnalysis.keyStrengths — name them specifically, not as generic categories. " +
+        "Format each as: \"[strength name] — [specific resume evidence]\" using \" — \" as separator.",
     ),
   reframingSuggestions: z
-    .array(z.string())
+    .array(ReframingItemSchema)
     .describe(
-      "Specific, actionable ways to retell existing experience so it reads as directly relevant to this role. " +
-        "Each suggestion must be specific to this candidate and this job — if it could have been written " +
-        "without reading both, rewrite it. Do not suggest acquiring new skills.",
+      "Specific ways to retell existing experience so it reads as directly relevant to this role. " +
+        "Each item is a structured object: " +
+        "before = current resume phrasing (exact quote or close paraphrase); " +
+        "after = reframed version targeting this role's language; " +
+        "reason = why this specific reframe works for this role. " +
+        "Must be specific to this candidate and this job — if it could have been written without reading both, rewrite it. " +
+        "Do not suggest acquiring new skills.",
     ),
   missingSkills: z
     .array(z.string())
     .describe(
       "Genuine gaps only — skills the role requires that this candidate does not have, " +
         "drawn from fitAnalysis.experienceGaps. " +
+        "Order most critical gaps first. " +
         "Empty array is correct output when there are no real gaps. " +
         "Do not disguise reframing suggestions as missing skills.",
     ),
@@ -46,7 +53,7 @@ You are given fit_analysis, fit_scenario_summary (human fit picture in isolation
 
 Rules:
 - transferableStrengths: draw directly from fitAnalysis.keyStrengths. Name the specific skills and experiences — not generic categories. What from their background maps to this role?
-- reframingSuggestions: specific ways to retell existing experience to fit this role's narrative. Each item must be specific to this candidate and this job. Specificity test: could it have been written without reading fit_analysis? If yes, rewrite it. Do not suggest learning new skills.
+- reframingSuggestions: structured objects, each with before (current resume phrasing), after (reframed for this role's language), and reason (why this reframe works for this specific role). Each item must be specific to this candidate and this job. Specificity test: could it have been written without reading fit_analysis? If yes, rewrite it. Do not suggest learning new skills.
 - missingSkills: draw from fitAnalysis.experienceGaps — real gaps only. Empty array is correct output when there are no genuine missing skills. Do not fill this with reframing suggestions.
 - closingSummary: synthesise fit_scenario_summary and ats_scenario_summary into a scenario-aware closing statement. Name the experience-is-right-framing-is-wrong insight explicitly. Mentor tone. One or two sentences.
 - verdictAha: one sentence pointing to the single most important result card for this candidate to look at first.
