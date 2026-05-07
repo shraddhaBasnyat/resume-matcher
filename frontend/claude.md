@@ -325,6 +325,24 @@ interface NodeProgress {
 ```
 All three verdict branch nodes (`analyzeStrongMatch`, `analyzeNarrativeGap`, `analyzeSkepticalReconciliation`) are normalized to the key `"analyzeMatch"` by `normalizeNodeName` — so `progress["analyzeMatch"]?.aha` is the nextStep text regardless of which branch fired.
 
+### fitAdvice type contract (`lib/types/api.ts`)
+
+Three primitive item types exported from `frontend/lib/types/api.ts` (mirroring backend `src/types/fit-advice.ts`):
+```ts
+EvidenceItem  = { label: string; detail: string; confidence: "high" | "medium" }
+ReframingItem = { before: string; after: string; reason: string }
+TaggedItem    = { severity: "material" | "notable"; text: string }
+```
+
+`MatchResponse.fitAdvice` shape:
+```ts
+fitAdvice: Array<{ key: string; items: EvidenceItem[] | ReframingItem[] | TaggedItem[] }>
+```
+
+`confidence` and `severity` are **deterministic** (derived in `mapFitAdvice` in `runner.ts`) — not LLM-generated. `ReframingItem` is the only fully LLM-generated primitive. `FitAdviceAccordion` still reads `item.bulletPoints` internally — that is resolved in `feat/fit-advice-cards`.
+
+Key-to-type mapping: `reframing_suggestions` and `terminology_swaps` → `ReframingItem[]`; `missing_skills`, `keywords_to_add`, `closing_steps` → `TaggedItem[]`; all others → `EvidenceItem[]`.
+
 ### routeVerdicts node_done payload
 `routeVerdicts` emits `fitScore`, `atsScore`, and `scenarioId` in its `node_done` SSE event. These are available in `progress["routeVerdicts"]` before the `completed` event fires — Beat 3 (VERDICT) uses `progress["routeVerdicts"]?.scenarioId` directly so the scenario pill populates mid-stream.
 

@@ -50,6 +50,10 @@ export interface CancelMatchRequest {
 // Public response types — mirrors PublicMatchResponseSchema on the backend
 // ---------------------------------------------------------------------------
 
+export type EvidenceItem  = { label: string; detail: string; confidence: "high" | "medium" };
+export type ReframingItem = { before: string; after: string; reason: string };
+export type TaggedItem    = { severity: "material" | "notable"; text: string };
+
 export type ScenarioId =
   | "confirmed_fit"
   | "invisible_expert"
@@ -71,7 +75,10 @@ export interface MatchResponse {
     headline: string;
     bullets: BattleCardBullet[];
   };
-  fitAdvice: { key: string; bulletPoints: string[] }[];
+  fitAdvice: Array<{
+    key: string;
+    items: EvidenceItem[] | ReframingItem[] | TaggedItem[];
+  }>;
   atsProfile: {
     atsScore: number | null;
     machineParsing: string[];

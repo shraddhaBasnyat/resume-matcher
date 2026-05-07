@@ -3,12 +3,21 @@
 import { Accordion } from "@base-ui/react/accordion";
 import { ChevronDown } from "lucide-react";
 import { ACCORDION_CONFIG } from "@/components/resume-init/accordion-config";
+import type { EvidenceItem, ReframingItem, TaggedItem } from "@/lib/types/api";
+
+type FitAdviceItem = EvidenceItem | ReframingItem | TaggedItem;
+
+function itemToString(item: FitAdviceItem): string {
+  if ("label" in item) return `${item.label} — ${item.detail}`;
+  if ("before" in item) return `${item.before} → ${item.after}`;
+  return item.text;
+}
 
 interface FitAdviceAccordionProps {
   isLoading: boolean;
   items?: {
     key: string;
-    bulletPoints: string[];
+    items: FitAdviceItem[];
   }[];
 }
 
@@ -44,7 +53,7 @@ export function FitAdviceAccordion({ isLoading, items }: FitAdviceAccordionProps
                         {ACCORDION_CONFIG[item.key]?.question ?? item.key}
                       </span>
                       <span className="text-sm text-foreground font-normal">
-                        {item.bulletPoints.length} {ACCORDION_CONFIG[item.key]?.subtitle ?? "items found"}
+                        {item.items.length} {ACCORDION_CONFIG[item.key]?.subtitle ?? "items found"}
                       </span>
                     </div>
                   </div>
@@ -56,9 +65,9 @@ export function FitAdviceAccordion({ isLoading, items }: FitAdviceAccordionProps
               </Accordion.Header>
               <Accordion.Panel className="py-2">
                 <ul className="list-disc pl-5 flex flex-col gap-1">
-                  {item.bulletPoints.map((point, j) => (
+                  {item.items.map((point, j) => (
                     <li key={j} className="text-sm text-foreground font-normal">
-                      {point}
+                      {itemToString(point)}
                     </li>
                   ))}
                 </ul>

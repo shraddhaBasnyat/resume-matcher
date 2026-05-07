@@ -6,6 +6,7 @@ import { graph } from "../../graphs/scoring/scoring-graph-instance.js";
 import { getCheckpointer } from "../../graphs/scoring/scoring-graph.js";
 import type { ConfidentMatchContext, ExploringGapContext } from "../../types/api.js";
 import { PublicMatchResponseSchema } from "../../types/public-response.js";
+import type { EvidenceItem, ReframingItem, TaggedItem } from "../types/fit-advice.js";
 
 type SharedOptions = {
   humanContext?: string;
@@ -66,36 +67,52 @@ async function invokeGraph(options: FreshRunOptions | ResumeRunOptions, invokeCo
   );
 }
 
+function toEvidenceItem(text: string, index: number): EvidenceItem {
+  const [label, ...rest] = text.split(" — ");
+  return {
+    label:      label?.trim() ?? text,
+    detail:     rest.join(" — ").trim() || text,
+    confidence: index === 0 ? "high" : "medium",
+  };
+}
+
+function toTaggedItem(text: string, index: number, total: number): TaggedItem {
+  return {
+    severity: index < Math.ceil(total / 2) ? "material" : "notable",
+    text,
+  };
+}
+
 function mapFitAdvice(
   fitAdvice: Record<string, unknown> | undefined,
-): { key: string; bulletPoints: string[] }[] {
+): { key: string; items: EvidenceItem[] | ReframingItem[] | TaggedItem[] }[] {
   if (!fitAdvice) return [];
   switch (fitAdvice.scenarioId as string) {
     case "confirmed_fit":
       return [
-        { key: "lead_with_these",        bulletPoints: (fitAdvice.leadWithThese        as string[]) ?? [] },
-        { key: "expect_these_questions", bulletPoints: (fitAdvice.expectTheseQuestions as string[]) ?? [] },
-        { key: "watch_out_for",          bulletPoints: (fitAdvice.watchOutFor          as string[]) ?? [] },
+        { key: "lead_with_these",        items: ((fitAdvice.leadWithThese        as string[]) ?? []).map(toEvidenceItem) },
+        { key: "expect_these_questions", items: ((fitAdvice.expectTheseQuestions as string[]) ?? []).map(toEvidenceItem) },
+        { key: "watch_out_for",          items: ((fitAdvice.watchOutFor          as string[]) ?? []).map(toEvidenceItem) },
       ];
     case "invisible_expert":
       return [
-        { key: "standout_strengths", bulletPoints: (fitAdvice.standoutStrengths as string[]) ?? [] },
-        { key: "ats_reality_check",  bulletPoints: (fitAdvice.atsRealityCheck  as string[]) ?? [] },
-        { key: "terminology_swaps",  bulletPoints: (fitAdvice.terminologySwaps  as string[]) ?? [] },
-        { key: "keywords_to_add",    bulletPoints: (fitAdvice.keywordsToAdd    as string[]) ?? [] },
+        { key: "standout_strengths", items: ((fitAdvice.standoutStrengths as string[])    ?? []).map(toEvidenceItem) },
+        { key: "ats_reality_check",  items: ((fitAdvice.atsRealityCheck  as string[])     ?? []).map(toEvidenceItem) },
+        { key: "terminology_swaps",  items:  (fitAdvice.terminologySwaps as ReframingItem[]) ?? []                   },
+        { key: "keywords_to_add",    items: ((fitAdvice.keywordsToAdd    as string[])     ?? []).map((t, i, arr) => toTaggedItem(t, i, arr.length)) },
       ];
     case "narrative_gap":
       return [
-        { key: "transferable_strengths", bulletPoints: (fitAdvice.transferableStrengths as string[]) ?? [] },
-        { key: "reframing_suggestions",  bulletPoints: (fitAdvice.reframingSuggestions  as string[]) ?? [] },
-        { key: "missing_skills",         bulletPoints: (fitAdvice.missingSkills         as string[]) ?? [] },
+        { key: "transferable_strengths", items: ((fitAdvice.transferableStrengths as string[])    ?? []).map(toEvidenceItem) },
+        { key: "reframing_suggestions",  items:  (fitAdvice.reframingSuggestions  as ReframingItem[]) ?? []                 },
+        { key: "missing_skills",         items: ((fitAdvice.missingSkills         as string[])    ?? []).map((t, i, arr) => toTaggedItem(t, i, arr.length)) },
       ];
     case "honest_verdict": {
       const ack = fitAdvice.acknowledgement as string[] | null;
       return [
-        { key: "honest_assessment", bulletPoints: (fitAdvice.honestAssessment as string[]) ?? [] },
-        { key: "closing_steps",     bulletPoints: (fitAdvice.closingSteps     as string[]) ?? [] },
-        ...(ack ? [{ key: "acknowledgement", bulletPoints: ack }] : []),
+        { key: "honest_assessment", items: ((fitAdvice.honestAssessment as string[]) ?? []).map(toEvidenceItem) },
+        { key: "closing_steps",     items: ((fitAdvice.closingSteps     as string[]) ?? []).map((t, i, arr) => toTaggedItem(t, i, arr.length)) },
+        ...(ack ? [{ key: "acknowledgement", items: ack.map(toEvidenceItem) }] : []),
       ];
     }
     default:
