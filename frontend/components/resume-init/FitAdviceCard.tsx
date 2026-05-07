@@ -20,10 +20,7 @@ export function FitAdviceCard({ icon, title, subtitle, defaultOpen, children }: 
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className={cn(
-          "flex flex-row items-center gap-3 px-5 py-[14px] w-full text-left",
-          isOpen && "border-b border-border/50",
-        )}
+        className="flex flex-row items-center gap-3 px-5 py-[14px] w-full text-left border-b border-border/50"
       >
         <div className="w-7 h-7 bg-primary rounded-full flex items-center justify-center shrink-0 text-primary-foreground">
           {icon}

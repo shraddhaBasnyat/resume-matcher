@@ -24,12 +24,12 @@ export function ScenarioSummary({ scenario, scenarioId: _scenarioId, text }: Sce
           </span>
         </div>
       </div>
-      <div className="px-5 py-5 flex flex-col gap-5">
+      <div className="px-5 py-5 flex flex-col gap-5 items-start">
         {paragraphs.map((para, i) =>
           i === paragraphs.length - 1 ? (
             <p key={i} className="font-semibold text-[14px] text-foreground leading-5">{para}</p>
           ) : (
-            <p key={i} className="font-normal text-[14px] text-foreground leading-5">{para}</p>
+            <p key={i} className="font-medium text-[14px] text-foreground leading-5">{para}</p>
           )
         )}
       </div>
