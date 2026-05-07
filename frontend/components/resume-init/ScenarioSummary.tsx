@@ -8,7 +8,7 @@ interface ScenarioSummaryProps {
   text: string;
 }
 
-export function ScenarioSummary({ scenario, scenarioId: _scenarioId, text }: ScenarioSummaryProps) {
+export function ScenarioSummary({ scenario, text }: ScenarioSummaryProps) {
   const paragraphs = text.split("\n\n").filter(Boolean);
 
   return (
