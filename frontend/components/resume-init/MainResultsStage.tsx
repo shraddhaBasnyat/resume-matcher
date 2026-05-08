@@ -16,7 +16,7 @@ import { type AppState, type NodeProgress } from "@/lib/match-constants";
 import type { MatchResponse, FitAdviceEntry } from "@/lib/types/api";
 import {
   ArrowRight, List, Clock, CheckSquare, Eye, HelpCircle,
-  Star, AlertCircle, FileText,
+  Star, AlertCircle, FileText, FileSearch,
 } from "lucide-react";
 
 type TabId = "resume-init" | "company-init" | "arc-init";
@@ -92,6 +92,14 @@ export function MainResultsStage({ className, result, progress, appState }: Main
 
       {activeTab === "resume-init" && (
         <div className="bg-background w-full flex flex-col px-6 py-4 gap-3 items-center min-h-[600px]">
+          {appState === "idle" && result === null && (
+            <div className="flex flex-col items-center justify-center flex-1 gap-3 py-24">
+              <FileSearch size={32} className="text-muted-foreground/40" />
+              <p className="font-brand text-sm text-muted-foreground/60">
+                Run your first analysis to see results
+              </p>
+            </div>
+          )}
           {(appState === "running" || result !== null) && (
             <CoachesNotes
               isLoading={appState === "running"}
