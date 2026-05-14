@@ -1,9 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Menu } from "@base-ui/react/menu";
 import { CreditCard, Footprints, LogOut, Settings, User } from "lucide-react";
+import { type User as SupabaseUser } from "@supabase/supabase-js";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { createClient } from "@/lib/supabase/client";
+import { signOut } from "@/app/auth/actions";
 
 const NAV_ITEMS = [
   { label: "Profile",  Icon: User,       shortcut: "⇧⌘P" },
@@ -11,7 +15,33 @@ const NAV_ITEMS = [
   { label: "Settings", Icon: Settings,   shortcut: "⌘S"  },
 ] as const;
 
+function getInitials(user: SupabaseUser | null): string {
+  if (!user) return "JI";
+  const name = user.user_metadata?.full_name ?? user.user_metadata?.name;
+  if (name) {
+    const parts = (name as string).trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    if (parts[0]) return parts[0][0].toUpperCase();
+  }
+  return user.email ? user.email[0].toUpperCase() : "JI";
+}
+
 export function Header() {
+  const [user, setUser] = useState<SupabaseUser | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => setUser(user));
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const initials = getInitials(user);
+
   return (
     <header className="sticky top-0 z-50 flex items-center justify-between w-full h-[88px] px-6 bg-background border-b border-success">
 
@@ -29,7 +59,7 @@ export function Header() {
       <Menu.Root>
         <Menu.Trigger className="bg-transparent border-0 p-0 cursor-pointer rounded-full">
           <Avatar>
-            <AvatarFallback>JI</AvatarFallback>
+            <AvatarFallback>{initials}</AvatarFallback>
           </Avatar>
         </Menu.Trigger>
 
@@ -45,7 +75,7 @@ export function Header() {
               {/* Section 1 — account label */}
               <Menu.Group>
                 <Menu.GroupLabel className="block py-1.5 px-2 text-sm font-semibold text-foreground">
-                  My Account
+                  {user?.email ?? "My Account"}
                 </Menu.GroupLabel>
               </Menu.Group>
 
@@ -67,14 +97,14 @@ export function Header() {
               <hr className="border-t border-muted m-0" />
 
               {/* Section 3 — log out */}
-              <Menu.LinkItem
-                href=""
-                className="flex items-center gap-2 py-1.5 px-2 no-underline w-full bg-transparent border-0 outline-none cursor-pointer"
+              <Menu.Item
+                onClick={() => signOut()}
+                className="flex items-center gap-2 py-1.5 px-2 w-full bg-transparent border-0 outline-none cursor-pointer"
               >
                 <LogOut size={16} className="text-foreground shrink-0" />
                 <span className="text-foreground text-sm font-normal flex-1">Log out</span>
                 <span className="text-foreground text-xs font-normal opacity-50">⇧⌘Q</span>
-              </Menu.LinkItem>
+              </Menu.Item>
 
             </Menu.Popup>
           </Menu.Positioner>

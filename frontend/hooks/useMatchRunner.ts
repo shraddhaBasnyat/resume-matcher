@@ -8,8 +8,7 @@ import {
   INITIAL_PROGRESS,
   normalizeNodeName,
 } from "@/lib/match-constants";
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
+import { backendFetch } from "@/lib/api/backend-client";
 
 export interface UseMatchRunnerReturn {
   appState: AppState;
@@ -87,7 +86,7 @@ export function useMatchRunner(): UseMatchRunnerReturn {
     formData.append("resume", file);
 
     try {
-      const res = await fetch(`${BACKEND_URL}/api/parse-resume`, { method: "POST", body: formData });
+      const res = await backendFetch("/api/parse-resume", { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) {
         setParseError(data.message ?? data.error ?? "Failed to extract text");
@@ -238,7 +237,7 @@ export function useMatchRunner(): UseMatchRunnerReturn {
     setHumanContext("");
 
     try {
-      const res = await fetch(`${BACKEND_URL}/api/match/run`, {
+      const res = await backendFetch("/api/match/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -278,7 +277,7 @@ export function useMatchRunner(): UseMatchRunnerReturn {
     setProgress(INITIAL_PROGRESS);
 
     try {
-      const res = await fetch(`${BACKEND_URL}/api/match/resume`, {
+      const res = await backendFetch("/api/match/resume", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ humanContext, threadId }),
@@ -312,7 +311,7 @@ export function useMatchRunner(): UseMatchRunnerReturn {
     setProgress(INITIAL_PROGRESS);
 
     try {
-      const res = await fetch(`${BACKEND_URL}/api/match/accept`, {
+      const res = await backendFetch("/api/match/accept", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ threadId }),
@@ -349,7 +348,7 @@ export function useMatchRunner(): UseMatchRunnerReturn {
 
     // Notify server to abort and update LangSmith trace
     if (threadId) {
-      fetch(`${BACKEND_URL}/api/match/cancel`, {
+      backendFetch("/api/match/cancel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

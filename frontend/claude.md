@@ -2,11 +2,10 @@
 
 ## Project Overview
 JobInit is a resume-to-job matching app built with Next.js 14 (App Router), TypeScript, 
-and Tailwind CSS. The new v2 UI lives at `/v2` and is built in parallel with the legacy 
-UI at `/` which must not be touched.
+and Tailwind CSS. The main UI lives at `/` (route group `(main)`).
 
 ## Architecture
-- **Entry point**: `frontend/app/v2/page.tsx` — "use client", uses `useMatchRunner` hook
+- **Entry point**: `frontend/app/(main)/page.tsx` — "use client", uses `useMatchRunner` hook
 - **Hook**: `frontend/hooks/useMatchRunner.ts` — owns all app state (idle | running | 
   interrupted | completed), SSE streaming, cancellation. Reusable, not coupled to any page.
 - **Backend**: Express on port 3001 (Render in production). URL via 
@@ -101,7 +100,10 @@ shadow-card
 - Sticky, full-width, height 88px, `bg-background`, `border-b border-success`
 - Left: 32x32 `bg-primary rounded-full` circle + Lucide `Footprints` (18px, 
   `text-primary-foreground`) + "JobInit" wordmark (`font-brand font-bold text-sm text-primary`)
-- Right: Avatar with "JI" initials only — no image, no auth yet
+- Right: Avatar showing live user initials via `getInitials()` — falls back to `JI` while
+  loading. Initials sourced from `user_metadata.full_name` (Google) or first char of email.
+  Dropdown group label shows `user.email`. `onAuthStateChange` keeps state reactive without
+  page reload.
 - Dropdown: Base UI `Menu` primitive with Profile, Billing, Settings, Log out items
 - "use client" required for dropdown state
 
@@ -124,7 +126,7 @@ shadow-card
 ### Avatar (`components/ui/avatar.tsx`)
 - Built on `@base-ui/react/avatar`
 - Initials only — `AvatarImage` removed entirely, never use image
-- When auth added: populate initials from real user name, still no image
+- Initials populated from authenticated user — see `getInitials()` in `Header.tsx`
 
 ### Tabs (`components/ui/tabs.tsx`)
 - Thin wrappers around `@base-ui/react/tabs`
@@ -270,7 +272,7 @@ shadow-card
 
 ## Key Patterns
 
-### Page Structure (v2/page.tsx)
+### Page Structure (`(main)/page.tsx`)
 ```tsx
 <div className="min-h-screen bg-muted/50">
   <Header />                    {/* sticky, outside padding */}
@@ -394,13 +396,44 @@ switch (entry.key) {
 | ArcInit | "Strategic Roadmap: Own the Career Path" | ~100% |
 CompanyInit and ArcInit show a paywall/waitlist gate (PaywallGateResult). All three tabs are clickable.
 
+## Auth — Supabase SSR
+
+Auth is implemented using `@supabase/ssr`. The main app at `/` is protected — unauthenticated users are redirected to `/login`.
+
+### Files
+| File | Purpose |
+|---|---|
+| `frontend/middleware.ts` | Session refresh on every request; redirects `/` → `/login` when unauthenticated; redirects `/login` → `/` when authenticated |
+| `frontend/lib/supabase/client.ts` | Browser client via `createBrowserClient` — used in client components (Header) |
+| `frontend/lib/supabase/server.ts` | Server client via `createServerClient` — used in Server Actions and Route Handlers |
+| `frontend/app/auth/actions.ts` | Server Actions: `signIn`, `signUp`, `signOut`, `signInWithGoogle` |
+| `frontend/app/auth/callback/route.ts` | Exchanges OAuth/email PKCE code for session; redirects to `/` or `?next=` |
+| `frontend/app/login/page.tsx` | Login/signup page (Server Component shell + `LoginForm` client component) |
+| `frontend/app/auth/confirm-email/page.tsx` | "Check your inbox" page shown after email sign-up |
+
+### Key rules
+- **`cookies()` is synchronous in Next.js 14** — do NOT `await` it (that's Next.js 15)
+- **`redirect()` throws internally** — never wrap Server Actions in try/catch that catches all errors; it will swallow the redirect
+- **`getUser()` not `getSession()`** in middleware — `getSession()` is client-only and unvalidated
+- **Log out uses `Menu.Item`** (not `Menu.LinkItem`) — `Menu.LinkItem` renders an `<a>` with no onClick support
+- **`getSiteUrl()`** resolution: `NEXT_PUBLIC_SITE_URL` → `https://${VERCEL_URL}` → `http://localhost:3000`
+- **Header user loading**: browser client + `useEffect` + `onAuthStateChange` — no prop threading needed
+- **Express auth is a separate future task** — this auth is frontend (Supabase) only
+
+### Env vars required
+```
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+NEXT_PUBLIC_SITE_URL    # optional — falls back to VERCEL_URL then localhost:3000
+```
+
 ## What's Next
 - Delete `dummy-data.ts` — `MainResultsStage` is now fully wired to live `useMatchRunner` state; no dummy imports remain
 - Wire `FitAdviceAccordion` and `ScenarioSummary` skeleton state for the running phase if needed
 - ATS panel (Station 3) — surface `atsProfile`, `terminologyDiffs` once backend schema is finalised
 
 ## Do Not Touch
-- `frontend/app/page.tsx` (legacy)
+- `frontend/app/page.tsx` (legacy root page, if it exists)
 - `frontend/components/match/` (legacy)
 - HITL feature (HitlForm, handleRescore, handleAccept) — ignore for now
 
