@@ -12,6 +12,8 @@
   "dependencies": {
     "@base-ui/react": "^1.3.0",
     "@resume-matcher/shared": "*",
+    "@supabase/ssr": "^0.10.3",
+    "@supabase/supabase-js": "^2.105.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.577.0",
