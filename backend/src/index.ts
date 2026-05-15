@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { setupCheckpointer } from "../graphs/scoring/scoring-graph.js";
+import { requireAuth } from "./middleware/requireAuth.js";
 
 const app = express();
 
@@ -21,11 +22,11 @@ setupCheckpointer()
     const { default: parseResumeRouter } = await import("./routes/parse-resume.js");
     const { default: healthRouter } = await import("./routes/health.js");
 
-    app.use("/api/match/run", matchRunRouter);
-    app.use("/api/match/resume", matchResumeRouter);
-    app.use("/api/match/accept", matchAcceptRouter);
-    app.use("/api/match/cancel", matchCancelRouter);
-    app.use("/api/parse-resume", parseResumeRouter);
+    app.use("/api/match/run", requireAuth, matchRunRouter);
+    app.use("/api/match/resume", requireAuth, matchResumeRouter);
+    app.use("/api/match/accept", requireAuth, matchAcceptRouter);
+    app.use("/api/match/cancel", requireAuth, matchCancelRouter);
+    app.use("/api/parse-resume", requireAuth, parseResumeRouter);
     app.use("/api/health", healthRouter);
 
     app.listen(port);

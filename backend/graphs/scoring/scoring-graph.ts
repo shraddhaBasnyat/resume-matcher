@@ -1,3 +1,4 @@
+import { Pool } from "pg";
 import { StateGraph, MemorySaver } from "@langchain/langgraph";
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
@@ -18,6 +19,17 @@ const NODES = {
   ANALYZE_SKEPTICAL_RECONCILIATION: "analyzeSkepticalReconciliation",
 } as const;
 
+function makePgPool(): Pool {
+  const ssl = process.env.SUPABASE_CA_CERT
+    ? {
+        ca: Buffer.from(process.env.SUPABASE_CA_CERT, "base64").toString("utf-8"),
+        rejectUnauthorized: true,
+      }
+    : { rejectUnauthorized: false };
+
+  return new Pool({ connectionString: process.env.SUPABASE_DB_URL, ssl });
+}
+
 let sharedCheckpointer: PostgresSaver | MemorySaver | null = null;
 
 export async function setupCheckpointer(): Promise<void> {
@@ -28,7 +40,7 @@ export async function setupCheckpointer(): Promise<void> {
   if (sharedCheckpointer instanceof PostgresSaver) {
     return;
   }
-  const checkpointer = PostgresSaver.fromConnString(process.env.SUPABASE_DB_URL);
+  const checkpointer = new PostgresSaver(makePgPool());
   await checkpointer.setup();
   sharedCheckpointer = checkpointer;
 }
@@ -39,7 +51,7 @@ function makeCheckpointer() {
   }
 
   if (process.env.SUPABASE_DB_URL) {
-    sharedCheckpointer = PostgresSaver.fromConnString(process.env.SUPABASE_DB_URL);
+    sharedCheckpointer = new PostgresSaver(makePgPool());
     return sharedCheckpointer;
   }
 

@@ -463,6 +463,34 @@ Mappings:
 
 ---
 
+## Auth
+
+Middleware lives at `src/middleware/requireAuth.ts`. Uses `jose` (`createRemoteJWKSet` +
+`jwtVerify`) for RS256 JWKS verification — no shared secret. The JWKS endpoint is derived
+from `SUPABASE_URL`: `${SUPABASE_URL}/auth/v1/.well-known/jwks.json`. Only `SUPABASE_URL`
+is required; `SUPABASE_JWT_SECRET` is not used.
+
+Applied inline at registration in `src/index.ts` to all routes except `/api/health`:
+
+```ts
+app.use("/api/match/run",    requireAuth, matchRunRouter);
+app.use("/api/match/resume", requireAuth, matchResumeRouter);
+app.use("/api/match/accept", requireAuth, matchAcceptRouter);
+app.use("/api/match/cancel", requireAuth, matchCancelRouter);
+app.use("/api/parse-resume", requireAuth, parseResumeRouter);
+app.use("/api/health", healthRouter);  // intentionally public — do not add requireAuth
+```
+
+On success `requireAuth` attaches the decoded payload to `req.user` (typed as `JWTPayload`
+from `jose`). `req.user.sub` contains the user's UUID and is available in every protected
+route handler.
+
+**Future:** `requireRunLimit` middleware for `match/run` only — checks
+`profiles.run_limit` in Supabase, returns 429 if exceeded. Separate from auth concern;
+sits after `requireAuth` in the chain.
+
+---
+
 ## Schema conventions (unchanged)
 
 `safeParse` → `logValidationFailure` → `throw validated.error` on every chain output. Never use `Schema.parse({ ...result })` — spreading null/undefined throws TypeError that masks the real Zod error. Nullable string fields: `z.string().min(1).nullable()` not `z.string().nullable()`. `weakMatch` and `weakMatchReason` (after normalisation) are derived in the node — not LLM output fields.
