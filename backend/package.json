@@ -22,6 +22,7 @@
     "langsmith": "^0.5.12",
     "multer": "^1.4.5-lts.1",
     "pdf2json": "^4.0.2",
+    "pg": "^8.20.0",
     "zod": "^3.25.1"
   },
   "devDependencies": {
@@ -29,6 +30,7 @@
     "@types/express": "^4.17.0",
     "@types/multer": "^1.4.12",
     "@types/node": "^20.0.0",
+    "@types/pg": "^8.20.0",
     "tsx": "^4.0.0",
     "typescript": "^5.0.0",
     "vitest": "^4.1.0"
