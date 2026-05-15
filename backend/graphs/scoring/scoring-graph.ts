@@ -20,14 +20,7 @@ const NODES = {
 } as const;
 
 function makePgPool(): Pool {
-  const ssl = process.env.SUPABASE_CA_CERT
-    ? {
-        ca: Buffer.from(process.env.SUPABASE_CA_CERT, "base64").toString("utf-8"),
-        rejectUnauthorized: true,
-      }
-    : { rejectUnauthorized: false };
-
-  return new Pool({ connectionString: process.env.SUPABASE_DB_URL, ssl });
+  return new Pool({ connectionString: process.env.SUPABASE_DB_URL });
 }
 
 let sharedCheckpointer: PostgresSaver | MemorySaver | null = null;
