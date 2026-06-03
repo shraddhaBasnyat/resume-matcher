@@ -1,9 +1,10 @@
 # PRD: Match Scenarios, Score Branching & Contextual Prompting
 
-**Status:** Updated — ATS three-layer model + terminology fixes node
+**Status:** Updated — archetype system integration, ATS path overhaul
 **Author:** sbasnyat
-**Last updated:** 2026-04-28
-**Supersedes:** version dated 2026-04-06
+**Last updated:** 2026-06-02
+**Supersedes:** version dated 2026-04-28
+**See also:** prd-graph-architecture.md for node responsibilities and graph topology
 
 ---
 
@@ -15,25 +16,24 @@ First, it conflates two independent questions: can a machine read this resume, a
 
 Second, it treats all analysis as a single pass. The score is produced alongside the advice in one chain call, which means the advice is generated without knowing what scenario the user is actually in. A confirmed strong match needs sparse validation. A narrative gap needs reframing. A genuine weak match needs an honest verdict. The same prompt cannot serve all three well.
 
-Third, the ATS signal was a single score with no explanatory structure. A candidate who fails on terminology (Layer 3) needs different advice than one who fails on formatting (Layer 1) or knockout questions (Layer 2). Blending these into one number obscures the actual problem and the actual fix.
+Third, the ATS signal was a single score with no explanatory structure. A candidate who fails on terminology needs different advice than one who fails on formatting. Blending these into one number obscures the actual problem and the actual fix.
 
 ---
 
 ## Goals
 
 - Separate ATS analysis from fit analysis — two independent signals always surfaced to the user
-- ATS analysis covers three distinct layers: machine parsing, knockout filters, recruiter search
-- `generateTerminologyFixes` surfaces exact before/after diffs automatically — no user prompt required
-- `analyzeFit` produces a clean score and factual narrative summary — no mechanical advice
+- ATS path surfaces mechanical facts — no inference, no judgment
 - Verdict nodes own coaching advice — one fires per run, calibrated to the scenario
 - Route to the correct scenario using two signals only: `fitScore` and `atsScore`
 - HITL fires once maximum in Honest Verdict
-- Gate archetype and intent enrichment behind the paid tier
+- Archetype enrichment available on paid tier — does not change routing, changes advice depth
 
 ---
 
 ## Non-goals
 
+- Graph topology and node responsibilities (see `prd-graph-architecture.md`)
 - Archetype registry and injection details (see `prd-archetype-system.md`)
 - Eval harness design (separate PRD)
 - Payment infrastructure and billing
@@ -45,11 +45,11 @@ Third, the ATS signal was a single score with no explanatory structure. A candid
 
 These are two different people's perspectives on the same application.
 
-**ATS panel** is the recruiter's view — mechanical, literal, searchable. It answers: will you be seen? It owns all three parsing and discoverability problems. It produces actionable fixes automatically.
+**ATS panel** is the recruiter's view — mechanical, literal, searchable. It answers: will you be seen? It surfaces keyword gaps and formatting problems as facts. It never speculates about human judgment.
 
-**Fit analysis** is the hiring manager's view — inferential, narrative, human. It answers: once seen, will you be wanted? It owns career trajectory, transferability judgments, and honest gap assessment. It never touches keyword lists, formatting, or terminology.
+**Fit analysis** is the hiring manager's view — inferential, semantic, human. It answers: once seen, will you be wanted? It owns career pattern assessment, transferability judgments, and honest gap assessment. It never touches keyword lists, formatting, or terminology.
 
-This division is strict. Fit analysis does not restate ATS findings in softer language. ATS analysis does not speculate about human judgment. A candidate who passes all three ATS layers perfectly can still have a weak fit score. A candidate who fails every ATS layer can be the strongest human match in the pool. The two signals are orthogonal.
+This division is strict. Fit analysis does not restate ATS findings. ATS analysis does not speculate about human judgment. A candidate who passes all ATS checks perfectly can still have a weak fit score. A candidate who fails every ATS check can be the strongest human match in the pool. The two signals are orthogonal.
 
 ---
 
@@ -57,8 +57,7 @@ This division is strict. Fit analysis does not restate ATS findings in softer la
 
 ### Base tier (free / all users)
 - Two-dimensional scoring — `fitScore` and `atsScore` independently, always surfaced
-- Full three-layer ATS panel — machine parsing, knockout questions, recruiter search
-- Automatic terminology diffs — `terminologyDiffs[]` generated without user prompt
+- Full ATS panel — formatting flags, recruiter search, terminology mismatches as facts
 - Four scenario routing — Confirmed Fit, Invisible Expert, Narrative Gap, Honest Verdict
 - HITL for Honest Verdict — one exchange maximum
 - Generic verdict node advice — not enriched by archetype or intent context
@@ -66,7 +65,7 @@ This division is strict. Fit analysis does not restate ATS findings in softer la
 
 ### Paid tier
 - Everything in base tier
-- Archetype enrichment — verdict node prompt enriched with transition-specific coaching data
+- Archetype enrichment — verdict node prompt enriched with real ask, archetype probe pattern, career arc, and transition-specific coaching
 - Intent enrichment — `intent` and `intentContext` collected from user and injected into verdict node
 - Routing logic does not change between tiers — only prompt richness changes
 
@@ -76,271 +75,17 @@ This division is strict. Fit analysis does not restate ATS findings in softer la
 
 Every run produces two independent scores:
 
-**`fitScore`** — does this candidate actually match this role? Career narrative, transferable skills, trajectory. Semantic, inferential. Produced by `analyzeFit`.
+**`fitScore`** — does this candidate actually match this role? Career pattern, demonstrated evidence, transferable work. Semantic, inferential.
 
-**`atsScore`** — can a machine read this resume and surface it for this role? Keyword density, layout parseability, terminology matching. Mechanical, literal. Produced by `atsAnalysis`. Composite of all three layers, weighted toward Layer 3 (recruiter search) as the most actionable signal.
+**`atsScore`** — can a machine read this resume and surface it for this role? Keyword presence, formatting parseability, terminology matching. Mechanical, literal. Weighted toward recruiter search as the most actionable signal.
 
 These are orthogonal. Both are always returned in the API response and always surfaced in the UI.
 
 ---
 
-## Graph topology
-
-```
-resumeText + jobText
-      ↓
-atsAnalysis ─────────────────── analyzeFit    (parallel, both read raw text)
-      ↓                               ↓
-generateTerminologyFixes         routeVerdicts
-(parallel with analyzeFit,            ↓
- reads atsAnalysis output)      one verdict node fires:
-      ↓                         analyzeStrongMatch |
-      └──────────────────────── analyzeNarrativeGap |
-                                analyzeSkepticalReconciliation
-                                      ↓
-                                     END
-```
-
-`atsAnalysis` and `analyzeFit` run in parallel. `generateTerminologyFixes` fans out from `atsAnalysis` output immediately — it does not wait for `analyzeFit`. The verdict node has access to both `atsProfile` and `terminologyDiffs` from state.
-
----
-
-## Node responsibilities
-
-### `atsAnalysis`
-
-Single node, single LLM call. Reads raw resume text and job text directly. Mechanical and literal — no semantic inference.
-
-**Prompt framing:** The LLM plays two roles simultaneously: a recruiter configuring knockout questions before posting the job, and a recruiter running a Boolean search query to find candidates. This framing produces more realistic output than asking for "ATS analysis" abstractly.
-
-**Output schema:**
-```ts
-{
-  atsScore: number              // 0–100, composite weighted toward Layer 3
-
-  // Layer 1 — formatting (inferred from text artifacts)
-  machineParsing: {
-    likelyTwoColumn: boolean
-    hasTablesOrGraphics: boolean
-    contactInHeaderFooter: boolean
-    inconsistentDateFormats: boolean
-    nonStandardBullets: boolean
-    missingSections: string[]   // e.g. ["skills section", "summary"]
-    flags: string[]             // human-readable summary of issues found
-  }
-
-  // Layer 2 — knockout questions (LLM acts as recruiter setting gates)
-  knockoutQuestions: {
-    question: string            // e.g. "Are you authorized to work in the US?"
-    inferredFromJD: string      // the JD phrase that implies this requirement
-    candidatePasses: boolean | null  // null = cannot determine from resume
-    riskLevel: "pass" | "at_risk" | "unknown"
-  }[]
-
-  // Layer 3 — recruiter search (LLM acts as recruiter running Boolean query)
-  recruiterSearch: {
-    likelySearchQuery: string   // e.g. "LangGraph AND (Python OR TypeScript) NOT junior"
-    termsPresentInResume: string[]
-    termsMissingFromResume: string[]
-    terminologyMismatches: {
-      resumeUses: string        // e.g. "agent orchestration"
-      jdExpects: string         // e.g. "agentic systems"
-    }[]
-  }
-
-  machineRanking: string[]      // keyword gap summary strings for UI display
-}
-```
-
-**Node logic after LLM call:**
-```ts
-// atsScore composite weighting
-// Layer 3 carries 60% weight — it's the most actionable and most common failure
-// Layer 2 carries 25% weight — knockout risk is high-stakes
-// Layer 1 carries 15% weight — formatting issues are fixable but rarer
-atsResult.machineParsing = { ...parsed, flags: derivedFlags }
-```
-
-**Layer 1 limitation:** The LLM infers formatting problems from text artifacts (garbled text, inconsistent dates, missing sections). It cannot detect two-column layout from plain text because the text is already linearized by the time it arrives. For Phase 1, LLM inference is sufficient. Programmatic PDF/DOCX analysis is the Phase 2 upgrade path for Layer 1.
-
----
-
-### `generateTerminologyFixes`
-
-New node. Single focused LLM call. Fires immediately after `atsAnalysis` completes, in parallel with the fit analysis path.
-
-**Reads:** `resumeText`, `atsAnalysis.recruiterSearch.terminologyMismatches[]`
-
-**Purpose:** For each terminology mismatch, find the exact sentence in the resume that contains the outdated phrase and rewrite only that sentence with the correct terminology. Surgical — no other content changes.
-
-**Output schema:**
-```ts
-terminologyDiffs: {
-  location: string          // e.g. "Senior Engineer @ Acme — bullet 2"
-  swapLabel: string         // e.g. "agent orchestration → agentic systems"
-  before: string            // exact original sentence from resume
-  after: string             // rewritten sentence with terminology swap
-}[]
-```
-
-**Prompt design:**
-```
-The candidate's resume uses these phrases where the recruiter's search
-uses different terminology:
-
-{terminologyMismatches as before → after pairs}
-
-Find the exact sentences in the resume below that contain these phrases.
-Rewrite only those sentences, replacing only the flagged phrase with the
-recruiter's preferred term. Do not change anything else — metrics,
-structure, tense, and all other content must remain identical.
-
-Return one object per mismatch. If a phrase does not appear in the
-resume, skip it.
-
-Resume text:
-{resumeText}
-```
-
-**Why this runs automatically:** The system already has everything needed to produce the diffs. Deferring behind a button forces the user to ask for work the system could have done. For the Invisible Expert scenario specifically, seeing their own sentence with the fix already applied — without asking — is the moment the product earns trust. The user recognizes their own words and can immediately verify nothing was fabricated.
-
-**Cost:** Small focused call. 4–6 output objects. Runs in parallel with verdict nodes. Adds no latency to the critical path.
-
----
-
-### `analyzeFit`
-
-Single LLM call. Cold, forensic assessment of the human match. Reads raw resume text and job text directly.
-
-**Scope:** Career trajectory, transferable skills, genuine gaps. No mechanical advice — that belongs entirely to the ATS panel. No keyword lists. No formatting observations. Purely the human judgment question: once seen, will this candidate be wanted?
-
-**Output schema (all fields required):**
-```ts
-{
-  fitScore: number
-  headline: string              // role-facing — encodes both match AND gap if one exists
-  battleCardBullets: string[]   // role-first format: [role requirement] — [candidate
-                                // evidence] — [honest assessment]. Collectively explain
-                                // the score. If score < 85, at least one bullet names
-                                // what is absent or weak.
-  fitScenarioSummary: string    // human fit picture in isolation — factual paragraph,
-                                // no ATS context, no scenario tone. Read by verdict nodes
-                                // which synthesise this with atsScenarioSummary into
-                                // the final closingSummary.
-  sourceRole: string
-  targetRole: string
-
-  fitAnalysis: {
-    careerTrajectory: string
-    keyStrengths: string[]
-    experienceGaps: string[]
-    weakMatchReason: string     // REQUIRED — use "NONE" if fitScore >= 50
-  }
-}
-```
-
-**Node logic after LLM call:**
-```ts
-matchResult.weakMatch = matchResult.fitScore < 50
-matchResult.fitAnalysis.weakMatchReason =
-  result.fitAnalysis.weakMatchReason === "NONE"
-    ? null
-    : result.fitAnalysis.weakMatchReason
-```
-
-**Critical prompt instruction:** `weakMatchReason` is always required. If `fitScore >= 50`, return the string "NONE". Do not omit the field. Conditional fields are unreliable and will be missed.
-
----
-
-### `routeVerdicts`
-
-Pure function. No LLM. Reads `fitScore` and `atsScore`. Writes `scenarioId`.
-
-```ts
-function deriveScenario(fitScore: number, atsScore: number | null): ScenarioId {
-  if (fitScore >= 75 && (atsScore === null || atsScore >= 75)) return "confirmed_fit"
-  if (fitScore >= 75 && atsScore !== null && atsScore < 75)   return "invisible_expert"
-  if (fitScore >= 50)                                          return "narrative_gap"
-  return "honest_verdict"
-}
-```
-
----
-
-### `analyzeStrongMatch`
-
-Fires for: `confirmed_fit` and `invisible_expert`. Reads `fitScore`, `scenarioId`, `fitAnalysis`, `atsProfile`, `terminologyDiffs`.
-
-**For `confirmed_fit`:** Sparse output is correct. The ATS panel is clean. The fit is strong. Do not manufacture advice to appear thorough. Empty `fitAdvice` is the right answer.
-
-**For `invisible_expert`:** The fit analysis confirms the candidate is qualified. The ATS panel and `terminologyDiffs` already contain the mechanical fix. The verdict node's job is the human framing: acknowledge the qualification clearly, then point to the ATS panel for the specific fixes. Do not restate the terminology gaps — they are already shown in Station 3.
-
-```ts
-// confirmed_fit
-{ scenarioId: "confirmed_fit", fitAdvice: [] }
-
-// invisible_expert
-{
-  scenarioId: "invisible_expert"
-  fitAdvice: {
-    standoutStrengths: string[]
-    atsRealityCheck: string[]     // human framing only — "your terminology, not your skills"
-    terminologySwaps: string[]    // omit if terminologyDiffs covers it — no duplication
-    keywordsToAdd: string[]
-  }
-}
-```
-
----
-
-### `analyzeNarrativeGap`
-
-Fires for: `narrative_gap`. Reads `fitScore`, `scenarioId`, `fitAnalysis`.
-
-The ATS panel may be entirely clean for this scenario. The problem is not mechanical — the career story doesn't obviously point at this role. This node owns the scenario entirely. Its output is about reframing existing experience, not fixing terminology or formatting.
-
-```ts
-{
-  scenarioId: "narrative_gap"
-  fitAdvice: {
-    transferableStrengths: string[]
-    reframingSuggestions: string[]
-    missingSkills: string[]
-  }
-}
-```
-
----
-
-### `analyzeSkepticalReconciliation`
-
-Fires for: `honest_verdict`. Reads `fitScore`, `scenarioId`, `fitAnalysis`, `hitlFired`.
-
-The ATS panel may be clean. The gap is real — not a terminology problem, not a formatting problem. This node owns the honest verdict. HITL gives the candidate one chance to surface context the resume missed.
-
-**First pass (`hitlFired === false`):**
-- If the gap is real and more context would change the assessment: generate `contextPrompt` → call `interrupt()` → set `hitlFired: true`
-- If no context would help: produce `fitAdvice` directly, no interrupt
-
-**Second pass (`hitlFired === true`):**
-- `humanContext` is in state
-- Produce `fitAdvice` with `acknowledgement` if context changed the assessment
-- No second interrupt regardless of score
-
-```ts
-{
-  scenarioId: "honest_verdict"
-  fitAdvice: {
-    honestAssessment: string[]
-    closingSteps: string[]
-    acknowledgement: string[] | null
-  }
-}
-```
-
----
-
 ## Scenario routing
+
+Routing uses two signals only: `fitScore` and `atsScore`.
 
 | scenarioId | fitScore | atsScore | Verdict node |
 |---|---|---|---|
@@ -351,33 +96,107 @@ The ATS panel may be clean. The gap is real — not a terminology problem, not a
 
 ---
 
-## Internal graph state — field ownership
+## Archetype match — coarse prior for fit scoring
 
-| Field | Written by | Read by |
-|---|---|---|
-| `resumeText` | request body | `analyzeFit`, `atsAnalysis`, `generateTerminologyFixes` |
-| `jobText` | request body | `analyzeFit`, `atsAnalysis` |
-| `fitScore` | `analyzeFit` | `routeVerdicts`, all verdict nodes |
-| `weakMatch` | `analyzeFit` (derived) | `routeVerdicts` |
-| `headline` | `analyzeFit` | runner |
-| `battleCardBullets` | `analyzeFit` | runner |
-| `fitScenarioSummary` | `analyzeFit` | verdict nodes |
-| `fitAha` | `analyzeFit` | runner (emitted in `node_done`) |
-| `sourceRole` | `analyzeFit` | `detectArchetype` (future) |
-| `targetRole` | `analyzeFit` | `detectArchetype` (future) |
-| `fitAnalysis` | `analyzeFit` | all verdict nodes |
-| `atsScore` | `atsAnalysis` | `routeVerdicts` |
-| `atsProfile` | `atsAnalysis` | `analyzeStrongMatch`, runner |
-| `atsScenarioSummary` | `atsAnalysis` | verdict nodes |
-| `atsAha` | `atsAnalysis` | runner (emitted in `node_done`) |
-| `terminologyDiffs` | `generateTerminologyFixes` | runner, `analyzeStrongMatch` |
-| `scenarioId` | `routeVerdicts` | all verdict nodes, runner |
-| `fitAdvice` | verdict nodes | runner |
-| `verdictAha` | verdict nodes | runner (emitted in `node_done`) |
-| `closingSummary` | verdict nodes | runner (remapped to `scenarioSummary.text`) |
-| `hitlFired` | `analyzeSkepticalReconciliation` | `analyzeSkepticalReconciliation` |
-| `humanContext` | HITL resume endpoint | `analyzeSkepticalReconciliation` |
-| `contextPrompt` | `analyzeSkepticalReconciliation` | runner |
+The comparison between `candidateArchetype` (from resume analysis) and `jdArchetype` (from JD analysis) provides a coarse prior that informs fit scoring:
+
+```
+candidateArchetype === jdArchetype.ideal     → strong match territory
+candidateArchetype in jdArchetype.couldWork  → narrative gap territory
+neither                                      → honest verdict territory
+```
+
+This is a prior, not a constraint. Battle card evidence and demonstrated experience are the fine-grained signal. A candidate in `couldWork` territory with strong demonstrated evidence can score higher than the tier suggests.
+
+---
+
+## Scenario profiles
+
+### Scenario 1 — The Confirmed Fit
+**fitScore >= 75, atsScore >= 75**
+
+**Who they are:** A candidate who genuinely matches the role and has a well-structured, keyword-rich resume. They want confirmation.
+
+**What they're feeling:** Hopeful and looking for validation. They believe they are qualified and want the tool to confirm they aren't second-guessing themselves unnecessarily.
+
+**What success looks like:** They close the tool feeling energised and ready to apply without hesitation. Sparse output is correct output here — padding erodes trust.
+
+**ATS panel role:** All checks are clear. Show it clearly. The panel's job is to confirm there's nothing to fix, not to find problems.
+
+**Fit analysis role:** Confirms the human match with specific strengths named from the actual resume. No generic encouragement.
+
+---
+
+### Scenario 2 — The Invisible Expert
+**fitScore >= 75, atsScore < 75**
+
+**Who they are:** A highly qualified candidate whose resume is invisible to automated filters due to terminology choices or formatting. They keep not getting interviews despite knowing they are the right person for the role.
+
+**What they're feeling:** Frustrated and bewildered. They know they are qualified but aren't getting traction.
+
+**What success looks like:** A massive sense of relief. They realise the problem isn't their talent — it's a translation issue. They close the tool knowing exactly which terminology swaps will make them visible.
+
+**ATS panel role:** This is the scenario where the ATS panel does its most important work. Terminology diffs surface as inline before/after rewrites on the candidate's own sentences — no user prompt required. The panel is the product for this user.
+
+**Fit analysis role:** Confirms clearly that the qualification is real and strong. Load-bearing for the emotional arc — the candidate needs to hear "you match this role" before the ATS panel's explanation of why they're invisible lands as relief rather than another rejection.
+
+**Critical:** The fit analysis must not restate the terminology gaps. The fit analysis speaks to the human match. The ATS panel speaks to the mechanical fix. They are separate voices.
+
+---
+
+### Scenario 3 — The Narrative Gap
+**fitScore 50–74, atsScore any**
+
+**Who they are:** A professional whose career trajectory and transferable skills fit the role well, but whose resume reads as a literal history of past job titles rather than a narrative pointing toward a future role.
+
+**What they're feeling:** Anxious and slightly insecure. They worry that because they haven't held this exact title before, no one will take them seriously.
+
+**What success looks like:** They feel seen and understood. The moment they realise they already have the experience — it's just not framed to show it. They close the tool knowing exactly how to reframe their existing story.
+
+**ATS panel role:** May be entirely clean — `atsScore` can be high even when `fitScore` is mid-range. If the panel is clean, show it clearly and briefly: "Your resume is readable and surfaces in search. The gap is not mechanical."
+
+**Fit analysis role:** This node owns this scenario entirely. Reframing suggestions must be specific to this candidate's actual experience. The specificity test applies with full force: could this reframing suggestion have been written without reading this specific resume? If yes, it fails.
+
+---
+
+### Scenario 4 — The Honest Verdict
+**fitScore < 50, atsScore any**
+
+**Who they are:** A candidate whose confidence may not be grounded in the evidence. The gap is real.
+
+**What they're feeling:** Defensive initially, then potentially deflated.
+
+**What success looks like:** They feel respected even though the answer may be no. The tool doesn't manufacture false hope. The verdict is direct and specific — not cruel, not generic, but honest in a way that a trusted mentor would be. They close the session knowing clearly why the gap exists and what it would actually take to close it. Clarity over comfort.
+
+**ATS panel role:** Secondary. The gap is in the fit score, not the ATS score. Surface the ATS panel normally but it does not soften the honest verdict.
+
+**HITL note:** HITL fires once maximum per run. If the rescore moves `fitScore` above 50, the user lands in Narrative Gap or Confirmed Fit instead. `hitlFired` prevents a second interrupt.
+
+---
+
+## Paid tier enrichment
+
+The four scenarios above are the base product. On the paid tier, two context layers enrich the advice without changing the routing:
+
+**Archetype context** — verdict node prompt enriched with the role's real ask, the archetype's interview probe pattern, the candidate's career arc transitions, and transition-specific coaching data. The scenario doesn't change — the advice gets more specific.
+
+**Intent context** — when the user declares their intent and current status, the verdict node prompt is calibrated to their declared situation. Base tier always defaults to `confident_match` + `direct_experience`.
+
+Neither enrichment changes which scenario the user is in. They change how specifically the verdict node speaks to that user's situation.
+
+---
+
+## Tone principles across all scenarios
+
+**Never manufacture advice.** Empty `fitAdvice` on a strong match is correct. Padding to appear thorough erodes trust faster than saying nothing.
+
+**Honesty over comfort, but never cruelty.** Scenario 4 especially. The tool is a trusted mentor, not a rejection machine.
+
+**Specificity is the product.** Generic advice — "strengthen your experience section," "highlight your skills" — is the failure mode in every scenario. The test for any output: could this have been written without reading this specific resume and this specific job description? If yes, it's generic.
+
+**The ATS panel and fit analysis are separate voices.** They do not restate each other. The fit analysis does not mention keyword gaps. The ATS panel does not speculate about career narrative or human judgment.
+
+**The user's emotional state is the context.** Tone is not decoration — it is part of the output quality.
 
 ---
 
@@ -385,25 +204,28 @@ The ATS panel may be clean. The gap is real — not a terminology problem, not a
 
 ```ts
 {
-  scenarioId: ScenarioId
+  scenarioId: "confirmed_fit" | "invisible_expert" | "narrative_gap" | "honest_verdict"
 
   fitScore: number
 
   battleCard: {
     headline: string
-    bulletPoints: string[]
+    bullets: {
+      requirement: string
+      evidence: string
+      verdict: "strong_match" | "framing_gap" | "terminology_gap" | "hard_gap" | "evidence_gap"
+    }[]
   }
 
   fitAdvice: {
     key: string
-    bulletPoints: string[]
-  }[]                             // empty array for confirmed_fit
+    items: Item[]
+  }[]
 
   atsProfile: {
     atsScore: number | null
-
     machineParsing: {
-      flags: string[]             // human-readable formatting issues
+      flags: string[]
       likelyTwoColumn: boolean
       hasTablesOrGraphics: boolean
       contactInHeaderFooter: boolean
@@ -411,20 +233,12 @@ The ATS panel may be clean. The gap is real — not a terminology problem, not a
       nonStandardBullets: boolean
       missingSections: string[]
     }
-
-    knockoutQuestions: {
-      question: string
-      inferredFromJD: string
-      riskLevel: "pass" | "at_risk" | "unknown"
-    }[]
-
     recruiterSearch: {
-      likelySearchQuery: string
-      termsPresentInResume: string[]
-      termsMissingFromResume: string[]
+      recruiterFilter: string
+      termGaps: { term: string, status: "missing" | "present_no_context" | "present_demonstrated" }[]
+      terminologyMismatches: { resumeUses: string, jdExpects: string }[]
     }
-
-    machineRanking: string[]      // keyword gap summary strings
+    machineRanking: string[]
   }
 
   terminologyDiffs: {
@@ -434,22 +248,24 @@ The ATS panel may be clean. The gap is real — not a terminology problem, not a
     after: string
   }[]
 
-  scenarioSummary: {
-    text: string              // remapped from closingSummary (verdict node)
-                              // scenario-aware synthesis of fitScenarioSummary +
-                              // atsScenarioSummary — closing statement the user reads
-  }
+  scenarioSummary: { text: string }
 
   threadId: string
   _meta: { durationMs: number }
 }
 ```
 
+Changes from prior version:
+- `knockoutQuestions` removed from `atsProfile`
+- `battleCard.bullets[].verdict` adds `evidence_gap` as fifth value
+- `atsProfile.recruiterSearch.likelySearchQuery` renamed to `recruiterFilter`
+- `atsProfile.recruiterSearch.termGaps` replaces `termsPresentInResume` / `termsMissingFromResume`
+
 ---
 
 ## HITL flow
 
-Unchanged from prior design. HITL fires inside `analyzeSkepticalReconciliation` only. Maximum one exchange per run. If `fitScore` moves above 50 after HITL, the user lands in a different scenario. `hitlFired` is a loop guard only — not a routing input to `deriveScenario`.
+Unchanged. HITL fires inside `analyzeSkepticalReconciliation` only. Maximum one exchange per run. If `fitScore` moves above 50 after HITL, the user lands in a different scenario. `hitlFired` is a loop guard only — not a routing input.
 
 ---
 
@@ -467,62 +283,44 @@ Unchanged from prior design. HITL fires inside `analyzeSkepticalReconciliation` 
 ### `node_done` payload — per node
 
 ```typescript
-// atsAnalysis
-{ node: "atsAnalysis", durationMs, timestamp,
-  aha: string }    // one sentence — most important ATS observation, pure finding only
-
-// generateTerminologyFixes
-{ node: "generateTerminologyFixes", durationMs, timestamp }
-// no aha — output surfaced in ATS panel cards
+// atsGapAnalysis
+{ node: "atsGapAnalysis", durationMs, timestamp,
+  aha: string }
 
 // analyzeFit
 { node: "analyzeFit", durationMs, timestamp,
-  aha: string }    // one sentence — sharpest human fit observation
+  aha: string }
 
 // routeVerdicts
 { node: "routeVerdicts", durationMs: 0, timestamp,
   fitScore: number, atsScore: number | null, scenarioId: ScenarioId }
-// no aha — routing data IS the observation, rendered deterministically
 
 // verdict nodes
 { node: string, durationMs, timestamp,
-  aha: string }    // one LLM sentence pointing to most important result card
+  aha: string }
 ```
 
 ### Provenance trail — logic pill content
 
-The frontend logic pill assembles four beats from `node_done` events as they arrive:
-
 ```
-Beat 1  atsAnalysis done     → aha string (LLM)
-Beat 2  analyzeFit done      → aha string (LLM)
-Beat 3  routeVerdicts done   → "fit {score} · ATS {score} → {scenario}" (deterministic,
-                                different visual treatment — mechanical, muted)
-Beat 4  verdict node done    → aha string (LLM)
-                               + static closing line: "Results ready — collapse to view"
+Beat 1  atsGapAnalysis done  → aha string
+Beat 2  analyzeFit done      → aha string
+Beat 3  routeVerdicts done   → "fit {score} · ATS {score} → {scenario}" (deterministic)
+Beat 4  verdict node done    → aha string + "Results ready — collapse to view"
 ```
-
-Pill behaviour:
-- Auto-expands when "Analyze Match" is pressed
-- Does NOT auto-collapse on `completed` — user closes manually
-- "Results ready — collapse to view" appears as the final beat when verdict node fires
-- Pill persists as a floating pin during scrolling after user closes it
-- For `honest_verdict`: pill acts as the "Why" anchor explaining the HITL requirement;
-  HITL drawer is the "How" and is self-explanatory — does not require pill to be open
 
 ---
 
 ## Open questions
 
-- Should `machineParsing` Layer 1 flags be inferred by the LLM (current) or produced programmatically from file analysis (Phase 2 upgrade)?
-- Should `terminologyDiffs` be capped at N results to avoid overwhelming users with many swaps?
-- Should `knockoutQuestions` be shown only when `riskLevel` is `at_risk` or `unknown`, or always?
-- Should the `recruiterSearch.likelySearchQuery` string be surfaced directly in the UI as the Boolean query? (Current design answer: yes — it's a differentiating insight no competitor shows.)
+- Should `terminologyDiffs` be capped at N results?
+- Should the `recruiterFilter` string be surfaced directly in the UI as the filter query?
 
 ---
 
 ## Out of scope for this PRD
 
+- Graph topology and node responsibilities (see `prd-graph-architecture.md`)
 - Archetype injection details (see `prd-archetype-system.md`)
 - Specific prompt copy for each verdict node
 - Model selection per node
