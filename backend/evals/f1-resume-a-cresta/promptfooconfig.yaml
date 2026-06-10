@@ -2,16 +2,14 @@
 description: "F1 — Resume A (no JobInit) vs Cresta JD — baseline eval"
 
 prompts:
-  - file://../../prompts/analyze-fit.prompt.md
+  - "Resume:\n{{resume_text}}\n\nJD:\n{{job_text}}"
 
 providers:
-  - id: anthropic:messages:claude-sonnet-4-20250514
-    config:
-      temperature: 0.3
+  - file://provider.ts
 
 defaultTest:
   options:
-    provider: anthropic:messages:claude-sonnet-4-20250514
+    provider: anthropic:messages:claude-sonnet-4-6
 
 derivedMetrics:
   - name: OverallF1Quality
@@ -28,32 +26,18 @@ tests:
       - type: is-json
 
       - type: javascript
-        value: >
-          const parsed = typeof output === 'string' ? JSON.parse(output) : output;
-          parsed.fitScore !== undefined &&
-          parsed.headline !== undefined &&
-          parsed.fitScenarioSummary !== undefined &&
-          parsed.fitAha !== undefined &&
-          parsed.battleCardBullets !== undefined
+        value: '((p) => p.fitScore !== undefined && p.headline !== undefined && p.fitScenarioSummary !== undefined && p.fitAha !== undefined && p.battleCardBullets !== undefined)(typeof output === "string" ? JSON.parse(output) : output)'
 
       - type: javascript
-        value: >
-          const parsed = typeof output === 'string' ? JSON.parse(output) : output;
-          parsed.battleCardBullets.every(b =>
-            ["hard_gap","framing_gap","terminology_gap",
-             "strong_match","evidence_gap"].includes(b.verdict))
+        value: '(typeof output === "string" ? JSON.parse(output) : output).battleCardBullets.every(b => ["hard_gap","framing_gap","terminology_gap","strong_match","evidence_gap"].includes(b.verdict))'
 
       - type: javascript
-        value: >
-          const parsed = typeof output === 'string' ? JSON.parse(output) : output;
-          parsed.fitScore >= 0 && parsed.fitScore <= 100
+        value: '((p) => p.fitScore >= 0 && p.fitScore <= 100)(typeof output === "string" ? JSON.parse(output) : output)'
 
       # --- Score calibration — deterministic ---
       - type: javascript
         metric: ScoreCalibration
-        value: >
-          const parsed = typeof output === 'string' ? JSON.parse(output) : output;
-          parsed.fitScore < 55
+        value: '(typeof output === "string" ? JSON.parse(output) : output).fitScore < 55'
 
       # --- Binary critical checks ---
       - type: llm-rubric
