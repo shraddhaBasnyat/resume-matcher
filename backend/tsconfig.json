@@ -18,7 +18,6 @@
     "chains/**/*",
     "types/**/*",
     "archetypes/**/*",
-    "schemas/**/*",
     "*.ts"
   ],
   "exclude": ["node_modules", "dist"]

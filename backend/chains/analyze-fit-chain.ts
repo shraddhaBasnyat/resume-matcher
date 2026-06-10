@@ -1,18 +1,19 @@
 import { readFileSync } from "fs";
-import { join } from "path";
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { RootRunCapture, logValidationFailure } from "../langsmith.js";
 import {
   BattleCardVerdictSchema,
   AnalyzeFitLLMSchema,
-} from "../schemas/analyze-fit.schema.js";
+} from "./analyze-fit.schema.js";
 
 export { BattleCardVerdictSchema, AnalyzeFitLLMSchema };
-export type { BattleCardBullet, AnalyzeFitLLMOutput } from "../schemas/analyze-fit.schema.js";
+export type { BattleCardBullet, AnalyzeFitLLMOutput } from "./analyze-fit.schema.js";
 
 const _promptRaw = readFileSync(
-  join(process.cwd(), "prompts/analyze-fit.prompt.md"),
+  join(dirname(fileURLToPath(import.meta.url)), "./analyze-fit.prompt.md"),
   "utf-8",
 ).replace(/\r\n/g, "\n");
 
