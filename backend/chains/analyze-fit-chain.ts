@@ -1,6 +1,5 @@
 import { readFileSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
+import { join } from "path";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { RootRunCapture, logValidationFailure } from "../langsmith.js";
@@ -12,11 +11,8 @@ import {
 export { BattleCardVerdictSchema, AnalyzeFitLLMSchema };
 export type { BattleCardBullet, AnalyzeFitLLMOutput } from "../schemas/analyze-fit.schema.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
 const _promptRaw = readFileSync(
-  join(__dirname, "../prompts/analyze-fit.prompt.md"),
+  join(process.cwd(), "prompts/analyze-fit.prompt.md"),
   "utf-8",
 ).replace(/\r\n/g, "\n");
 

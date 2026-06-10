@@ -5,11 +5,13 @@ export const BattleCardVerdictSchema = z.enum([
   "framing_gap",
   "terminology_gap",
   "strong_match",
+  "evidence_gap",
 ]).describe(
   "hard_gap: the candidate genuinely lacks this qualification or experience. " +
   "framing_gap: the experience exists but is described in a way that misses the role signal. " +
   "terminology_gap: the skill is present but named differently than the JD expects. " +
-  "strong_match: the candidate directly meets or exceeds this requirement.",
+  "strong_match: the candidate directly meets or exceeds this requirement. " +
+  "evidence_gap: the skill or experience is claimed on the resume but no concrete evidence supports it — the claim exists without proof.",
 );
 
 export type BattleCardBullet = {
