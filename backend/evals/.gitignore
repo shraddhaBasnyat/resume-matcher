@@ -1,2 +1,4 @@
 .promptfoo/
 *.cache
+results.json
+*.json.output
