@@ -1,0 +1,267 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: "F1 — Resume A (no JobInit) vs Cresta JD — baseline eval"
+
+prompts:
+  - file://../../prompts/analyze-fit.prompt.md
+
+providers:
+  - id: anthropic:messages:claude-sonnet-4-20250514
+    config:
+      temperature: 0.3
+
+defaultTest:
+  options:
+    provider: anthropic:messages:claude-sonnet-4-20250514
+
+derivedMetrics:
+  - name: OverallF1Quality
+    value: "(HardGapAcknowledged + TranslationLegitimacy + SummaryQuality + AhaQuality + SpecificityTest) / 5"
+
+tests:
+  - description: "F1 — Resume A vs Cresta — honest verdict territory"
+    vars:
+      resume_text: file://fixtures/resume-a.md
+      job_text: file://fixtures/cresta-jd.md
+
+    assert:
+      # --- Structural ---
+      - type: is-json
+
+      - type: javascript
+        value: >
+          const parsed = typeof output === 'string' ? JSON.parse(output) : output;
+          parsed.fitScore !== undefined &&
+          parsed.headline !== undefined &&
+          parsed.fitScenarioSummary !== undefined &&
+          parsed.fitAha !== undefined &&
+          parsed.battleCardBullets !== undefined
+
+      - type: javascript
+        value: >
+          const parsed = typeof output === 'string' ? JSON.parse(output) : output;
+          parsed.battleCardBullets.every(b =>
+            ["hard_gap","framing_gap","terminology_gap",
+             "strong_match","evidence_gap"].includes(b.verdict))
+
+      - type: javascript
+        value: >
+          const parsed = typeof output === 'string' ? JSON.parse(output) : output;
+          parsed.fitScore >= 0 && parsed.fitScore <= 100
+
+      # --- Score calibration — deterministic ---
+      - type: javascript
+        metric: ScoreCalibration
+        value: >
+          const parsed = typeof output === 'string' ? JSON.parse(output) : output;
+          parsed.fitScore < 55
+
+      # --- Binary critical checks ---
+      - type: llm-rubric
+        metric: HardGapAcknowledged
+        value: >
+          Context: The Cresta JD lists "Previous experience
+          working with Virtual Agent or AI Agent systems" as
+          an explicit qualification. The candidate's resume
+          covers Wayfair storefront engineering from 2016–2022
+          — PHP monolith decomposition, GraphQL federation,
+          Java microservices, image selection — with zero
+          mention of agents, LLMs, virtual assistants, or
+          any AI system work of any kind.
+
+          PASS if and only if: at least one battle card bullet
+          has verdict "hard_gap" AND its requirement field
+          references AI agent or virtual agent experience
+          specifically — not generic backend experience — AND
+          its evidence field explicitly states the absence
+          of any AI agent or virtual agent work from this
+          resume.
+
+          FAIL if: no battle card bullet addresses the AI
+          agent experience gap as a hard_gap.
+          FAIL if: the bullet verdicts the AI agent gap as
+          framing_gap, terminology_gap, or evidence_gap —
+          this experience is genuinely absent from the resume,
+          not mislabeled or unclaimed.
+          FAIL if: the output suggests Wayfair storefront
+          engineering covers or approximates the AI agent
+          experience requirement.
+
+      - type: llm-rubric
+        metric: TranslationLegitimacy
+        value: >
+          Context: The candidate built "an Apollo Federated
+          GraphQL stack" at Wayfair for storefront UI/UX
+          experiences. Cresta's JD requires "proficient in
+          designing and maintaining clear and robust APIs
+          with a strong understanding of protocols including
+          gRPC, REST." GraphQL is a query language for
+          client-facing APIs. gRPC is a high-performance
+          RPC framework for service-to-service communication
+          in distributed systems. They are not equivalent.
+
+          The candidate also "Architected and deployed Java
+          microservices to decouple the core purchasing funnel
+          from legacy PHP monolith systems" — this work
+          involved service boundary design, decoupling, and
+          distributed system patterns that have genuine
+          structural analogy to backend infrastructure design.
+
+          PASS if: the output does not claim or imply that
+          Apollo Federated GraphQL experience maps to gRPC
+          proficiency or agent API orchestration.
+          PASS if: the output identifies the PHP monolith
+          decomposition — "Architected and deployed Java
+          microservices to decouple the core purchasing funnel
+          from legacy PHP monolith systems" — as having
+          genuine architectural analogy to distributed backend
+          infrastructure design, while correctly noting the
+          domain (e-commerce) does not transfer.
+
+          FAIL if: the output states or implies GraphQL
+          federation experience demonstrates gRPC capability
+          or agent interface design.
+          FAIL if: the output treats all Wayfair backend
+          experience as equally transferable to AI agent
+          backend systems without distinguishing which
+          analogies hold and which don't.
+
+      # --- Multi-dimensional quality ---
+      - type: g-eval
+        metric: SummaryQuality
+        threshold: 0.7
+        value:
+          - "fitScenarioSummary references the candidate's
+             specific Wayfair roles — Staff Engineer or Tech
+             Lead in Storefront Core Funnel, Search and Browse,
+             Dynamic Infrastructure, or Images — as evidence
+             that the career arc points toward e-commerce
+             infrastructure, not AI systems. A summary that
+             says 'backend engineer' without referencing the
+             specific Wayfair storefront context fails."
+          - "fitScenarioSummary explicitly states there is
+             no signal of a pivot toward AI systems in this
+             resume — no AI projects, no LLM work, no agent
+             development, no ML collaboration beyond a single
+             line about collaborating with ML teams on search.
+             The absence must be stated, not implied."
+          - "fitScenarioSummary does not suggest the gap can
+             be closed by reframing, rewording, or translating
+             vocabulary. The Wayfair work is e-commerce
+             storefront engineering — that is what it is.
+             A summary that says 'reframe your experience'
+             or 'translate your infrastructure skills' fails
+             this criterion."
+          - "fitScenarioSummary does not contain hedging
+             language that softens the domain gap — phrases
+             like 'with some reframing', 'your patterns are
+             relevant', 'transferable architecture experience',
+             or 'with additional AI exposure' are failures.
+             The domain gap is stated directly and without
+             qualification."
+
+      - type: g-eval
+        metric: AhaQuality
+        threshold: 0.7
+        value:
+          - "fitAha names at least one of the following
+             specific pieces of work from this resume by
+             name: PHP monolith decomposition, Core Funnel
+             replatforming, Apollo Federated GraphQL stack,
+             Dynamic Infrastructure, or Image Selection
+             microservice. A generic reference to 'your
+             backend work' or 'your Wayfair experience'
+             without naming the specific work fails."
+          - "fitAha explicitly connects the named Wayfair
+             work to Cresta's specific need — reliable,
+             scalable backend infrastructure for AI agent
+             systems at contact center scale. The connection
+             must name both the Wayfair work and the Cresta
+             need specifically, not generally."
+          - "fitAha would be factually incorrect if applied
+             to a different backend engineer's resume —
+             it contains at least one detail that is specific
+             to this candidate's actual Wayfair work and
+             cannot be generic."
+
+      - type: g-eval
+        metric: SpecificityTest
+        threshold: 0.7
+        value:
+          - "Output names at least one of the following
+             specific projects or technologies from this
+             resume: Apollo Federated GraphQL, PHP monolith
+             decomposition, Core Funnel replatforming, Image
+             Selection microservice, Java microservices,
+             Dynamic Infrastructure, Storefront Search and
+             Browse. A generic reference to 'your Wayfair
+             experience' or 'your backend work' without
+             naming the specific project or technology fails."
+          - "Output references at least one of the following
+             specific Cresta requirements from the JD:
+             contact center scale, AI agent systems,
+             Virtual Agent experience, gRPC, Kubernetes,
+             Docker, high-volume interactions, or backend
+             architecture for AI Agent solutions. A generic
+             reference to 'the role requirements' or 'AI
+             experience' without naming the specific
+             requirement fails."
+
+      # --- Banned phrases ---
+      - type: not-contains
+        value: "transferable skills"
+      - type: not-contains
+        value: "highlight your relevant experience"
+      - type: not-contains
+        value: "leverage your experience"
+      - type: not-contains
+        value: "demonstrate your expertise"
+      - type: not-contains
+        value: "results-driven"
+      - type: not-contains
+        value: "proven track record"
+      - type: not-contains
+        value: "while you may not have direct experience"
+      - type: not-contains
+        value: "although your background is in"
+      - type: not-contains
+        value: "despite not having"
+      - type: not-contains
+        value: "you could consider"
+      - type: not-contains
+        value: "it may be worth"
+      - type: not-contains
+        value: "consider building projects"
+      - type: not-contains
+        value: "gain relevant experience"
+      - type: not-contains
+        value: "network with professionals"
+      - type: not-contains
+        value: "In today's competitive landscape"
+      - type: not-contains
+        value: "spearheaded"
+      - type: not-contains
+        value: "orchestrated"
+      - type: not-contains
+        value: "championed"
+      - type: not-contains
+        value: "cutting-edge"
+      - type: not-contains
+        value: "game-changing"
+      - type: not-contains
+        value: "holistic"
+      - type: not-contains
+        value: "actionable"
+      - type: not-contains
+        value: "impactful"
+      - type: not-contains
+        value: "stakeholder"
+      - type: not-contains
+        value: "value-add"
+      - type: not-contains
+        value: "move the needle"
+      - type: not-contains
+        value: "deep dive"
+      - type: not-contains
+        value: "synergized"
+      - type: not-contains
+        value: "revolutionized"
