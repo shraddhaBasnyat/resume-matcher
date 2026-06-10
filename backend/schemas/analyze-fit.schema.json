@@ -1,0 +1,112 @@
+{
+  "$ref": "#/definitions/AnalyzeFitLLMSchema",
+  "definitions": {
+    "AnalyzeFitLLMSchema": {
+      "type": "object",
+      "properties": {
+        "fitScore": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "headline": {
+          "type": "string",
+          "minLength": 1
+        },
+        "battleCardBullets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "requirement": {
+                "type": "string",
+                "minLength": 1
+              },
+              "evidence": {
+                "type": "string",
+                "minLength": 1
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "hard_gap",
+                  "framing_gap",
+                  "terminology_gap",
+                  "strong_match"
+                ]
+              }
+            },
+            "required": [
+              "requirement",
+              "evidence",
+              "verdict"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "fitScenarioSummary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fitAha": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceRole": {
+          "type": "string",
+          "minLength": 1
+        },
+        "targetRole": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fitAnalysis": {
+          "type": "object",
+          "properties": {
+            "careerTrajectory": {
+              "type": "string",
+              "minLength": 1
+            },
+            "keyStrengths": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "experienceGaps": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "weakMatchReason": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "careerTrajectory",
+            "keyStrengths",
+            "experienceGaps",
+            "weakMatchReason"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "fitScore",
+        "headline",
+        "battleCardBullets",
+        "fitScenarioSummary",
+        "fitAha",
+        "sourceRole",
+        "targetRole",
+        "fitAnalysis"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}
