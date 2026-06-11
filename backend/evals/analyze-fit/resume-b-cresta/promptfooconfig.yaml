@@ -1,0 +1,188 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: "F2 — Resume B (JobInit added) vs Cresta JD — narrative_gap territory"
+
+prompts:
+  - "Resume:\n{{resume_text}}\n\nJD:\n{{job_text}}"
+
+providers:
+  - file://provider.ts
+
+defaultTest:
+  options:
+    provider: anthropic:messages:claude-sonnet-4-6
+
+derivedMetrics:
+  - name: OverallF2Quality
+    value: "(JobInitRecognized + EvidenceGapCorrect + InfraGapsIdentified + FramingInsight + SpecificityTest) / 5"
+
+tests:
+  - description: "F2 — Resume B vs Cresta — narrative_gap territory"
+    vars:
+      resume_text: file://../fixtures/resume-b.md
+      job_text: file://../fixtures/cresta-jd.md
+
+    assert:
+      # --- Structural ---
+      - type: is-json
+
+      - type: javascript
+        value: '(typeof output === "string" ? JSON.parse(output) : output).fitScore !== undefined && (typeof output === "string" ? JSON.parse(output) : output).headline !== undefined && (typeof output === "string" ? JSON.parse(output) : output).fitScenarioSummary !== undefined && (typeof output === "string" ? JSON.parse(output) : output).fitAha !== undefined && (typeof output === "string" ? JSON.parse(output) : output).battleCardBullets !== undefined'
+
+      - type: javascript
+        value: '(typeof output === "string" ? JSON.parse(output) : output).battleCardBullets.every(b => ["hard_gap","framing_gap","terminology_gap","strong_match","evidence_gap"].includes(b.verdict))'
+
+      - type: javascript
+        value: '(typeof output === "string" ? JSON.parse(output) : output).fitScore >= 0 && (typeof output === "string" ? JSON.parse(output) : output).fitScore <= 100'
+
+      # --- Score calibration — deterministic ---
+      - type: javascript
+        metric: ScoreCalibration
+        value: '(typeof output === "string" ? JSON.parse(output) : output).fitScore >= 65 && (typeof output === "string" ? JSON.parse(output) : output).fitScore <= 78'
+
+      # --- Score must be higher than F1 ---
+      - type: javascript
+        metric: ScoreHigherThanF1
+        value: '(typeof output === "string" ? JSON.parse(output) : output).fitScore > 62'
+
+      # --- Binary critical checks ---
+      - type: llm-rubric
+        metric: JobInitRecognized
+        value: >
+          PASS if: the output recognizes JobInit as legitimate AI agent engineering
+          that directly maps to Cresta's requirements — LangGraph, HITL, LangSmith,
+          and Promptfoo eval harness are all signals of production AI agent work.
+          PASS if: the output does not treat the AI agent experience gap the same
+          as a candidate with zero AI work.
+
+          FAIL if: the output gives JobInit no weight in the fit assessment.
+          FAIL if: the output classifies AI agent experience as completely absent
+          despite JobInit being present on the resume.
+
+      - type: llm-rubric
+        metric: EvidenceGapCorrect
+        value: >
+          PASS if: the output classifies the AI agent experience as evidence_gap —
+          the work exists but proof of scale and production traffic is missing.
+          PASS if: the output identifies "Personal Project" framing or missing
+          scale signals as what creates the gap — not the absence of AI work.
+
+          FAIL if: the output classifies the AI agent gap as hard_gap — the
+          experience exists, the proof of scale is what's missing.
+          FAIL if: the output treats JobInit as fully closing the AI agent
+          requirement without noting the scale and framing gap.
+
+      - type: llm-rubric
+        metric: InfraGapsIdentified
+        value: >
+          PASS if: the output identifies cloud platform experience (AWS/Azure/GCP)
+          and containerization (Kubernetes/Docker) as hard_gap — these are
+          absent from Resume B just as they were from Resume A.
+          PASS if: the output identifies gRPC as a hard_gap — GraphQL is
+          present but gRPC is not, and they are not equivalent.
+
+          FAIL if: the infrastructure gaps are not surfaced because JobInit
+          improved the overall picture.
+          FAIL if: the output implies JobInit covers cloud or containerization
+          experience that the resume does not state.
+
+      - type: llm-rubric
+        metric: FramingInsight
+        value: >
+          PASS if: the output identifies that "Personal Project" framing or
+          missing scale metrics is what prevents JobInit from fully closing
+          the AI agent experience requirement.
+          PASS if: the fitAha or fitScenarioSummary names the framing gap
+          explicitly — the work is real but the presentation doesn't signal
+          production engineering at Cresta's scale.
+
+          FAIL if: the output accepts "Personal Project" at face value without
+          noting the description demonstrates more than the label implies.
+          FAIL if: the output does not surface the framing gap as the key
+          coaching insight for this candidate.
+
+      # --- Multi-dimensional quality ---
+      - type: g-eval
+        metric: SpecificityTest
+        threshold: 0.7
+        value:
+          - "Output names JobInit specifically and references at least one
+             of its technical components — LangGraph, HITL interrupt,
+             LangSmith tracing, or Promptfoo eval harness — not a generic
+             reference to 'your AI project'"
+          - "Output references at least one specific Cresta requirement —
+             contact center scale, AI agent reliability, Virtual Agent
+             experience, gRPC, Kubernetes, or enterprise production"
+          - "Output correctly distinguishes what Resume B adds over Resume A —
+             the JobInit project — rather than treating both resumes identically"
+
+      - type: g-eval
+        metric: NarrativeGapQuality
+        threshold: 0.7
+        value:
+          - "fitScenarioSummary identifies that the career arc is now pointing
+             in the right direction — AI agent work exists — but framing
+             and scale signals don't yet match what Cresta needs"
+          - "fitScenarioSummary does not treat this as confirmed fit —
+             infrastructure gaps and scale signals are real limitations"
+          - "fitScenarioSummary correctly frames this as narrative gap
+             territory — the story is there but needs to be told better"
+
+      # --- Banned phrases ---
+      - type: not-contains
+        value: "transferable skills"
+      - type: not-contains
+        value: "highlight your relevant experience"
+      - type: not-contains
+        value: "leverage your experience"
+      - type: not-contains
+        value: "demonstrate your expertise"
+      - type: not-contains
+        value: "results-driven"
+      - type: not-contains
+        value: "proven track record"
+      - type: not-contains
+        value: "while you may not have direct experience"
+      - type: not-contains
+        value: "although your background is in"
+      - type: not-contains
+        value: "despite not having"
+      - type: not-contains
+        value: "you could consider"
+      - type: not-contains
+        value: "it may be worth"
+      - type: not-contains
+        value: "consider building projects"
+      - type: not-contains
+        value: "gain relevant experience"
+      - type: not-contains
+        value: "network with professionals"
+      - type: not-contains
+        value: "In today's competitive landscape"
+      - type: not-contains
+        value: "spearheaded"
+      - type: not-contains
+        value: "orchestrated"
+      - type: not-contains
+        value: "championed"
+      - type: not-contains
+        value: "cutting-edge"
+      - type: not-contains
+        value: "game-changing"
+      - type: not-contains
+        value: "holistic"
+      - type: not-contains
+        value: "actionable"
+      - type: not-contains
+        value: "impactful"
+      - type: not-contains
+        value: "stakeholder"
+      - type: not-contains
+        value: "value-add"
+      - type: not-contains
+        value: "move the needle"
+      - type: not-contains
+        value: "deep dive"
+      - type: not-contains
+        value: "synergized"
+      - type: not-contains
+        value: "revolutionized"
