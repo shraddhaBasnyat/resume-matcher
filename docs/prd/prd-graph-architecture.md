@@ -423,3 +423,25 @@ Deferred to eval results. Cognitive load groupings:
 - Verdict nodes
 
 The last group is where weak models will fail the specificity test first. Eval cases for verdict nodes need to be the sharpest. Model assignment TBD based on eval quality per tier.
+
+## Known gaps — deferred
+
+### Cross-domain translation knowledge
+
+The current architecture has no reliable mechanism for injecting knowledge about 
+cross-domain translation legitimacy — whether a technology or pattern from one 
+domain has a genuine structural analogy in another.
+
+Example: GraphQL federation is not equivalent to gRPC. E-commerce monolith 
+decomposition has genuine structural analogy to agent backend infrastructure. 
+These distinctions cannot be derived from the resume, the JD, or the archetype 
+config — they require external domain knowledge.
+
+Current workaround: static prompt text covering anticipated cases.
+Known failure: unreliable without explicit context injection (evidenced by 
+TranslationLegitimacy assertion at 40% without context in F1 baseline).
+
+Possible approaches include archetype config translation guides, RAG retrieval 
+keyed to source/target domain pair, or relying on model general knowledge with 
+tighter prompting. Not yet decided — needs real-world data before committing 
+to an approach.

@@ -1,5 +1,5 @@
 import { ChatAnthropic } from "@langchain/anthropic";
-import { buildAnalyzeFitChain } from "../../chains/analyze-fit-chain.js";
+import { buildAnalyzeFitChain } from "../../../chains/analyze-fit-chain.js";
 
 export default class AnalyzeFitProvider {
   id(): string {

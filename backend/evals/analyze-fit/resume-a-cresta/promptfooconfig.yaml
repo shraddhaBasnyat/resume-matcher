@@ -18,8 +18,8 @@ derivedMetrics:
 tests:
   - description: "F1 — Resume A vs Cresta — honest verdict territory"
     vars:
-      resume_text: file://fixtures/resume-a.md
-      job_text: file://fixtures/cresta-jd.md
+      resume_text: file://../fixtures/resume-a.md
+      job_text: file://../fixtures/cresta-jd.md
 
     assert:
       # --- Structural ---
@@ -43,15 +43,6 @@ tests:
       - type: llm-rubric
         metric: HardGapAcknowledged
         value: >
-          Context: The Cresta JD lists "Previous experience
-          working with Virtual Agent or AI Agent systems" as
-          an explicit qualification. The candidate's resume
-          covers Wayfair storefront engineering from 2016–2022
-          — PHP monolith decomposition, GraphQL federation,
-          Java microservices, image selection — with zero
-          mention of agents, LLMs, virtual assistants, or
-          any AI system work of any kind.
-
           PASS if and only if: at least one battle card bullet
           has verdict "hard_gap" AND its requirement field
           references AI agent or virtual agent experience
@@ -82,7 +73,6 @@ tests:
           client-facing APIs. gRPC is a high-performance
           RPC framework for service-to-service communication
           in distributed systems. They are not equivalent.
-
           The candidate also "Architected and deployed Java
           microservices to decouple the core purchasing funnel
           from legacy PHP monolith systems" — this work
@@ -114,6 +104,14 @@ tests:
         metric: SummaryQuality
         threshold: 0.7
         value:
+          - "Context: The candidate's entire career is at
+             Wayfair in storefront engineering roles — Staff
+             Engineer and Tech Lead in Storefront Core Funnel,
+             Search and Browse, Dynamic Infrastructure, and
+             Images. The resume contains zero AI projects,
+             zero LLM work, and zero agent development. The
+             only AI-adjacent mention is a single line about
+             collaborating with ML teams on search functionality."
           - "fitScenarioSummary references the candidate's
              specific Wayfair roles — Staff Engineer or Tech
              Lead in Storefront Core Funnel, Search and Browse,
