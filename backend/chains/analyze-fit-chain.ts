@@ -1,6 +1,4 @@
-import { readFileSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
+import { SYSTEM, HUMAN } from "./analyze-fit.prompt.js";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { RootRunCapture, logValidationFailure } from "../langsmith.js";
@@ -11,19 +9,6 @@ import {
 
 export { BattleCardVerdictSchema, AnalyzeFitLLMSchema };
 export type { BattleCardBullet, AnalyzeFitLLMOutput } from "./analyze-fit.schema.js";
-
-const _promptRaw = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), "./analyze-fit.prompt.md"),
-  "utf-8",
-).replace(/\r\n/g, "\n");
-
-const _systemMatch = _promptRaw.match(/^# SYSTEM\n([\s\S]*?)(?=\n# HUMAN)/m);
-const _humanMatch  = _promptRaw.match(/^# HUMAN\n([\s\S]*)$/m);
-if (!_systemMatch || !_humanMatch) {
-  throw new Error("analyze-fit.prompt.md: missing # SYSTEM or # HUMAN section");
-}
-const SYSTEM = _systemMatch[1].trim();
-const HUMAN  = _humanMatch[1].trim();
 
 export function buildAnalyzeFitChain(model: BaseChatModel) {
   const prompt = ChatPromptTemplate.fromMessages([
