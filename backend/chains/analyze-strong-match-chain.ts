@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { RootRunCapture, logValidationFailure } from "../langsmith.js";
 import { ReframingItemSchema } from "../src/types/fit-advice.js";
 
 // -----------------------------------------------------------------------
@@ -136,36 +135,20 @@ export function buildInvisibleExpertChain(model: BaseChatModel) {
   const structuredModel = model.withStructuredOutput(InvisibleExpertLLMSchema);
 
   return {
-    invoke: async (
-      input: {
-        scenario: string;
-        fit_analysis: string;
-        ats_ranking: string;
-        fit_scenario_summary: string;
-        ats_scenario_summary: string;
-      },
-      config?: { runName?: string },
-    ): Promise<InvisibleExpertLLMOutput> => {
+    invoke: async (input: {
+      scenario: string;
+      fit_analysis: string;
+      ats_ranking: string;
+      fit_scenario_summary: string;
+      ats_scenario_summary: string;
+    }): Promise<InvisibleExpertLLMOutput> => {
       const messages = await prompt.invoke(input);
 
-      let capturedRunId: string | undefined;
-      const capture = new RootRunCapture((id) => {
-        capturedRunId = id;
-      });
-
-      const result = await structuredModel.invoke(messages, {
-        ...(config ?? {}),
-        callbacks: [capture],
-      });
+      const result = await structuredModel.invoke(messages);
 
       const validated = InvisibleExpertLLMSchema.safeParse(result);
       if (!validated.success) {
-        await logValidationFailure({
-          runId: capturedRunId,
-          nodeName: config?.runName ?? "analyze-strong-match-invisible-expert",
-          errors: validated.error,
-          rawOutput: result,
-        });
+        console.error("[validation-failed] analyze-strong-match-invisible-expert", validated.error.flatten(), result);
         throw validated.error;
       }
 

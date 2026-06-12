@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { RootRunCapture, logValidationFailure } from "../langsmith.js";
 
 export const AtsAnalysisSchema = z.object({
   atsScore: z.number().min(0).max(100),
@@ -72,30 +71,14 @@ export function buildAtsAnalysisChain(model: BaseChatModel) {
   const structuredModel = model.withStructuredOutput(AtsAnalysisSchema);
 
   return {
-    invoke: async (
-      input: { resume_text: string; job_text: string },
-      config?: { runName?: string },
-    ): Promise<AtsAnalysisOutput> => {
+    invoke: async (input: { resume_text: string; job_text: string }): Promise<AtsAnalysisOutput> => {
       const messages = await prompt.invoke(input);
 
-      let capturedRunId: string | undefined;
-      const capture = new RootRunCapture((id) => {
-        capturedRunId = id;
-      });
-
-      const result = await structuredModel.invoke(messages, {
-        ...(config ?? {}),
-        callbacks: [capture],
-      });
+      const result = await structuredModel.invoke(messages);
 
       const validated = AtsAnalysisSchema.safeParse(result);
       if (!validated.success) {
-        await logValidationFailure({
-          runId: capturedRunId,
-          nodeName: config?.runName ?? "ats-analysis",
-          errors: validated.error,
-          rawOutput: result,
-        });
+        console.error("[validation-failed] ats-analysis", validated.error.flatten(), result);
         throw validated.error;
       }
 

@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { RootRunCapture, logValidationFailure } from "../langsmith.js";
 
 export const HonestVerdictLLMSchema = z.object({
   honestAssessment: z
@@ -92,36 +91,20 @@ export function buildHonestVerdictChain(model: BaseChatModel) {
   const structuredModel = model.withStructuredOutput(HonestVerdictLLMSchema);
 
   return {
-    invoke: async (
-      input: {
-        fit_analysis: string;
-        weak_match_reason: string;
-        fit_scenario_summary: string;
-        ats_scenario_summary: string;
-        human_context: string;
-      },
-      config?: { runName?: string },
-    ): Promise<HonestVerdictLLMOutput> => {
+    invoke: async (input: {
+      fit_analysis: string;
+      weak_match_reason: string;
+      fit_scenario_summary: string;
+      ats_scenario_summary: string;
+      human_context: string;
+    }): Promise<HonestVerdictLLMOutput> => {
       const messages = await prompt.invoke(input);
 
-      let capturedRunId: string | undefined;
-      const capture = new RootRunCapture(function (id) {
-        capturedRunId = id;
-      });
-
-      const result = await structuredModel.invoke(messages, {
-        ...(config ?? {}),
-        callbacks: [capture],
-      });
+      const result = await structuredModel.invoke(messages);
 
       const validated = HonestVerdictLLMSchema.safeParse(result);
       if (!validated.success) {
-        await logValidationFailure({
-          runId: capturedRunId,
-          nodeName: config?.runName ?? "analyze-skeptical-reconciliation",
-          errors: validated.error,
-          rawOutput: result,
-        });
+        console.error("[validation-failed] analyze-skeptical-reconciliation", validated.error.flatten(), result);
         throw validated.error;
       }
 

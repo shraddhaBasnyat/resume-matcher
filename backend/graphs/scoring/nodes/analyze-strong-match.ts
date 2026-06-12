@@ -32,18 +32,15 @@ export function makeAnalyzeStrongMatchNode(model: BaseChatModel) {
       );
     }
 
-    const llmOutput = await invisibleExpertChain.invoke(
-      {
-        scenario: state.scenarioId,
-        fit_analysis: JSON.stringify(state.fitAnalysis, null, 2),
-        ats_ranking: isInvisibleExpert
-          ? JSON.stringify(state.atsProfile!.machineRanking, null, 2)
-          : "[]",
-        fit_scenario_summary: state.fitScenarioSummary,
-        ats_scenario_summary: state.atsScenarioSummary,
-      },
-      { runName: `analyze-strong-match-${state.scenarioId}` },
-    );
+    const llmOutput = await invisibleExpertChain.invoke({
+      scenario: state.scenarioId,
+      fit_analysis: JSON.stringify(state.fitAnalysis, null, 2),
+      ats_ranking: isInvisibleExpert
+        ? JSON.stringify(state.atsProfile!.machineRanking, null, 2)
+        : "[]",
+      fit_scenario_summary: state.fitScenarioSummary,
+      ats_scenario_summary: state.atsScenarioSummary,
+    });
 
     const { closingSummary, verdictAha, ...fitAdviceFields } = llmOutput;
 

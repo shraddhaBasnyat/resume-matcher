@@ -42,8 +42,6 @@ export interface ResumeMatchRequest {
 
 export interface CancelMatchRequest {
   threadId: string;
-  rootRunId?: string;
-  runStartTime?: number;
 }
 
 // ---------------------------------------------------------------------------

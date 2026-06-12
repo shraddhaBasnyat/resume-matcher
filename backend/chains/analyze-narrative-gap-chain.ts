@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { RootRunCapture, logValidationFailure } from "../langsmith.js";
 import { ReframingItemSchema } from "../src/types/fit-advice.js";
 
 export const NarrativeGapLLMSchema = z.object({
@@ -80,30 +79,18 @@ export function buildNarrativeGapChain(model: BaseChatModel) {
   const structuredModel = model.withStructuredOutput(NarrativeGapLLMSchema);
 
   return {
-    invoke: async (
-      input: { fit_analysis: string; fit_scenario_summary: string; ats_scenario_summary: string },
-      config?: { runName?: string },
-    ): Promise<NarrativeGapLLMOutput> => {
+    invoke: async (input: {
+      fit_analysis: string;
+      fit_scenario_summary: string;
+      ats_scenario_summary: string;
+    }): Promise<NarrativeGapLLMOutput> => {
       const messages = await prompt.invoke(input);
 
-      let capturedRunId: string | undefined;
-      const capture = new RootRunCapture(function (id) {
-        capturedRunId = id;
-      });
-
-      const result = await structuredModel.invoke(messages, {
-        ...(config ?? {}),
-        callbacks: [capture],
-      });
+      const result = await structuredModel.invoke(messages);
 
       const validated = NarrativeGapLLMSchema.safeParse(result);
       if (!validated.success) {
-        await logValidationFailure({
-          runId: capturedRunId,
-          nodeName: config?.runName ?? "analyze-narrative-gap",
-          errors: validated.error,
-          rawOutput: result,
-        });
+        console.error("[validation-failed] analyze-narrative-gap", validated.error.flatten(), result);
         throw validated.error;
       }
 

@@ -6,10 +6,7 @@ export function makeAnalyzeFitNode(model: BaseChatModel) {
   const chain = buildAnalyzeFitChain(model);
 
   return async function analyzeFit(state: GraphStateType) {
-    const result = await chain.invoke(
-      { resume_text: state.resumeText, job_text: state.jobText },
-      { runName: "analyze-fit" },
-    );
+    const result = await chain.invoke({ resume_text: state.resumeText, job_text: state.jobText });
 
     const weakMatch = result.fitScore < 50;
     const weakMatchReason =

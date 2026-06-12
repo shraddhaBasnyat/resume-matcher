@@ -27,16 +27,13 @@ export function makeAnalyzeSkepticalReconciliationNode(model: BaseChatModel) {
       ? `Additional Context from Candidate:\n${state.humanContext}\n\n`
       : "";
 
-    const llmOutput = await chain.invoke(
-      {
-        fit_analysis: JSON.stringify(state.fitAnalysis, null, 2),
-        weak_match_reason: state.weakMatchReason ?? "Not provided",
-        fit_scenario_summary: state.fitScenarioSummary,
-        ats_scenario_summary: state.atsScenarioSummary,
-        human_context: humanContextBlock,
-      },
-      { runName: "analyze-skeptical-reconciliation" },
-    );
+    const llmOutput = await chain.invoke({
+      fit_analysis: JSON.stringify(state.fitAnalysis, null, 2),
+      weak_match_reason: state.weakMatchReason ?? "Not provided",
+      fit_scenario_summary: state.fitScenarioSummary,
+      ats_scenario_summary: state.atsScenarioSummary,
+      human_context: humanContextBlock,
+    });
 
     if (!state.hitlFired && llmOutput.contextPrompt != null) {
       const humanContext = interrupt(llmOutput.contextPrompt);
