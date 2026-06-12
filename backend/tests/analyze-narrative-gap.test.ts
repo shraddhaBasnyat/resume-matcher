@@ -1,21 +1,13 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { ZodError } from "zod";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { NarrativeGapLLMSchema } from "../chains/analyze-narrative-gap-chain.js";
 import { makeAnalyzeNarrativeGapNode } from "../graphs/scoring/nodes/analyze-narrative-gap.js";
 import type { GraphStateType } from "../graphs/scoring/scoring-graph-state.js";
-import * as langsmith from "../langsmith.js";
 
-vi.mock("../langsmith.js", () => ({
-  isTracingEnabled: () => false,
-  getTraceUrl: vi.fn(),
-  RootRunCapture: function RootRunCapture(
-    this: Record<string, unknown>,
-    _callback: (id: string) => void,
-  ) {},
-  logValidationFailure: vi.fn(),
-  RUN_NAMES: {},
-}));
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -172,13 +164,14 @@ describe("analyzeNarrativeGap — guards", () => {
 
     const node = makeAnalyzeNarrativeGapNode(model);
 
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
     await expect(node(buildBaseState())).rejects.toBeInstanceOf(ZodError);
 
-    expect(langsmith.logValidationFailure).toHaveBeenCalledWith(
-      expect.objectContaining({
-        nodeName: "analyze-narrative-gap",
-        rawOutput: invalidOutput,
-      }),
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "[validation-failed] analyze-narrative-gap",
+      expect.anything(),
+      invalidOutput,
     );
   });
 });

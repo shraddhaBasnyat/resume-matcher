@@ -1,22 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ZodError } from "zod";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { HonestVerdictLLMSchema } from "../chains/analyze-skeptical-reconciliation-chain.js";
 import { makeAnalyzeSkepticalReconciliationNode } from "../graphs/scoring/nodes/analyze-skeptical-reconciliation.js";
 import type { GraphStateType } from "../graphs/scoring/scoring-graph-state.js";
-import * as langsmith from "../langsmith.js";
 import * as langgraph from "@langchain/langgraph";
-
-vi.mock("../langsmith.js", () => ({
-  isTracingEnabled: () => false,
-  getTraceUrl: vi.fn(),
-  RootRunCapture: function RootRunCapture(
-    this: Record<string, unknown>,
-    _callback: (id: string) => void,
-  ) {},
-  logValidationFailure: vi.fn(),
-  RUN_NAMES: {},
-}));
 
 vi.mock("@langchain/langgraph", () => ({
   interrupt: vi.fn().mockReturnValue("user-provided context"),
@@ -116,6 +104,10 @@ function buildMockModel(llmReturn: Record<string, unknown> = validLLMOutput) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 // ---------------------------------------------------------------------------
@@ -221,13 +213,14 @@ describe("analyzeSkepticalReconciliation — validation failure", () => {
 
     const node = makeAnalyzeSkepticalReconciliationNode(model);
 
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
     await expect(node(buildBaseState())).rejects.toBeInstanceOf(ZodError);
 
-    expect(langsmith.logValidationFailure).toHaveBeenCalledWith(
-      expect.objectContaining({
-        nodeName: "analyze-skeptical-reconciliation",
-        rawOutput: invalidOutput,
-      }),
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "[validation-failed] analyze-skeptical-reconciliation",
+      expect.anything(),
+      invalidOutput,
     );
   });
 

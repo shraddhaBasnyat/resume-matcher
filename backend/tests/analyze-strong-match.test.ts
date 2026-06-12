@@ -1,19 +1,12 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { InvisibleExpertLLMSchema } from "../chains/analyze-strong-match-chain.js";
 import { makeAnalyzeStrongMatchNode } from "../graphs/scoring/nodes/analyze-strong-match.js";
 import type { GraphStateType } from "../graphs/scoring/scoring-graph-state.js";
 
-vi.mock("../langsmith.js", () => ({
-  isTracingEnabled: () => false,
-  getTraceUrl: vi.fn(),
-  RootRunCapture: function RootRunCapture(
-    this: Record<string, unknown>,
-    _callback: (id: string) => void,
-  ) {},
-  logValidationFailure: vi.fn(),
-  RUN_NAMES: {},
-}));
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -323,7 +316,6 @@ describe("analyzeStrongMatch — guards", () => {
 describe("analyzeStrongMatch — validation failure", () => {
   it("throws ZodError and calls logValidationFailure when LLM returns invalid shape", async () => {
     const invalidOutput = { standoutStrengths: "not-an-array", atsRealityCheck: 42 };
-    const langsmithModule = await import("../langsmith.js");
 
     const model = {
       bind: vi.fn().mockReturnThis(),
@@ -337,16 +329,13 @@ describe("analyzeStrongMatch — validation failure", () => {
 
     const node = makeAnalyzeStrongMatchNode(model);
 
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
     await expect(
       node(buildBaseState({ scenarioId: "confirmed_fit" })),
     ).rejects.toThrow(expect.objectContaining({ name: "ZodError" }));
 
-    expect(langsmithModule.logValidationFailure).toHaveBeenCalledWith(
-      expect.objectContaining({
-        nodeName: expect.stringContaining("analyze-strong-match"),
-        rawOutput: invalidOutput,
-      }),
-    );
+    expect(consoleErrorSpy.mock.calls[0][0]).toEqual(expect.stringContaining("analyze-strong-match"));
   });
 
   it("throws ZodError when leadWithThese is missing from output", async () => {

@@ -17,18 +17,6 @@ vi.mock("../graphs/scoring/scoring-graph-instance.js", () => ({
   },
 }));
 
-vi.mock("../langsmith.js", () => ({
-  isTracingEnabled: () => false,
-  getTraceUrl: vi.fn(),
-  RootRunCapture: vi.fn(),
-  RUN_NAMES: {
-    COMPLETED: "resume-match-graph: completed",
-    CANCELLED: "resume-match-graph: cancelled-by-human",
-    HITL_RESUMED: "resume-match-graph: hitl-resumed",
-    FAILED: "resume-match-graph: failed",
-  },
-}));
-
 // ---------------------------------------------------------------------------
 // Shared fixtures — must match current graph state shape and PublicMatchResponseSchema
 // ---------------------------------------------------------------------------

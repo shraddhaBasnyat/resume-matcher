@@ -50,7 +50,6 @@ export function useMatchRunner(): UseMatchRunnerReturn {
 
   // Run tracking (for cancellation)
   const [threadId, setThreadId] = useState<string | null>(null);
-  const [rootRunId, setRootRunId] = useState<string | null>(null);
   const [runStartTime, setRunStartTime] = useState<number | null>(null);
 
   // HITL
@@ -115,7 +114,6 @@ export function useMatchRunner(): UseMatchRunnerReturn {
       switch (event) {
         case "meta":
           if (payload.threadId) setThreadId(payload.threadId as string);
-          if (payload.rootRunId) setRootRunId(payload.rootRunId as string);
           if (payload.runStartTime) setRunStartTime(payload.runStartTime as number);
           break;
 
@@ -231,7 +229,6 @@ export function useMatchRunner(): UseMatchRunnerReturn {
     setResult(null);
     setMatchError(null);
     setThreadId(null);
-    setRootRunId(null);
     setRunStartTime(Date.now());
     setProgress(INITIAL_PROGRESS);
     setHumanContext("");
@@ -272,7 +269,6 @@ export function useMatchRunner(): UseMatchRunnerReturn {
 
     setAppState("running");
     setMatchError(null);
-    setRootRunId(null);
     setRunStartTime(Date.now());
     setProgress(INITIAL_PROGRESS);
 
@@ -306,7 +302,6 @@ export function useMatchRunner(): UseMatchRunnerReturn {
 
     setAppState("running");
     setMatchError(null);
-    setRootRunId(null);
     setRunStartTime(Date.now());
     setProgress(INITIAL_PROGRESS);
 
@@ -346,22 +341,17 @@ export function useMatchRunner(): UseMatchRunnerReturn {
       cancelledRef.current = false;
     }
 
-    // Notify server to abort and update LangSmith trace
+    // Notify server to abort the run and clean up the checkpoint
     if (threadId) {
       backendFetch("/api/match/cancel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          threadId,
-          rootRunId: rootRunId ?? undefined,
-          runStartTime: runStartTime ?? undefined,
-        }),
+        body: JSON.stringify({ threadId }),
       }).catch(() => {});
     }
 
     setAppState("idle");
     setThreadId(null);
-    setRootRunId(null);
     setRunStartTime(null);
     setResult(null);
     setProgress(INITIAL_PROGRESS);

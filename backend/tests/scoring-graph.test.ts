@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { AnalyzeFitLLMSchema, buildAnalyzeFitChain } from "../chains/analyze-fit-chain.js";
 import { AtsAnalysisSchema } from "../chains/ats-analysis-chain.js";
@@ -6,24 +6,6 @@ import { InvisibleExpertLLMSchema } from "../chains/analyze-strong-match-chain.j
 import { NarrativeGapLLMSchema } from "../chains/analyze-narrative-gap-chain.js";
 import { HonestVerdictLLMSchema } from "../chains/analyze-skeptical-reconciliation-chain.js";
 import { buildScoringGraph } from "../graphs/scoring/scoring-graph.js";
-import * as langsmith from "../langsmith.js";
-
-// ---------------------------------------------------------------------------
-// Langsmith mock — top-level, hoisted before imports
-// ---------------------------------------------------------------------------
-
-vi.mock("../langsmith.js", () => ({
-  RootRunCapture: function RootRunCapture(
-    this: Record<string, unknown>,
-    _callback: (id: string) => void,
-  ) {
-    // stub — callbacks are ignored by model mocks
-  },
-  logValidationFailure: vi.fn(),
-  isTracingEnabled: () => false,
-  getTraceUrl: vi.fn(),
-  RUN_NAMES: {},
-}));
 
 // ---------------------------------------------------------------------------
 // Shared fixtures
@@ -171,6 +153,10 @@ function buildMockModel(
 describe("buildScoringGraph — full run with mocked chains", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("produces the expected output state shape for a high-score confirmed_fit run", async () => {
@@ -364,7 +350,11 @@ describe("buildAnalyzeFitChain — validation failure", () => {
     vi.clearAllMocks();
   });
 
-  it("throws ZodError and calls logValidationFailure when model returns invalid shape", async () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("logs console.error and throws ZodError when model returns invalid shape", async () => {
     const invalidOutput = { fitScore: "not-a-number", headline: "" };
 
     const mockModel = {
@@ -376,12 +366,16 @@ describe("buildAnalyzeFitChain — validation failure", () => {
 
     const chain = buildAnalyzeFitChain(mockModel as unknown as BaseChatModel);
 
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
     await expect(
       chain.invoke({ resume_text: "resume", job_text: "job" }),
     ).rejects.toThrow(expect.objectContaining({ name: "ZodError" }));
 
-    expect(langsmith.logValidationFailure).toHaveBeenCalledWith(
-      expect.objectContaining({ nodeName: "analyze-fit", rawOutput: invalidOutput }),
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "[validation-failed] analyze-fit",
+      expect.anything(),
+      invalidOutput,
     );
   });
 });
@@ -391,8 +385,12 @@ describe("buildAnalyzeFitChain — validation failure", () => {
 // ---------------------------------------------------------------------------
 
 describe("buildAtsAnalysisChain — validation failure on missing new fields", () => {
-  it("throws ZodError when atsScenarioSummary is missing", async () => {
-    const { buildAtsAnalysisChain, AtsAnalysisSchema } = await import("../chains/ats-analysis-chain.js");
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("logs console.error and throws ZodError when atsScenarioSummary is missing", async () => {
+    const { buildAtsAnalysisChain } = await import("../chains/ats-analysis-chain.js");
     const invalidOutput = { atsScore: 80, machineRanking: [], atsAha: "Something" };
 
     const mockModel = {
@@ -404,39 +402,16 @@ describe("buildAtsAnalysisChain — validation failure on missing new fields", (
 
     const chain = buildAtsAnalysisChain(mockModel as unknown as BaseChatModel);
 
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
     await expect(
       chain.invoke({ resume_text: "resume", job_text: "job" }),
     ).rejects.toThrow(expect.objectContaining({ name: "ZodError" }));
 
-    expect(langsmith.logValidationFailure).toHaveBeenCalledWith(
-      expect.objectContaining({ nodeName: "ats-analysis", rawOutput: invalidOutput }),
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "[validation-failed] ats-analysis",
+      expect.anything(),
+      invalidOutput,
     );
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Cancel flow — LangSmith trace update
-// ---------------------------------------------------------------------------
-
-describe("cancel flow — LangSmith trace update shape", () => {
-  it("cancel payload has required fields for LangSmith updateRun", () => {
-    const cancelPayload = {
-      end_time: Date.now(),
-      error: null,
-      extra: {
-        cancelled: true,
-        cancelledBy: "human",
-        cancelReason: "user_initiated_escape",
-        durationMs: 5000,
-      },
-      tags: ["cancelled", "human-interrupted"],
-    };
-
-    expect(cancelPayload.extra.cancelled).toBe(true);
-    expect(cancelPayload.extra.cancelledBy).toBe("human");
-    expect(cancelPayload.tags).toContain("cancelled");
-    expect(cancelPayload.tags).toContain("human-interrupted");
-    expect(cancelPayload.error).toBeNull();
-    expect(typeof cancelPayload.end_time).toBe("number");
   });
 });

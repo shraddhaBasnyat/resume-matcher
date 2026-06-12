@@ -1,5 +1,4 @@
 import { Command } from "@langchain/langgraph";
-import { isTracingEnabled, RootRunCapture, RUN_NAMES } from "../../langsmith.js";
 import { activeRuns } from "../../active-runs.js";
 import { NodeProgressEmitter } from "./emitter.js";
 import { graph } from "../../graphs/scoring/scoring-graph-instance.js";
@@ -37,18 +36,9 @@ type AcceptRunOptions = Omit<SharedOptions, "threadId"> & {
 
 export type RunMatchGraphOptions = FreshRunOptions | ResumeRunOptions | AcceptRunOptions;
 
-function buildCallbacks(
-  emit: (eventName: string, data: object) => void,
-  threadId: string,
-  runStartTime: number
-) {
+function buildCallbacks(emit: (eventName: string, data: object) => void) {
   const progressEmitter = new NodeProgressEmitter(emit);
-  const capture = isTracingEnabled()
-    ? new RootRunCapture((rootRunId) => {
-        emit("meta", { threadId, rootRunId, runStartTime });
-      })
-    : null;
-  return { callbacks: [...(capture ? [capture] : []), progressEmitter], capture };
+  return { callbacks: [progressEmitter] };
 }
 
 async function invokeGraph(options: FreshRunOptions | ResumeRunOptions, invokeConfig: Parameters<typeof graph.invoke>[1]) {
@@ -234,10 +224,11 @@ export async function runMatchGraph(options: RunMatchGraphOptions): Promise<void
   const config = { configurable: { thread_id: newThreadId } };
 
   activeRuns.set(newThreadId, { abort: () => abort.abort(), runStartTime });
+  emit("meta", { threadId: newThreadId, runStartTime });
 
   try {
-    const { callbacks, capture } = buildCallbacks(emit, newThreadId, runStartTime);
-    const runName = options.kind === "resume" ? RUN_NAMES.HITL_RESUMED : "resume-match-graph";
+    const { callbacks } = buildCallbacks(emit);
+    const runName = options.kind === "resume" ? "resume-match-graph: hitl-resumed" : "resume-match-graph";
     const invokeConfig = { ...config, runName, signal: abort.signal, callbacks };
 
     const state = await invokeGraph(options, invokeConfig);
