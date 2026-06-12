@@ -91,23 +91,20 @@ export function buildHonestVerdictChain(model: BaseChatModel) {
   const structuredModel = model.withStructuredOutput(HonestVerdictLLMSchema);
 
   return {
-    invoke: async (
-      input: {
-        fit_analysis: string;
-        weak_match_reason: string;
-        fit_scenario_summary: string;
-        ats_scenario_summary: string;
-        human_context: string;
-      },
-      config?: { runName?: string },
-    ): Promise<HonestVerdictLLMOutput> => {
+    invoke: async (input: {
+      fit_analysis: string;
+      weak_match_reason: string;
+      fit_scenario_summary: string;
+      ats_scenario_summary: string;
+      human_context: string;
+    }): Promise<HonestVerdictLLMOutput> => {
       const messages = await prompt.invoke(input);
 
-      const result = await structuredModel.invoke(messages, config ?? {});
+      const result = await structuredModel.invoke(messages);
 
       const validated = HonestVerdictLLMSchema.safeParse(result);
       if (!validated.success) {
-        console.error(`[validation-failed] ${config?.runName ?? "analyze-skeptical-reconciliation"}`, validated.error.flatten(), result);
+        console.error("[validation-failed] analyze-skeptical-reconciliation", validated.error.flatten(), result);
         throw validated.error;
       }
 

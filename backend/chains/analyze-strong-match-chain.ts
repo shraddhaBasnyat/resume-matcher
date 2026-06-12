@@ -135,23 +135,20 @@ export function buildInvisibleExpertChain(model: BaseChatModel) {
   const structuredModel = model.withStructuredOutput(InvisibleExpertLLMSchema);
 
   return {
-    invoke: async (
-      input: {
-        scenario: string;
-        fit_analysis: string;
-        ats_ranking: string;
-        fit_scenario_summary: string;
-        ats_scenario_summary: string;
-      },
-      config?: { runName?: string },
-    ): Promise<InvisibleExpertLLMOutput> => {
+    invoke: async (input: {
+      scenario: string;
+      fit_analysis: string;
+      ats_ranking: string;
+      fit_scenario_summary: string;
+      ats_scenario_summary: string;
+    }): Promise<InvisibleExpertLLMOutput> => {
       const messages = await prompt.invoke(input);
 
-      const result = await structuredModel.invoke(messages, config ?? {});
+      const result = await structuredModel.invoke(messages);
 
       const validated = InvisibleExpertLLMSchema.safeParse(result);
       if (!validated.success) {
-        console.error(`[validation-failed] ${config?.runName ?? "analyze-strong-match-invisible-expert"}`, validated.error.flatten(), result);
+        console.error("[validation-failed] analyze-strong-match-invisible-expert", validated.error.flatten(), result);
         throw validated.error;
       }
 

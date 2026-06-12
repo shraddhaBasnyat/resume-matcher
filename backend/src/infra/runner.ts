@@ -228,8 +228,7 @@ export async function runMatchGraph(options: RunMatchGraphOptions): Promise<void
 
   try {
     const { callbacks } = buildCallbacks(emit);
-    const runName = options.kind === "resume" ? "resume-match-graph: hitl-resumed" : "resume-match-graph";
-    const invokeConfig = { ...config, runName, signal: abort.signal, callbacks };
+    const invokeConfig = { ...config, signal: abort.signal, callbacks };
 
     const state = await invokeGraph(options, invokeConfig);
     const snapshot = await graph.getState(config);

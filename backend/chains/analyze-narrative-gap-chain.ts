@@ -79,17 +79,18 @@ export function buildNarrativeGapChain(model: BaseChatModel) {
   const structuredModel = model.withStructuredOutput(NarrativeGapLLMSchema);
 
   return {
-    invoke: async (
-      input: { fit_analysis: string; fit_scenario_summary: string; ats_scenario_summary: string },
-      config?: { runName?: string },
-    ): Promise<NarrativeGapLLMOutput> => {
+    invoke: async (input: {
+      fit_analysis: string;
+      fit_scenario_summary: string;
+      ats_scenario_summary: string;
+    }): Promise<NarrativeGapLLMOutput> => {
       const messages = await prompt.invoke(input);
 
-      const result = await structuredModel.invoke(messages, config ?? {});
+      const result = await structuredModel.invoke(messages);
 
       const validated = NarrativeGapLLMSchema.safeParse(result);
       if (!validated.success) {
-        console.error(`[validation-failed] ${config?.runName ?? "analyze-narrative-gap"}`, validated.error.flatten(), result);
+        console.error("[validation-failed] analyze-narrative-gap", validated.error.flatten(), result);
         throw validated.error;
       }
 

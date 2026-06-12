@@ -71,17 +71,14 @@ export function buildAtsAnalysisChain(model: BaseChatModel) {
   const structuredModel = model.withStructuredOutput(AtsAnalysisSchema);
 
   return {
-    invoke: async (
-      input: { resume_text: string; job_text: string },
-      config?: { runName?: string },
-    ): Promise<AtsAnalysisOutput> => {
+    invoke: async (input: { resume_text: string; job_text: string }): Promise<AtsAnalysisOutput> => {
       const messages = await prompt.invoke(input);
 
-      const result = await structuredModel.invoke(messages, config ?? {});
+      const result = await structuredModel.invoke(messages);
 
       const validated = AtsAnalysisSchema.safeParse(result);
       if (!validated.success) {
-        console.error(`[validation-failed] ${config?.runName ?? "ats-analysis"}`, validated.error.flatten(), result);
+        console.error("[validation-failed] ats-analysis", validated.error.flatten(), result);
         throw validated.error;
       }
 

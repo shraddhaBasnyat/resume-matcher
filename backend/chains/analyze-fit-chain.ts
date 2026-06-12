@@ -18,17 +18,14 @@ export function buildAnalyzeFitChain(model: BaseChatModel) {
   const structuredModel = model.withStructuredOutput(AnalyzeFitLLMSchema);
 
   return {
-    invoke: async (
-      input: { resume_text: string; job_text: string },
-      config?: { runName?: string },
-    ) => {
+    invoke: async (input: { resume_text: string; job_text: string }) => {
       const messages = await prompt.invoke(input);
 
-      const result = await structuredModel.invoke(messages, config ?? {});
+      const result = await structuredModel.invoke(messages);
 
       const validated = AnalyzeFitLLMSchema.safeParse(result);
       if (!validated.success) {
-        console.error(`[validation-failed] ${config?.runName ?? "analyze-fit"}`, validated.error.flatten(), result);
+        console.error("[validation-failed] analyze-fit", validated.error.flatten(), result);
         throw validated.error;
       }
 
