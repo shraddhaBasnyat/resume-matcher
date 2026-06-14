@@ -228,7 +228,12 @@ export async function runMatchGraph(options: RunMatchGraphOptions): Promise<void
 
   try {
     const { callbacks } = buildCallbacks(emit);
-    const invokeConfig = { ...config, signal: abort.signal, callbacks };
+    const invokeConfig = {
+      ...config,
+      signal: abort.signal,
+      callbacks,
+      runName: options.kind === "resume" ? "jobinit-match-graph: hitl-resumed" : "jobinit-match-graph",
+    };
 
     const state = await invokeGraph(options, invokeConfig);
     const snapshot = await graph.getState(config);
