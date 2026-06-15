@@ -4,7 +4,7 @@
 2026-06-15
 
 ## Status
-Accepted — implementation in progress
+Accepted — implemented
 
 ## Context
 
@@ -24,21 +24,17 @@ A code review session (2026-06-15) identified several problems with the current 
 
 5. **Mock testability constraint.** The recommended way to test LangChain components is `FakeListChatModel` from `@langchain/core/utils/testing` — a real `BaseChatModel` that has all model methods including `withStructuredOutput()`, but returns pre-configured fake responses instead of calling the real API. This is the correct mock because it exercises the same code paths as a real model without incurring API cost or latency. The current chain factories prevented this. Because the factories return plain objects that call `prompt.invoke()` and `structuredModel.invoke()` manually — bypassing the `BaseChatModel` interface — tests could only mock at the `invoke()` level using `{ invoke: vi.fn() }`. Using `FakeListChatModel` with the current architecture would require the factory to call `this.model.withStructuredOutput(Schema)`, which the plain object pattern never does. The plain object mock `{ invoke: vi.fn() }` is an unnecessary hack — it exists only because the current chain architecture bypasses the real model interface. A proper `BaseChatModel` mock (`FakeListChatModel`) is the correct approach and is only possible once the chain architecture is fixed.
 
-LangSmith can extract node-level inputs and outputs from production traces directly without a separate wrapper layer. The wrapper layer exists for two different reasons:
-
-1. **Explicit input contract.** The wrapper documents exactly what the LLM call needs, separate from what the node reads from graph state. This is developer ergonomics, not runtime enforcement.
-
-2. **Silent eval and testing drift protection.** LangGraph nodes receive the full `GraphStateType` — every node can read any field from state without declaring it in its signature. There is no enforced contract between what state a node is supposed to read and what it actually reads at runtime. A new field read added silently to a node implementation is invisible to TypeScript and invisible to tests unless the test explicitly sets that field. The wrapper's narrow typed input interface (`{ resume_text: string; job_text: string }`) forces promptfoo evals and unit tests to break loudly on any change.
 
 ## Decision
 
-**1. Rename `backend/chains/` to `backend/llm-wrappers/`, and rename each chain file to `*.wrapper.ts`.**
+**1. Introduce `RunnableLambda` wrapper factories as LLM call boundaries and promptfoo eval entry points.**
 
-`chains/` implies LangChain legacy migration and plain chain objects. `llm-wrappers/` describes purpose — these files wrap LLM calls with prompt formatting, structured output, Zod validation, and a named observability span. File names follow the same convention: `analyze-fit-chain.ts` → `analyze-fit.wrapper.ts`, `ats-analysis-chain.ts` → `ats-analysis.wrapper.ts`, etc. Factory function names keep the `Runnable` suffix since what they return IS a Runnable: `buildAnalyzeFitRunnable`, `buildAtsAnalysisRunnable`, etc.
+Each wrapper becomes a factory function returning a `RunnableLambda` — the documented public API for wrapping custom logic in LangChain. This gives a named span in LangSmith via `withConfig({ runName })`, correct config threading via LCEL pipe inside the lambda, and Zod validation on the output. No subclassing, no framework internals.
 
-**2. Convert plain object factories to `RunnableLambda.from().withConfig()`.**
+The `RunnableLambda`'s typed input signature provides two benefits:
 
-Each runnable becomes a factory function returning a `RunnableLambda` — the documented public API for wrapping custom logic in LangChain. This gives a named span in LangSmith via `withConfig({ runName })`, correct config threading via LCEL pipe inside the lambda, and Zod validation on the output. No subclassing, no framework internals.
+- **Explicit input contract** — the typed input documents exactly what the LLM call needs, separate from what the node reads from graph state. Developer ergonomics, not runtime enforcement.
+- **Silent LLM input drift protection** — if the prompt gains a new variable (e.g. `{user_tier}`), the lambda's input type must change, breaking node call sites and promptfoo fixtures loudly at compile time. Note: this only protects LLM call inputs. A node can still silently read new state fields from `GraphStateType` without breaking anything.
 
 ```ts
 // backend/llm-wrappers/analyze-fit.wrapper.ts
@@ -76,11 +72,15 @@ export function buildAnalyzeFitRunnable(model: BaseChatModel) {
 }
 ```
 
-**Why a factory function in a separate file rather than inline `RunnableLambda` inside the node:** The factory function is the promptfoo eval entry point. Promptfoo needs to call the LLM layer directly with a narrow typed input — `{ resume_text, job_text }` — without constructing a full `GraphStateType` or invoking the graph. Without the separate factory, promptfoo would have to call the node or graph directly, losing the narrow input contract that provides silent eval drift protection. If promptfoo evals are ever removed, the factory functions can be inlined into their nodes with no other architectural change.
+**Why a factory function in a separate file rather than inline `RunnableLambda` inside the node:** The primary reason is promptfoo — it needs an importable entry point to call the LLM layer directly with a narrow typed input without constructing a full `GraphStateType` or invoking the graph. Tests also benefit as a secondary consumer — `scoring-graph.test.ts` imports wrapper factories and schemas directly for schema-identity dispatch in `SchemaAwareFakeChatModel`, and per-wrapper tests (`analyze-narrative-gap.test.ts` etc.) test the LLM call in isolation rather than through the full node, making failures easier to pinpoint. All other benefits (named span, config threading, Zod validation, input contract) would work with an inline `RunnableLambda` inside the node as well.
 
-**Why Zod validation after `withStructuredOutput`:** `ChatAnthropic.withStructuredOutput()` actually runs Zod validation internally via `AnthropicToolsOutputParser` — on a real Anthropic call, if the schema fails, it throws `OutputParserException` before your code sees the result. So `safeParse` in the wrapper is effectively dead code on the success path against real Anthropic calls. However it serves two real purposes: (1) `FakeListChatModel.withStructuredOutput()` ignores the schema entirely and just JSON-parses — so `safeParse` is the only validation that runs in tests, which is what makes the validation-failure tests work; (2) if the model is swapped to a non-Anthropic provider (e.g. Ollama in local dev) that doesn't run Zod validation, `safeParse` catches schema drift. Keep it — it's load-bearing for tests and cross-provider safety.
+**Why Zod validation after `withStructuredOutput`:** `ChatAnthropic.withStructuredOutput()` actually runs Zod validation internally via `AnthropicToolsOutputParser` — on a real Anthropic call, if the schema fails, it throws `OutputParserException` before your code sees the result. So `safeParse` in the wrapper is effectively dead code on the success path against real Anthropic calls. However it serves two real purposes: (1) `FakeListChatModel.withStructuredOutput()` ignores the schema entirely and just JSON-parses — so `safeParse` is the only validation that runs in tests, which is what makes the validation-failure tests work; (2) if the model is swapped to a non-Anthropic provider (e.g. Ollama in local dev) that doesn't run Zod validation, `safeParse` catches schema drift.
 
-**Why `RunnableLambda` over a `Runnable` subclass:** `RunnableLambda.from()` is the documented public API for custom logic. Subclassing `Runnable` requires touching `_callWithConfig` and `_invoke` — internal conventions, not public API. `RunnableLambda` fires `handleChainStart`/`handleChainEnd` automatically, giving the named span in LangSmith without framework internals.
+**Why `RunnableLambda` over a `Runnable` subclass:** `RunnableLambda.from()` is the documented public API for custom logic. Subclassing `Runnable` requires touching `_callWithConfig` and `_invoke` — internal conventions, not public API. `RunnableLambda` fires `handleChainStart`/`handleChainEnd` automatically via `.withConfig({ runName })`, giving the named span in LangSmith without touching framework internals.
+
+**2. Rename `backend/chains/` to `backend/llm-wrappers/`, and rename each chain file to `*.wrapper.ts`.**
+
+`chains/` implies LangChain legacy migration and plain chain objects. `llm-wrappers/` describes purpose — these files wrap LLM calls with prompt formatting, structured output, Zod validation, and a named observability span. File names follow the same convention: `analyze-fit-chain.ts` → `analyze-fit.wrapper.ts`, `ats-analysis-chain.ts` → `ats-analysis.wrapper.ts`, etc. Factory function names keep the `Runnable` suffix since what they return IS a Runnable: `buildAnalyzeFitRunnable`, `buildAtsAnalysisRunnable`, etc.
 
 **3. Use `FakeListChatModel` in tests instead of plain object mocks.**
 
@@ -92,15 +92,15 @@ export function buildAnalyzeFitRunnable(model: BaseChatModel) {
 Good:
 - Config threads automatically through LCEL pipe inside the lambda — no manual spreading needed
 - Named span in LangSmith via `withConfig({ runName })` — `RunnableLambda` fires `handleChainStart`/`handleChainEnd` automatically, making the LLM call visible as a distinct span between the node and `ChatAnthropic`
-- Silent eval and testing drift protection — wrapper typed input forces loud failures when LLM call dependencies change
+- Silent LLM input drift protection — if the prompt gains a new variable, the wrapper typed input must change, breaking node call sites and promptfoo fixtures loudly at compile time
 - `FakeListChatModel` replaces plain object mocks — tests exercise real model behavior
 - `llm-wrappers/` directory name signals purpose — not a migration artifact, not an implementation detail
 - No framework internals touched — `RunnableLambda.from()` is documented public API
 
 Bad:
-- Non-trivial refactor — 5 plain object factories to convert, 5 node files to update, all tests to migrate to `FakeListChatModel`
 - `FakeListChatModel` response format requires understanding — more setup than `{ invoke: vi.fn() }`
 - More files — one wrapper file per LLM node, but consistent and predictable
+- `SchemaAwareFakeChatModel` in `scoring-graph.test.ts` adds complexity for multi-schema graph tests
 
 ## Eval tooling
 
@@ -115,8 +115,8 @@ Both tools can eval at runnable, node, or graph level. The distinction is data s
 
 ## Alternatives considered
 
-1. **LCEL inline with `RunnableLambda` inside each node, no separate runnable layer**
-   → Rejected: Zod validation and error logging after `withStructuredOutput` need to live somewhere. A `RunnableLambda` wrapper is needed either way; moving it to a separate file gives the explicit input contract and silent eval drift protection that inline LCEL alone cannot provide.
+1. **LCEL inline with `RunnableLambda` inside each node, no separate wrapper layer**
+   → Rejected: see "Why a factory function in a separate file" in decision 1.
 
 2. **`Runnable` subclass with `_callWithConfig` and `_invoke`**
    → Rejected: to get a named span in LangSmith, a `Runnable` subclass must call `_callWithConfig` internally — this is what fires `handleChainStart`/`handleChainEnd`. Simply overriding `invoke` directly gives you config threading but no named span. `_callWithConfig` and `_invoke` are internal conventions, not public API. `RunnableLambda.from()` achieves the same result — named span, config threading, callback lifecycle — using the documented public API with no framework internals.
