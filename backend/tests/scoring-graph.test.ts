@@ -1,11 +1,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { AnalyzeFitLLMSchema, buildAnalyzeFitChain } from "../chains/analyze-fit-chain.js";
-import { AtsAnalysisSchema } from "../chains/ats-analysis-chain.js";
-import { InvisibleExpertLLMSchema } from "../chains/analyze-strong-match-chain.js";
-import { NarrativeGapLLMSchema } from "../chains/analyze-narrative-gap-chain.js";
-import { HonestVerdictLLMSchema } from "../chains/analyze-skeptical-reconciliation-chain.js";
+import { FakeListChatModel } from "@langchain/core/utils/testing";
+import { RunnableLambda } from "@langchain/core/runnables";
+import { AnalyzeFitLLMSchema, buildAnalyzeFitRunnable } from "../llm-wrappers/analyze-fit.wrapper.js";
+import { AtsAnalysisSchema, buildAtsAnalysisRunnable } from "../llm-wrappers/ats-analysis.wrapper.js";
+import { InvisibleExpertLLMSchema } from "../llm-wrappers/analyze-strong-match.wrapper.js";
+import { NarrativeGapLLMSchema } from "../llm-wrappers/analyze-narrative-gap.wrapper.js";
+import { HonestVerdictLLMSchema } from "../llm-wrappers/analyze-skeptical-reconciliation.wrapper.js";
 import { buildScoringGraph } from "../graphs/scoring/scoring-graph.js";
+
+class SchemaAwareFakeChatModel extends FakeListChatModel {
+  constructor(private readonly responsesBySchema: Map<unknown, unknown>) {
+    super({ responses: ["{}"] });
+  }
+  override withStructuredOutput(schema: unknown) {
+    const response = this.responsesBySchema.get(schema) ?? { unexpected: true };
+    return RunnableLambda.from(async () => response);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Shared fixtures
@@ -119,31 +131,13 @@ function buildMockModel(
   const analyzeFitOutput = fitLow ? weakAnalyzeFitLLMOutput : validAnalyzeFitLLMOutput;
   const atsOutput = atsLow ? lowAtsLLMOutput : validAtsLLMOutput;
 
-  const withStructuredOutput = vi.fn().mockImplementation((schema) => {
-    if (schema === AnalyzeFitLLMSchema) {
-      return { invoke: vi.fn().mockResolvedValue(analyzeFitOutput) };
-    }
-    if (schema === AtsAnalysisSchema) {
-      return { invoke: vi.fn().mockResolvedValue(atsOutput) };
-    }
-    if (schema === InvisibleExpertLLMSchema) {
-      return { invoke: vi.fn().mockResolvedValue(validInvisibleExpertLLMOutput) };
-    }
-    if (schema === NarrativeGapLLMSchema) {
-      return { invoke: vi.fn().mockResolvedValue(validNarrativeGapLLMOutput) };
-    }
-    if (schema === HonestVerdictLLMSchema) {
-      return { invoke: vi.fn().mockResolvedValue(validHonestVerdictLLMOutput) };
-    }
-    // Fallback — loud failure guard. Any new chain without a case here returns
-    // data that fails every LLM schema. throw validated.error surfaces it immediately.
-    return { invoke: vi.fn().mockResolvedValue({ unexpected: true }) };
-  });
-
-  return {
-    bind: vi.fn().mockReturnThis(),
-    withStructuredOutput,
-  };
+  return new SchemaAwareFakeChatModel(new Map<unknown, unknown>([
+    [AnalyzeFitLLMSchema, analyzeFitOutput],
+    [AtsAnalysisSchema, atsOutput],
+    [InvisibleExpertLLMSchema, validInvisibleExpertLLMOutput],
+    [NarrativeGapLLMSchema, validNarrativeGapLLMOutput],
+    [HonestVerdictLLMSchema, validHonestVerdictLLMOutput],
+  ]));
 }
 
 // ---------------------------------------------------------------------------
@@ -262,25 +256,13 @@ describe("buildScoringGraph — full run with mocked chains", () => {
   });
 
   it("honest_verdict — fitScore < 50 with contextPrompt triggers interrupt", async () => {
-    const lowScoreInterruptModel = {
-      bind: vi.fn().mockReturnThis(),
-      withStructuredOutput: vi.fn().mockImplementation((schema) => {
-        if (schema === AnalyzeFitLLMSchema) {
-          return { invoke: vi.fn().mockResolvedValue(weakAnalyzeFitLLMOutput) };
-        }
-        if (schema === AtsAnalysisSchema) {
-          return { invoke: vi.fn().mockResolvedValue(validAtsLLMOutput) };
-        }
-        if (schema === HonestVerdictLLMSchema) {
-          return { invoke: vi.fn().mockResolvedValue(honestVerdictWithContextPrompt) };
-        }
-        return { invoke: vi.fn().mockResolvedValue({ unexpected: true }) };
-      }),
-    };
+    const lowScoreInterruptModel = new SchemaAwareFakeChatModel(new Map<unknown, unknown>([
+      [AnalyzeFitLLMSchema, weakAnalyzeFitLLMOutput],
+      [AtsAnalysisSchema, validAtsLLMOutput],
+      [HonestVerdictLLMSchema, honestVerdictWithContextPrompt],
+    ]));
 
-    const compiledGraph = buildScoringGraph(
-      lowScoreInterruptModel as unknown as BaseChatModel,
-    );
+    const compiledGraph = buildScoringGraph(lowScoreInterruptModel);
     const threadId = "test-thread-low-score-interrupt";
 
     await compiledGraph.invoke(
@@ -300,23 +282,13 @@ describe("buildScoringGraph — full run with mocked chains", () => {
   });
 
   it("honest_verdict — contextPrompt null completes without interrupt and writes fitAdvice", async () => {
-    const scenario5Model = {
-      bind: vi.fn().mockReturnThis(),
-      withStructuredOutput: vi.fn().mockImplementation((schema) => {
-        if (schema === AnalyzeFitLLMSchema) {
-          return { invoke: vi.fn().mockResolvedValue(weakAnalyzeFitLLMOutput) };
-        }
-        if (schema === AtsAnalysisSchema) {
-          return { invoke: vi.fn().mockResolvedValue(validAtsLLMOutput) };
-        }
-        if (schema === HonestVerdictLLMSchema) {
-          return { invoke: vi.fn().mockResolvedValue(validHonestVerdictLLMOutput) }; // contextPrompt: null
-        }
-        return { invoke: vi.fn().mockResolvedValue({ unexpected: true }) };
-      }),
-    };
+    const scenario5Model = new SchemaAwareFakeChatModel(new Map<unknown, unknown>([
+      [AnalyzeFitLLMSchema, weakAnalyzeFitLLMOutput],
+      [AtsAnalysisSchema, validAtsLLMOutput],
+      [HonestVerdictLLMSchema, validHonestVerdictLLMOutput], // contextPrompt: null
+    ]));
 
-    const compiledGraph = buildScoringGraph(scenario5Model as unknown as BaseChatModel);
+    const compiledGraph = buildScoringGraph(scenario5Model);
     const threadId = "test-thread-scenario-5";
 
     const state = await compiledGraph.invoke(
@@ -345,7 +317,7 @@ describe("buildScoringGraph — full run with mocked chains", () => {
 // Validation failure — AnalyzeFitLLMSchema
 // ---------------------------------------------------------------------------
 
-describe("buildAnalyzeFitChain — validation failure", () => {
+describe("AnalyzeFitRunnable — validation failure", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -357,14 +329,9 @@ describe("buildAnalyzeFitChain — validation failure", () => {
   it("logs console.error and throws ZodError when model returns invalid shape", async () => {
     const invalidOutput = { fitScore: "not-a-number", headline: "" };
 
-    const mockModel = {
-      bind: vi.fn().mockReturnThis(),
-      withStructuredOutput: vi.fn().mockReturnValue({
-        invoke: vi.fn().mockResolvedValue(invalidOutput),
-      }),
-    };
+    const mockModel = new FakeListChatModel({ responses: [JSON.stringify(invalidOutput)] });
 
-    const chain = buildAnalyzeFitChain(mockModel as unknown as BaseChatModel);
+    const chain = buildAnalyzeFitRunnable(mockModel);
 
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -373,7 +340,7 @@ describe("buildAnalyzeFitChain — validation failure", () => {
     ).rejects.toThrow(expect.objectContaining({ name: "ZodError" }));
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(
-      "[validation-failed] analyze-fit",
+      "[validation-failed] AnalyzeFitRunnable",
       expect.anything(),
       invalidOutput,
     );
@@ -384,23 +351,17 @@ describe("buildAnalyzeFitChain — validation failure", () => {
 // Validation failure — AtsAnalysisSchema (new fields)
 // ---------------------------------------------------------------------------
 
-describe("buildAtsAnalysisChain — validation failure on missing new fields", () => {
+describe("AtsAnalysisRunnable — validation failure on missing new fields", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   it("logs console.error and throws ZodError when atsScenarioSummary is missing", async () => {
-    const { buildAtsAnalysisChain } = await import("../chains/ats-analysis-chain.js");
     const invalidOutput = { atsScore: 80, machineRanking: [], atsAha: "Something" };
 
-    const mockModel = {
-      bind: vi.fn().mockReturnThis(),
-      withStructuredOutput: vi.fn().mockReturnValue({
-        invoke: vi.fn().mockResolvedValue(invalidOutput),
-      }),
-    };
+    const mockModel = new FakeListChatModel({ responses: [JSON.stringify(invalidOutput)] });
 
-    const chain = buildAtsAnalysisChain(mockModel as unknown as BaseChatModel);
+    const chain = buildAtsAnalysisRunnable(mockModel);
 
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -409,7 +370,7 @@ describe("buildAtsAnalysisChain — validation failure on missing new fields", (
     ).rejects.toThrow(expect.objectContaining({ name: "ZodError" }));
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(
-      "[validation-failed] ats-analysis",
+      "[validation-failed] AtsAnalysisRunnable",
       expect.anything(),
       invalidOutput,
     );

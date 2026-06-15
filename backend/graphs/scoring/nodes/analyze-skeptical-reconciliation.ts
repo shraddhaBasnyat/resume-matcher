@@ -1,10 +1,10 @@
 import { interrupt, Command } from "@langchain/langgraph";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { buildHonestVerdictChain } from "../../../chains/analyze-skeptical-reconciliation-chain.js";
+import { buildHonestVerdictRunnable } from "../../../llm-wrappers/analyze-skeptical-reconciliation.wrapper.js";
 import type { GraphStateType } from "../scoring-graph-state.js";
 
 export function makeAnalyzeSkepticalReconciliationNode(model: BaseChatModel) {
-  const chain = buildHonestVerdictChain(model);
+  const chain = buildHonestVerdictRunnable(model);
 
   return async function analyzeSkepticalReconciliation(state: GraphStateType) {
     if (state.scenarioId !== "honest_verdict") {

@@ -1,9 +1,9 @@
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { buildInvisibleExpertChain } from "../../../chains/analyze-strong-match-chain.js";
+import { buildInvisibleExpertRunnable } from "../../../llm-wrappers/analyze-strong-match.wrapper.js";
 import type { GraphStateType } from "../scoring-graph-state.js";
 
 export function makeAnalyzeStrongMatchNode(model: BaseChatModel) {
-  const invisibleExpertChain = buildInvisibleExpertChain(model);
+  const invisibleExpertChain = buildInvisibleExpertRunnable(model);
 
   return async function analyzeStrongMatch(state: GraphStateType) {
     if (state.scenarioId !== "confirmed_fit" && state.scenarioId !== "invisible_expert") {

@@ -1,9 +1,9 @@
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { buildNarrativeGapChain } from "../../../chains/analyze-narrative-gap-chain.js";
+import { buildNarrativeGapRunnable } from "../../../llm-wrappers/analyze-narrative-gap.wrapper.js";
 import type { GraphStateType } from "../scoring-graph-state.js";
 
 export function makeAnalyzeNarrativeGapNode(model: BaseChatModel) {
-  const chain = buildNarrativeGapChain(model);
+  const chain = buildNarrativeGapRunnable(model);
 
   return async function analyzeNarrativeGap(state: GraphStateType) {
     if (state.scenarioId !== "narrative_gap") {
