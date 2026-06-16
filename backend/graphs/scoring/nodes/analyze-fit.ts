@@ -1,9 +1,9 @@
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { buildAnalyzeFitChain } from "../../../chains/analyze-fit-chain.js";
+import { buildAnalyzeFitRunnable } from "../../../llm-wrappers/analyze-fit.wrapper.js";
 import type { GraphStateType } from "../scoring-graph-state.js";
 
 export function makeAnalyzeFitNode(model: BaseChatModel) {
-  const chain = buildAnalyzeFitChain(model);
+  const chain = buildAnalyzeFitRunnable(model);
 
   return async function analyzeFit(state: GraphStateType) {
     const result = await chain.invoke({ resume_text: state.resumeText, job_text: state.jobText });

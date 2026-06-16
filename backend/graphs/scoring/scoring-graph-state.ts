@@ -1,7 +1,7 @@
 import { Annotation } from "@langchain/langgraph";
 import type { ConfidentMatchContext, ExploringGapContext } from "../../types/api.js";
 import type { ScenarioId } from "./scenario/derive-scenario.js";
-import type { BattleCardBullet } from "../../chains/analyze-fit-chain.js";
+import type { BattleCardBullet } from "../../llm-wrappers/analyze-fit.wrapper.js";
 
 type FitAnalysis = {
   careerTrajectory: string;

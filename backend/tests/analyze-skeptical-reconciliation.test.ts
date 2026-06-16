@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ZodError } from "zod";
-import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { HonestVerdictLLMSchema } from "../chains/analyze-skeptical-reconciliation-chain.js";
+import { FakeListChatModel } from "@langchain/core/utils/testing";
 import { makeAnalyzeSkepticalReconciliationNode } from "../graphs/scoring/nodes/analyze-skeptical-reconciliation.js";
 import type { GraphStateType } from "../graphs/scoring/scoring-graph-state.js";
 import * as langgraph from "@langchain/langgraph";
@@ -91,15 +90,7 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
 }
 
 function buildMockModel(llmReturn: Record<string, unknown> = validLLMOutput) {
-  return {
-    bind: vi.fn().mockReturnThis(),
-    withStructuredOutput: vi.fn().mockImplementation((schema: unknown) => {
-      if (schema === HonestVerdictLLMSchema) {
-        return { invoke: vi.fn().mockResolvedValue(llmReturn) };
-      }
-      return { invoke: vi.fn().mockResolvedValue({}) };
-    }),
-  } as unknown as BaseChatModel;
+  return new FakeListChatModel({ responses: [JSON.stringify(llmReturn)] });
 }
 
 beforeEach(() => {
@@ -201,15 +192,7 @@ describe("analyzeSkepticalReconciliation — validation failure", () => {
   it("rejects with ZodError and calls logValidationFailure when LLM returns invalid shape", async () => {
     const invalidOutput = { honestAssessment: 42, closingSteps: "not an array" };
 
-    const model = {
-      bind: vi.fn().mockReturnThis(),
-      withStructuredOutput: vi.fn().mockImplementation((schema: unknown) => {
-        if (schema === HonestVerdictLLMSchema) {
-          return { invoke: vi.fn().mockResolvedValue(invalidOutput) };
-        }
-        return { invoke: vi.fn().mockResolvedValue({}) };
-      }),
-    } as unknown as BaseChatModel;
+    const model = new FakeListChatModel({ responses: [JSON.stringify(invalidOutput)] });
 
     const node = makeAnalyzeSkepticalReconciliationNode(model);
 
@@ -218,7 +201,7 @@ describe("analyzeSkepticalReconciliation — validation failure", () => {
     await expect(node(buildBaseState())).rejects.toBeInstanceOf(ZodError);
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(
-      "[validation-failed] analyze-skeptical-reconciliation",
+      "[validation-failed] HonestVerdictRunnable",
       expect.anything(),
       invalidOutput,
     );
@@ -227,15 +210,7 @@ describe("analyzeSkepticalReconciliation — validation failure", () => {
   it("rejects with ZodError when acknowledgement is an empty string — must be array or null", async () => {
     const invalidOutput = { ...validLLMOutput, acknowledgement: "" };
 
-    const model = {
-      bind: vi.fn().mockReturnThis(),
-      withStructuredOutput: vi.fn().mockImplementation((schema: unknown) => {
-        if (schema === HonestVerdictLLMSchema) {
-          return { invoke: vi.fn().mockResolvedValue(invalidOutput) };
-        }
-        return { invoke: vi.fn().mockResolvedValue({}) };
-      }),
-    } as unknown as BaseChatModel;
+    const model = new FakeListChatModel({ responses: [JSON.stringify(invalidOutput)] });
 
     await expect(
       makeAnalyzeSkepticalReconciliationNode(model)(buildBaseState()),

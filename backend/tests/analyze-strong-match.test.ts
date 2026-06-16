@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { InvisibleExpertLLMSchema } from "../chains/analyze-strong-match-chain.js";
+import { FakeListChatModel } from "@langchain/core/utils/testing";
+import { InvisibleExpertLLMSchema } from "../llm-wrappers/analyze-strong-match.wrapper.js";
 import { makeAnalyzeStrongMatchNode } from "../graphs/scoring/nodes/analyze-strong-match.js";
 import type { GraphStateType } from "../graphs/scoring/scoring-graph-state.js";
 
@@ -99,15 +99,7 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
 }
 
 function buildMockModel() {
-  return {
-    bind: vi.fn().mockReturnThis(),
-    withStructuredOutput: vi.fn().mockImplementation((schema: unknown) => {
-      if (schema === InvisibleExpertLLMSchema) {
-        return { invoke: vi.fn().mockResolvedValue(validInvisibleExpertLLMOutput) };
-      }
-      return { invoke: vi.fn().mockResolvedValue({}) };
-    }),
-  } as unknown as BaseChatModel;
+  return new FakeListChatModel({ responses: [JSON.stringify(validInvisibleExpertLLMOutput)] });
 }
 
 // ---------------------------------------------------------------------------
@@ -149,15 +141,9 @@ describe("InvisibleExpertLLMSchema", () => {
 
 describe("analyzeStrongMatch — confirmed_fit", () => {
   it("returns interview prep fields in fitAdvice, closingSummary and verdictAha at top level", async () => {
-    const confirmedFitModel = {
-      bind: vi.fn().mockReturnThis(),
-      withStructuredOutput: vi.fn().mockImplementation((schema: unknown) => {
-        if (schema === InvisibleExpertLLMSchema) {
-          return { invoke: vi.fn().mockResolvedValue(validConfirmedFitLLMOutput) };
-        }
-        return { invoke: vi.fn().mockResolvedValue({}) };
-      }),
-    } as unknown as BaseChatModel;
+    const confirmedFitModel = new FakeListChatModel({
+      responses: [JSON.stringify(validConfirmedFitLLMOutput)],
+    });
 
     const node = makeAnalyzeStrongMatchNode(confirmedFitModel);
     const result = await node(buildBaseState({ scenarioId: "confirmed_fit" }));
@@ -317,15 +303,7 @@ describe("analyzeStrongMatch — validation failure", () => {
   it("throws ZodError and calls logValidationFailure when LLM returns invalid shape", async () => {
     const invalidOutput = { standoutStrengths: "not-an-array", atsRealityCheck: 42 };
 
-    const model = {
-      bind: vi.fn().mockReturnThis(),
-      withStructuredOutput: vi.fn().mockImplementation((schema: unknown) => {
-        if (schema === InvisibleExpertLLMSchema) {
-          return { invoke: vi.fn().mockResolvedValue(invalidOutput) };
-        }
-        return { invoke: vi.fn().mockResolvedValue({}) };
-      }),
-    } as unknown as BaseChatModel;
+    const model = new FakeListChatModel({ responses: [JSON.stringify(invalidOutput)] });
 
     const node = makeAnalyzeStrongMatchNode(model);
 
@@ -335,7 +313,7 @@ describe("analyzeStrongMatch — validation failure", () => {
       node(buildBaseState({ scenarioId: "confirmed_fit" })),
     ).rejects.toThrow(expect.objectContaining({ name: "ZodError" }));
 
-    expect(consoleErrorSpy.mock.calls[0][0]).toEqual(expect.stringContaining("analyze-strong-match"));
+    expect(consoleErrorSpy.mock.calls[0][0]).toEqual(expect.stringContaining("InvisibleExpertRunnable"));
   });
 
   it("throws ZodError when leadWithThese is missing from output", async () => {

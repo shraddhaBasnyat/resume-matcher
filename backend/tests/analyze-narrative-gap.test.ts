@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { ZodError } from "zod";
-import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { NarrativeGapLLMSchema } from "../chains/analyze-narrative-gap-chain.js";
+import { FakeListChatModel } from "@langchain/core/utils/testing";
 import { makeAnalyzeNarrativeGapNode } from "../graphs/scoring/nodes/analyze-narrative-gap.js";
 import type { GraphStateType } from "../graphs/scoring/scoring-graph-state.js";
 
@@ -66,15 +65,7 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
 }
 
 function buildMockModel() {
-  return {
-    bind: vi.fn().mockReturnThis(),
-    withStructuredOutput: vi.fn().mockImplementation((schema: unknown) => {
-      if (schema === NarrativeGapLLMSchema) {
-        return { invoke: vi.fn().mockResolvedValue(validLLMOutput) };
-      }
-      return { invoke: vi.fn().mockResolvedValue({}) };
-    }),
-  } as unknown as BaseChatModel;
+  return new FakeListChatModel({ responses: [JSON.stringify(validLLMOutput)] });
 }
 
 // ---------------------------------------------------------------------------
@@ -152,15 +143,7 @@ describe("analyzeNarrativeGap — guards", () => {
   it("throws ZodError and calls logValidationFailure when LLM returns invalid shape", async () => {
     const invalidOutput = { reframingSuggestions: "not an array", transferableStrengths: 42 };
 
-    const model = {
-      bind: vi.fn().mockReturnThis(),
-      withStructuredOutput: vi.fn().mockImplementation((schema: unknown) => {
-        if (schema === NarrativeGapLLMSchema) {
-          return { invoke: vi.fn().mockResolvedValue(invalidOutput) };
-        }
-        return { invoke: vi.fn().mockResolvedValue({}) };
-      }),
-    } as unknown as BaseChatModel;
+    const model = new FakeListChatModel({ responses: [JSON.stringify(invalidOutput)] });
 
     const node = makeAnalyzeNarrativeGapNode(model);
 
@@ -169,7 +152,7 @@ describe("analyzeNarrativeGap — guards", () => {
     await expect(node(buildBaseState())).rejects.toBeInstanceOf(ZodError);
 
     expect(consoleErrorSpy).toHaveBeenCalledWith(
-      "[validation-failed] analyze-narrative-gap",
+      "[validation-failed] NarrativeGapRunnable",
       expect.anything(),
       invalidOutput,
     );
