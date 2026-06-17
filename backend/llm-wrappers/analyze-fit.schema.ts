@@ -14,12 +14,6 @@ export const BattleCardVerdictSchema = z.enum([
   "evidence_gap: the skill or experience is claimed on the resume but no concrete evidence supports it — the claim exists without proof.",
 );
 
-export type BattleCardBullet = {
-  requirement: string;
-  evidence: string;
-  verdict: z.infer<typeof BattleCardVerdictSchema>;
-};
-
 export const AnalyzeFitLLMSchema = z.object({
   fitScore: z.number().min(0).max(100)
     .describe("Semantic fit from 0–100. Score based on career trajectory, transferable skills, and experience relative to the role. Not based on keyword overlap."),
@@ -52,4 +46,5 @@ export const AnalyzeFitLLMSchema = z.object({
   }),
 });
 
+export type BattleCardBullet = z.infer<typeof AnalyzeFitLLMSchema>["battleCardBullets"][number];
 export type AnalyzeFitLLMOutput = z.infer<typeof AnalyzeFitLLMSchema>;
