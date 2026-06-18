@@ -5,7 +5,7 @@ prompts:
   - "Resume:\n{{resume_text}}\n\nJD:\n{{job_text}}"
 
 providers:
-  - file://provider.ts
+  - file://../provider.ts
 
 defaultTest:
   options:
