@@ -1,5 +1,5 @@
 import { ChatAnthropic } from "@langchain/anthropic";
-import { buildAnalyzeFitRunnable } from "../../../llm-wrappers/analyze-fit.wrapper.js";
+import { buildAnalyzeFitRunnable } from "../../llm-wrappers/analyze-fit.wrapper.js";
 
 export default class AnalyzeFitProvider {
   id(): string {
@@ -13,10 +13,13 @@ export default class AnalyzeFitProvider {
         temperature: 0.3,
       });
 
-      const result = await buildAnalyzeFitRunnable(model).invoke({
-        resume_text: context.vars.resume_text,
-        job_text: context.vars.job_text,
-      });
+      const result = await buildAnalyzeFitRunnable(model).invoke(
+        {
+          resume_text: context.vars.resume_text,
+          job_text: context.vars.job_text,
+        },
+        { metadata: { run_type: "eval" } },
+      );
 
       return {
         output: JSON.stringify(result),
