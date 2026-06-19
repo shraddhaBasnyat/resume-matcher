@@ -9,7 +9,7 @@ export const PublicMatchResponseSchema = z.object({
     bullets: z.array(z.object({
       requirement: z.string(),
       evidence:    z.string(),
-      verdict:     z.enum(["hard_gap", "framing_gap", "terminology_gap", "strong_match"]),
+      verdict:     z.enum(["hard_gap", "framing_gap", "terminology_gap", "strong_match", "evidence_gap"]),
     })),
   }),
   fitAdvice: z.array(z.union([

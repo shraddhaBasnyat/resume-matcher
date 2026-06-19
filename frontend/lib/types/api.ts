@@ -73,7 +73,7 @@ export type ScenarioId =
   | "narrative_gap"
   | "honest_verdict";
 
-export type BattleCardVerdict = "hard_gap" | "framing_gap" | "terminology_gap" | "strong_match";
+export type BattleCardVerdict = "hard_gap" | "framing_gap" | "terminology_gap" | "strong_match" | "evidence_gap";
 
 export interface BattleCardBullet {
   requirement: string;
