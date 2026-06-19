@@ -21,7 +21,7 @@ export function makeAnalyzeNarrativeGapNode(model: BaseChatModel) {
     const llmOutput = await chain.invoke({
       fit_analysis: JSON.stringify(state.fitAnalysis, null, 2),
       fit_scenario_summary: state.fitScenarioSummary,
-      ats_scenario_summary: state.atsScenarioSummary,
+      ats_scenario_summary: state.atsScenarioSummary ?? "",
     });
 
     const { closingSummary, verdictAha, ...fitAdviceFields } = llmOutput;

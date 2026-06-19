@@ -34,7 +34,7 @@ export function makeAnalyzeStrongMatchNode(model: BaseChatModel) {
       fit_analysis: JSON.stringify(state.fitAnalysis, null, 2),
       ats_ranking: isInvisibleExpert ? JSON.stringify(atsRankingStrings, null, 2) : "[]",
       fit_scenario_summary: state.fitScenarioSummary,
-      ats_scenario_summary: state.atsScenarioSummary,
+      ats_scenario_summary: state.atsScenarioSummary ?? "",
     });
 
     const { closingSummary, verdictAha, ...fitAdviceFields } = llmOutput;

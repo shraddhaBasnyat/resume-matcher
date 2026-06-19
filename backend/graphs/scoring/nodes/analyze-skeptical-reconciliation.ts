@@ -27,7 +27,7 @@ export function makeAnalyzeSkepticalReconciliationNode(model: BaseChatModel) {
       fit_analysis: JSON.stringify(state.fitAnalysis, null, 2),
       weak_match_reason: state.weakMatchReason ?? "Not provided",
       fit_scenario_summary: state.fitScenarioSummary,
-      ats_scenario_summary: state.atsScenarioSummary,
+      ats_scenario_summary: state.atsScenarioSummary ?? "",
       human_context: humanContextBlock,
     });
 
