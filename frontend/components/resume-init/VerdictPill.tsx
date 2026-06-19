@@ -2,13 +2,14 @@
 
 import { cn } from "@/lib/utils";
 
-type Verdict = "hard_gap" | "framing_gap" | "terminology_gap" | "strong_match";
+type Verdict = "hard_gap" | "framing_gap" | "terminology_gap" | "strong_match" | "evidence_gap";
 
 const VERDICT_CONFIG: Record<Verdict, { label: string; bg: string; text: string }> = {
   hard_gap:        { label: "Hard gap",        bg: "bg-destructive-bg", text: "text-destructive" },
   framing_gap:     { label: "Framing gap",     bg: "bg-warning-bg",     text: "text-warning"     },
   terminology_gap: { label: "Terminology gap", bg: "bg-warning-bg",     text: "text-warning"     },
   strong_match:    { label: "Strong match",    bg: "bg-success-bg",     text: "text-success"     },
+  evidence_gap:    { label: "Evidence gap",    bg: "bg-warning-bg",     text: "text-warning"     },
 };
 
 interface VerdictPillProps {
