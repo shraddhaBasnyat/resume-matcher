@@ -2,6 +2,8 @@ import { Annotation } from "@langchain/langgraph";
 import type { ConfidentMatchContext, ExploringGapContext } from "../../types/api.js";
 import type { ScenarioId } from "./scenario/derive-scenario.js";
 import type { BattleCardBullet } from "../../llm-wrappers/analyze-fit.wrapper.js";
+import type { AnalyzeJDLLMOutput } from "../../llm-wrappers/analyze-jd.wrapper.js";
+import type { AnalyzeResumeLLMOutput } from "../../llm-wrappers/analyze-resume.wrapper.js";
 
 type FitAnalysis = {
   careerTrajectory: string;
@@ -18,7 +20,62 @@ export const GraphState = Annotation.Root({
     default: () => "",
     reducer: (prev, next) => prev ? `${prev}\n${next}` : next,
   }),
-  // Fit analysis outputs — written by analyzeFit node
+
+  // analyzeJD outputs
+  jdArchetype: Annotation<AnalyzeJDLLMOutput["jdArchetype"] | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  realAsk: Annotation<string | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  recruiterFilter: Annotation<string | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+
+  // analyzeResume outputs
+  candidateArchetype: Annotation<AnalyzeResumeLLMOutput["candidateArchetype"] | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  demonstratedVsClaimed: Annotation<AnalyzeResumeLLMOutput["demonstratedVsClaimed"] | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  scopeAmbiguity: Annotation<AnalyzeResumeLLMOutput["scopeAmbiguity"] | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  careerArcNote: Annotation<AnalyzeResumeLLMOutput["careerArcNote"] | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  resumeAha: Annotation<string | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+
+  // atsGapAnalysis outputs (deterministic)
+  atsScore: Annotation<number | null | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  termGaps: Annotation<{ term: string; status: "missing" | "present_no_context" | "present_demonstrated" }[] | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  terminologyMismatches: Annotation<{ resumeUses: string; jdExpects: string }[] | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  formattingFlags: Annotation<string[] | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+
+  // analyzeFit outputs
   fitScore: Annotation<number | undefined>({
     default: () => undefined,
     reducer: (_prev, next) => next,
@@ -59,6 +116,18 @@ export const GraphState = Annotation.Root({
     default: () => undefined,
     reducer: (_prev, next) => next,
   }),
+
+  // Phase 1: atsScenarioSummary and atsAha are not written by any node in Phase 1
+  // (atsGapAnalysis is deterministic — no LLM aha). Kept in state for Phase 2+ verdict node consumption.
+  atsScenarioSummary: Annotation<string | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+  atsAha: Annotation<string | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
+
   // LangGraph thread ID — for HITL resume
   threadId: Annotation<string | undefined>({
     default: () => undefined,
@@ -74,7 +143,6 @@ export const GraphState = Annotation.Root({
     reducer: (_prev, next) => next,
   }),
   // HITL loop guard — set to true before interrupting.
-  // Prevents a second interrupt on the resume pass.
   hitlFired: Annotation<boolean>({
     default: () => false,
     reducer: (_prev, next) => next,
@@ -82,28 +150,6 @@ export const GraphState = Annotation.Root({
   // User tier — hardcoded to "base" until auth middleware is wired.
   userTier: Annotation<"base" | "paid">({
     default: () => "base",
-    reducer: (_prev, next) => next,
-  }),
-  // ATS analysis output — written by atsAnalysis node (runs in parallel with analyzeFit).
-  atsProfile: Annotation<{
-    atsScore: number;
-    machineParsing: string[];
-    machineRanking: string[];
-  } | undefined>({
-    default: () => undefined,
-    reducer: (_prev, next) => next,
-  }),
-  // Derived from atsProfile.atsScore — first-class field so routeVerdicts and emitter can read it.
-  atsScore: Annotation<number | null | undefined>({
-    default: () => undefined,
-    reducer: (_prev, next) => next,
-  }),
-  atsScenarioSummary: Annotation<string | undefined>({
-    default: () => undefined,
-    reducer: (_prev, next) => next,
-  }),
-  atsAha: Annotation<string | undefined>({
-    default: () => undefined,
     reducer: (_prev, next) => next,
   }),
   // Verdict node outputs — closingSummary remapped to scenarioSummary.text in PublicMatchResponse.
@@ -115,7 +161,7 @@ export const GraphState = Annotation.Root({
     default: () => undefined,
     reducer: (_prev, next) => next,
   }),
-  // Scenario routing outputs — written by routeVerdicts and verdict nodes.
+  // Scenario routing outputs
   scenarioId: Annotation<ScenarioId | undefined>({
     default: () => undefined,
     reducer: (_prev, next) => next,

@@ -18,10 +18,6 @@ export function makeAnalyzeNarrativeGapNode(model: BaseChatModel) {
     if (!state.fitScenarioSummary) {
       throw new Error("analyzeNarrativeGap: fitScenarioSummary is missing from graph state");
     }
-    if (!state.atsScenarioSummary) {
-      throw new Error("analyzeNarrativeGap: atsScenarioSummary is missing from graph state");
-    }
-
     const llmOutput = await chain.invoke({
       fit_analysis: JSON.stringify(state.fitAnalysis, null, 2),
       fit_scenario_summary: state.fitScenarioSummary,

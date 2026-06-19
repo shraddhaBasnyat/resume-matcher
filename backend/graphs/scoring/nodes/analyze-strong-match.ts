@@ -19,25 +19,20 @@ export function makeAnalyzeStrongMatchNode(model: BaseChatModel) {
     if (!state.fitScenarioSummary) {
       throw new Error("analyzeStrongMatch: fitScenarioSummary is missing from graph state");
     }
-    if (!state.atsScenarioSummary) {
-      throw new Error("analyzeStrongMatch: atsScenarioSummary is missing from graph state");
-    }
-
     const isInvisibleExpert = state.scenarioId === "invisible_expert";
 
-    if (isInvisibleExpert && !state.atsProfile) {
-      throw new Error(
-        "analyzeStrongMatch: atsProfile is missing from graph state — " +
-          "required for invisible_expert scenario",
+    const atsRankingStrings = (state.termGaps ?? [])
+      .filter((g) => g.status !== "present_demonstrated")
+      .map((g) =>
+        g.status === "missing"
+          ? `missing keyword: "${g.term}"`
+          : `"${g.term}" present but without demonstrated context`,
       );
-    }
 
     const llmOutput = await invisibleExpertChain.invoke({
       scenario: state.scenarioId,
       fit_analysis: JSON.stringify(state.fitAnalysis, null, 2),
-      ats_ranking: isInvisibleExpert
-        ? JSON.stringify(state.atsProfile!.machineRanking, null, 2)
-        : "[]",
+      ats_ranking: isInvisibleExpert ? JSON.stringify(atsRankingStrings, null, 2) : "[]",
       fit_scenario_summary: state.fitScenarioSummary,
       ats_scenario_summary: state.atsScenarioSummary,
     });

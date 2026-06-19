@@ -19,10 +19,6 @@ export function makeAnalyzeSkepticalReconciliationNode(model: BaseChatModel) {
     if (!state.fitScenarioSummary) {
       throw new Error("analyzeSkepticalReconciliation: fitScenarioSummary is missing from graph state");
     }
-    if (!state.atsScenarioSummary) {
-      throw new Error("analyzeSkepticalReconciliation: atsScenarioSummary is missing from graph state");
-    }
-
     const humanContextBlock = state.humanContext
       ? `Additional Context from Candidate:\n${state.humanContext}\n\n`
       : "";

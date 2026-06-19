@@ -252,15 +252,6 @@ describe("analyzeStrongMatch — guards", () => {
     ).rejects.toThrow('expected scenarioId "confirmed_fit" or "invisible_expert"');
   });
 
-  it("throws when scenarioId is invisible_expert but atsProfile is missing", async () => {
-    const model = buildMockModel();
-    const node = makeAnalyzeStrongMatchNode(model);
-
-    await expect(
-      node(buildBaseState({ scenarioId: "invisible_expert", atsProfile: undefined })),
-    ).rejects.toThrow("atsProfile is missing");
-  });
-
   it("throws when scenarioId is invisible_expert but fitAnalysis is missing", async () => {
     const model = buildMockModel();
     const node = makeAnalyzeStrongMatchNode(model);
@@ -285,14 +276,6 @@ describe("analyzeStrongMatch — guards", () => {
     ).rejects.toThrow("fitScenarioSummary is missing");
   });
 
-  it("throws when atsScenarioSummary is missing", async () => {
-    const model = buildMockModel();
-    const node = makeAnalyzeStrongMatchNode(model);
-
-    await expect(
-      node(buildBaseState({ scenarioId: "confirmed_fit", atsScenarioSummary: undefined })),
-    ).rejects.toThrow("atsScenarioSummary is missing");
-  });
 });
 
 // ---------------------------------------------------------------------------
