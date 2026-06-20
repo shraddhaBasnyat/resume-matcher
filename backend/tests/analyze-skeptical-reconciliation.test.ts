@@ -29,6 +29,7 @@ const validLLMOutput = {
   contextPrompt: null,
   closingSummary: "The gap is real and the score stands — this is a 2–3 year development path, not a framing problem.",
   verdictAha: "The honest assessment cards explain specifically why — start there before deciding whether to apply.",
+  terminologyDiffs: [],
 };
 
 const validLLMOutputWithContextPrompt = {
@@ -75,12 +76,15 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     atsScore: null,
     atsScenarioSummary: "Resume is parseable. No knockout risks. Low keyword match on backend infrastructure terms.",
     atsAha: "Missing 'distributed systems' and 'infrastructure ownership' — terms the recruiter filters for.",
+    jdArchetype: { ideal: "specialist_depth" as const, couldWork: [] },
+    candidateArchetype: "specialist_depth" as const,
+    scopeAmbiguity: [],
+    terminologyMismatches: [],
     threadId: undefined,
     intent: undefined,
     intentContext: undefined,
     hitlFired: false,
     userTier: "base",
-    atsProfile: undefined,
     scenarioId: "honest_verdict",
     fitAdvice: undefined,
     closingSummary: undefined,
@@ -242,6 +246,13 @@ describe("analyzeSkepticalReconciliation — guards", () => {
     await expect(
       node(buildBaseState({ fitScenarioSummary: undefined })),
     ).rejects.toThrow("fitScenarioSummary is missing");
+  });
+
+  it("throws when jdArchetype is missing", async () => {
+    const node = makeAnalyzeSkepticalReconciliationNode(buildMockModel());
+    await expect(
+      node(buildBaseState({ jdArchetype: undefined })),
+    ).rejects.toThrow("jdArchetype is missing");
   });
 
 });

@@ -95,6 +95,12 @@ export interface MatchResponse {
     terminologyMismatches: { resumeUses: string; jdExpects: string }[];
     formattingFlags: string[];
   };
+  terminologyDiffs: {
+    location: string;
+    swapLabel: string;
+    before: string;
+    after: string;
+  }[];
   scenarioSummary: { text: string };
   threadId: string;
   _meta: { durationMs: number };

@@ -10,10 +10,12 @@ Decisions here prioritise clarity over production readiness.
 
 ```
 START
-  ├→ atsAnalysis ──────────────────────────┐
-  │     └→ generateTerminologyFixes ────── │ ─ (fans out immediately after atsAnalysis)
+  ├→ analyzeJD ────────────────────────────┐
+  ├→ analyzeResume ────────────────────────┤
   └→ analyzeFit ───────────────────────────┤
-                                           └→ routeVerdicts (pure fn, no LLM)
+                                           └→ atsGapAnalysis (deterministic, no LLM)
+                                                   │
+                                            routeVerdicts (pure fn, no LLM)
                                                    │
                               ┌────────────────────┼──────────────────────┐
                               ↓                    ↓                      ↓
@@ -24,12 +26,14 @@ START
                                                   END
 ```
 
-`atsAnalysis` and `analyzeFit` run **in parallel** from `START`. `generateTerminologyFixes`
-fans out from `atsAnalysis` output immediately — it does not wait for `analyzeFit` or
-`routeVerdicts`. All four nodes (`atsAnalysis`, `generateTerminologyFixes`, `analyzeFit`,
-and whichever verdict node fires) must complete before the runner emits `completed`.
-Exactly one verdict node fires per run. `analyzeSkepticalReconciliation` can loop back to
-itself via LangGraph `interrupt()`.
+`analyzeJD`, `analyzeResume`, and `analyzeFit` run **in parallel** from `START`. `atsGapAnalysis`
+is deterministic — no LLM — and fans in after the JD/resume/fit nodes complete. `routeVerdicts`
+reads from `atsGapAnalysis` output. Exactly one verdict node fires per run.
+`analyzeSkepticalReconciliation` can loop back to itself via LangGraph `interrupt()`.
+
+**Note on `generateTerminologyFixes`**: This node was planned but never implemented. Terminology
+diffs are produced directly by verdict nodes in Phase 2, assessed for legitimacy against the
+full fit picture before output.
 
 ---
 
@@ -41,9 +45,9 @@ itself via LangGraph `interrupt()`.
 | `atsAnalysis` | `resumeText`, `jobText` | `atsProfile`, `atsScenarioSummary`, `atsAha` | Three-layer output: `machineParsing` (formatting), `knockoutQuestions` (hard filters), `recruiterSearch` (keyword discoverability). `atsScore` composite weighted 60% recruiter search / 25% knockout / 15% formatting. `atsScenarioSummary`: machine picture in isolation — 2–3 sentences, plain-language synthesis of what the three layers found collectively, no fit context. `atsAha`: one sentence, the most important ATS observation — emitted in `node_done` payload. Pure observation only — no card content, no fix language. |
 | `generateTerminologyFixes` | `resumeText`, `atsProfile.recruiterSearch.terminologyMismatches` | `terminologyDiffs` | Fans out from `atsAnalysis`. Finds the exact resume sentence for each terminology mismatch and rewrites only that sentence. Runs automatically — no user prompt needed. Tracked in `progress` but normalised to `atsAnalysis` in the stepper UI. No aha — its output is already surfaced in the ATS panel cards. |
 | `routeVerdicts` | `fitScore`, `atsScore` | `scenarioId` | Pure fn, no LLM. Emits `fitScore`, `atsScore`, `scenarioId` in `node_done` payload — the deterministic "therefore" beat in the provenance trail. No aha field — the routing logic IS the observation. |
-| `analyzeStrongMatch` | `scenarioId`, `fitAnalysis`, `atsProfile`, `terminologyDiffs`, `fitScenarioSummary`, `atsScenarioSummary` | `fitAdvice`, `verdictAha`, `closingSummary` | Fires for `confirmed_fit` and `invisible_expert`. For `confirmed_fit`, `fitAdvice` contains interview preparation advice — `leadWithThese`, `expectTheseQuestions`, `watchOutFor` — not ATS remediation. For `invisible_expert`, `fitAdvice` contains ATS remediation fields. Does not restate `terminologyDiffs` already shown in the ATS panel. |
-| `analyzeNarrativeGap` | `scenarioId`, `fitAnalysis`, `fitScenarioSummary`, `atsScenarioSummary` | `fitAdvice`, `verdictAha`, `closingSummary` | Fires for `narrative_gap`. ATS panel may be clean — the gap is narrative, not mechanical. `closingSummary`: synthesises both drafts, closes with the reframe opportunity — names the experience-is-right-framing-is-wrong insight explicitly. |
-| `analyzeSkepticalReconciliation` | `scenarioId`, `fitAnalysis`, `humanContext`, `hitlFired`, `fitScenarioSummary`, `atsScenarioSummary` | `fitAdvice`, `verdictAha`, `closingSummary`, `humanContext` (on interrupt), `hitlFired` | Fires for `honest_verdict`. `closingSummary`: the most emotionally important piece of writing in the output — direct and respectful, mentor not rejection machine. If HITL fired and context shifted the assessment, `closingSummary` acknowledges it. No second interrupt. |
+| `analyzeStrongMatch` | `scenarioId`, `fitAnalysis`, `jdArchetype`, `candidateArchetype`, `realAsk`, `terminologyMismatches`, `resumeText`, `fitScenarioSummary`, `atsScenarioSummary`, `userTier` | `fitAdvice`, `verdictAha`, `closingSummary`, `terminologyDiffs` | Fires for `confirmed_fit` and `invisible_expert`. Looks up `ARCHETYPE_CONFIG[jdArchetype.ideal]` — for paid tier injects `scanPattern` + `interviewProbePattern` into prompt. Assesses each `terminologyMismatch` for legitimacy; produces `terminologyDiffs` for those that hold. For `confirmed_fit`, `fitAdvice` contains interview prep fields. For `invisible_expert`, `fitAdvice` contains ATS remediation fields. |
+| `analyzeNarrativeGap` | `scenarioId`, `fitAnalysis`, `jdArchetype`, `candidateArchetype`, `careerArcNote`, `terminologyMismatches`, `resumeText`, `fitScenarioSummary`, `atsScenarioSummary`, `userTier` | `fitAdvice`, `verdictAha`, `closingSummary`, `terminologyDiffs` | Fires for `narrative_gap`. Looks up `ARCHETYPE_CONFIG[jdArchetype.ideal]` — paid tier gets scan pattern context for reframing suggestions. Assesses `terminologyMismatches` for legitimacy. ATS panel may be clean — the gap is narrative, not mechanical. |
+| `analyzeSkepticalReconciliation` | `scenarioId`, `fitAnalysis`, `jdArchetype`, `scopeAmbiguity`, `terminologyMismatches`, `resumeText`, `humanContext`, `hitlFired`, `fitScenarioSummary`, `atsScenarioSummary`, `userTier` | `fitAdvice`, `verdictAha`, `closingSummary`, `terminologyDiffs`, `humanContext` (on interrupt), `hitlFired` | Fires for `honest_verdict`. Uses `scopeAmbiguity` to distinguish genuine skill absence from scope-level mismatch. Assesses `terminologyMismatches` for legitimacy. `closingSummary`: the most emotionally important piece of writing in the output. No second interrupt. |
 
 ### Scenario routing (deriveScenario — pure fn)
 
@@ -63,8 +67,8 @@ dependencies explicit. Before adding a node, declare its reads and writes here.
 
 | Field | Type | Default | Written by | Read by |
 |-------|------|---------|-----------|---------| 
-| `resumeText` | `string` | required | request body | `analyzeFit`, `atsAnalysis`, `generateTerminologyFixes` |
-| `jobText` | `string` | required | request body | `analyzeFit`, `atsAnalysis` |
+| `resumeText` | `string` | required | request body | `analyzeFit`, `analyzeJD`, `analyzeResume`, verdict nodes |
+| `jobText` | `string` | required | request body | `analyzeFit`, `analyzeJD`, `analyzeResume` |
 | `humanContext` | `string` | `""` | HITL resume endpoint; `analyzeSkepticalReconciliation` (on interrupt) | `analyzeSkepticalReconciliation` |
 | `fitScore` | `number \| undefined` | `undefined` | `analyzeFit` | `routeVerdicts`, all verdict nodes, runner |
 | `headline` | `string \| undefined` | `undefined` | `analyzeFit` | runner |
@@ -76,10 +80,19 @@ dependencies explicit. Before adding a node, declare its reads and writes here.
 | `fitAnalysis.weakMatchReason` | `string \| null` | — | `analyzeFit` (normalised: `"NONE"` → `null`) | `analyzeSkepticalReconciliation`, runner |
 | `weakMatch` | `boolean \| undefined` | `undefined` | `analyzeFit` (derived) | `routeVerdicts` |
 | `fitAha` | `string \| undefined` | `undefined` | `analyzeFit` | runner (emitted in `node_done`) |
-| `atsProfile` | `AtsProfile \| undefined` | `undefined` | `atsAnalysis` | `generateTerminologyFixes`, `analyzeStrongMatch`, runner |
-| `atsScenarioSummary` | `string \| undefined` | `undefined` | `atsAnalysis` | verdict nodes |
-| `atsAha` | `string \| undefined` | `undefined` | `atsAnalysis` | runner (emitted in `node_done`) |
-| `terminologyDiffs` | `TerminologyDiff[] \| undefined` | `undefined` | `generateTerminologyFixes` | `analyzeStrongMatch`, runner |
+| `jdArchetype` | `{ ideal: RoleArchetype; couldWork: RoleArchetype[] } \| undefined` | `undefined` | `analyzeJD` | `analyzeFit`, verdict nodes |
+| `realAsk` | `string \| undefined` | `undefined` | `analyzeJD` | `analyzeFit`, verdict nodes |
+| `recruiterFilter` | `string \| undefined` | `undefined` | `analyzeJD` | `atsGapAnalysis` |
+| `candidateArchetype` | `RoleArchetype \| undefined` | `undefined` | `analyzeResume` | `analyzeFit`, verdict nodes |
+| `demonstratedVsClaimed` | `DemonstratedVsClaimed[] \| undefined` | `undefined` | `analyzeResume` | `analyzeFit`, `atsGapAnalysis` |
+| `scopeAmbiguity` | `string[] \| undefined` | `undefined` | `analyzeResume` | `analyzeSkepticalReconciliation` |
+| `careerArcNote` | `CareerArcNote \| undefined` | `undefined` | `analyzeResume` | `analyzeNarrativeGap` |
+| `atsScore` | `number \| null \| undefined` | `undefined` | `atsGapAnalysis` | `routeVerdicts`, runner |
+| `termGaps` | `TermGap[] \| undefined` | `undefined` | `atsGapAnalysis` | `analyzeStrongMatch`, runner |
+| `terminologyMismatches` | `{ resumeUses: string; jdExpects: string }[] \| undefined` | `undefined` | `atsGapAnalysis` | verdict nodes, runner |
+| `formattingFlags` | `string[] \| undefined` | `undefined` | `atsGapAnalysis` | runner |
+| `atsScenarioSummary` | `string \| undefined` | `undefined` | — (Phase 1: not written) | verdict nodes |
+| `terminologyDiffs` | `TerminologyDiff[] \| undefined` | `undefined` | verdict nodes | runner |
 | `verdictAha` | `string \| undefined` | `undefined` | verdict nodes | runner (emitted in `node_done`) |
 | `closingSummary` | `string \| undefined` | `undefined` | verdict nodes | runner (remapped to `scenarioSummary.text` in `PublicMatchResponse`) |
 | `scenarioId` | `ScenarioId \| undefined` | `undefined` | `routeVerdicts` | all verdict nodes, runner |

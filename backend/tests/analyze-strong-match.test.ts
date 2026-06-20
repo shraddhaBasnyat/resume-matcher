@@ -25,6 +25,7 @@ const validInvisibleExpertLLMOutput = {
   watchOutFor: [],
   closingSummary: "Your background is exactly what this role needs — the gap is in how your resume reads to machines, not to humans.",
   verdictAha: "Your reframing cards show exactly how to retell the experience as the machine expects to read it.",
+  terminologyDiffs: [],
 };
 
 const validConfirmedFitLLMOutput = {
@@ -46,21 +47,13 @@ const validConfirmedFitLLMOutput = {
   ],
   closingSummary: "Strong match across the board — prepare to show depth on the ML infrastructure work and be ready on the mentoring question.",
   verdictAha: "Your FastAPI and ML infra work maps directly — lead with the scale numbers.",
+  terminologyDiffs: [],
 };
 
 const validFitAnalysis = {
   careerTrajectory: "Backend engineer progressing to ML-focused roles over 5 years",
   keyStrengths: ["Python", "FastAPI", "ML infrastructure"],
   experienceGaps: [],
-};
-
-const validAtsProfile = {
-  atsScore: 55,
-  machineParsing: ["// TODO: replace with programmatic resume parsing analysis"],
-  machineRanking: [
-    "resume uses 'ML'; job posting requires 'machine learning'",
-    "missing keyword: 'TensorFlow'",
-  ],
 };
 
 function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): GraphStateType {
@@ -84,12 +77,17 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     fitAnalysis: validFitAnalysis,
     weakMatch: false,
     weakMatchReason: null,
+    jdArchetype: { ideal: "specialist_depth" as const, couldWork: [] },
+    candidateArchetype: "specialist_depth" as const,
+    realAsk: "Build production backend systems with Python and FastAPI.",
+    terminologyMismatches: [],
+    careerArcNote: undefined,
+    scopeAmbiguity: [],
     threadId: undefined,
     intent: undefined,
     intentContext: undefined,
     hitlFired: false,
     userTier: "base",
-    atsProfile: undefined,
     scenarioId: undefined,
     fitAdvice: undefined,
     closingSummary: undefined,
@@ -185,7 +183,6 @@ describe("analyzeStrongMatch — invisible_expert", () => {
     const result = await node(
       buildBaseState({
         scenarioId: "invisible_expert",
-        atsProfile: validAtsProfile,
       }),
     );
     const advice = result.fitAdvice as Record<string, unknown>;
@@ -210,7 +207,6 @@ describe("analyzeStrongMatch — invisible_expert", () => {
     const result = await node(
       buildBaseState({
         scenarioId: "invisible_expert",
-        atsProfile: validAtsProfile,
       }),
     );
     const advice = result.fitAdvice as Record<string, unknown>;
@@ -260,7 +256,6 @@ describe("analyzeStrongMatch — guards", () => {
       node(
         buildBaseState({
           scenarioId: "invisible_expert",
-          atsProfile: validAtsProfile,
           fitAnalysis: undefined,
         }),
       ),
@@ -274,6 +269,15 @@ describe("analyzeStrongMatch — guards", () => {
     await expect(
       node(buildBaseState({ scenarioId: "confirmed_fit", fitScenarioSummary: undefined })),
     ).rejects.toThrow("fitScenarioSummary is missing");
+  });
+
+  it("throws when jdArchetype is missing", async () => {
+    const model = buildMockModel();
+    const node = makeAnalyzeStrongMatchNode(model);
+
+    await expect(
+      node(buildBaseState({ scenarioId: "confirmed_fit", jdArchetype: undefined })),
+    ).rejects.toThrow("jdArchetype is missing");
   });
 
 });

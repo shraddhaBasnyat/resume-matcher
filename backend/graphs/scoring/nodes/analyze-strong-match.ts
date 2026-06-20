@@ -1,5 +1,7 @@
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { buildInvisibleExpertRunnable } from "../../../llm-wrappers/analyze-strong-match.wrapper.js";
+import { ARCHETYPE_CONFIG } from "../archetype-config.js";
+import { formatTerminologyMismatches } from "./format-helpers.js";
 import type { GraphStateType } from "../scoring-graph-state.js";
 
 export function makeAnalyzeStrongMatchNode(model: BaseChatModel) {
@@ -19,7 +21,16 @@ export function makeAnalyzeStrongMatchNode(model: BaseChatModel) {
     if (!state.fitScenarioSummary) {
       throw new Error("analyzeStrongMatch: fitScenarioSummary is missing from graph state");
     }
+    if (!state.jdArchetype) {
+      throw new Error("analyzeStrongMatch: jdArchetype is missing from graph state");
+    }
+
     const isInvisibleExpert = state.scenarioId === "invisible_expert";
+
+    const archetypeConfig = ARCHETYPE_CONFIG[state.jdArchetype.ideal];
+    const archetypeContext = state.userTier === "paid"
+      ? `Archetype scan pattern: ${archetypeConfig.scanPattern}\nInterview probe pattern: ${archetypeConfig.interviewProbePattern}`
+      : "";
 
     const atsRankingStrings = (state.termGaps ?? [])
       .filter((g) => g.status !== "present_demonstrated")
@@ -35,9 +46,16 @@ export function makeAnalyzeStrongMatchNode(model: BaseChatModel) {
       ats_ranking: isInvisibleExpert ? JSON.stringify(atsRankingStrings, null, 2) : "[]",
       fit_scenario_summary: state.fitScenarioSummary,
       ats_scenario_summary: state.atsScenarioSummary ?? "",
+      candidate_archetype: state.candidateArchetype ?? "",
+      jd_archetype_ideal: state.jdArchetype.ideal,
+      jd_archetype_could_work: (state.jdArchetype.couldWork ?? []).join(", "),
+      real_ask: state.realAsk ?? "",
+      terminology_mismatches: formatTerminologyMismatches(state.terminologyMismatches),
+      resume_text: state.resumeText,
+      archetype_context: archetypeContext,
     });
 
-    const { closingSummary, verdictAha, ...fitAdviceFields } = llmOutput;
+    const { closingSummary, verdictAha, terminologyDiffs, ...fitAdviceFields } = llmOutput;
 
     return {
       fitAdvice: isInvisibleExpert
@@ -56,6 +74,7 @@ export function makeAnalyzeStrongMatchNode(model: BaseChatModel) {
           },
       closingSummary,
       verdictAha,
+      terminologyDiffs,
     };
   };
 }

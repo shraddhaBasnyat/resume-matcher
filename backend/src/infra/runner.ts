@@ -129,6 +129,7 @@ function buildPublicResponse(
       terminologyMismatches: state.terminologyMismatches ?? [],
       formattingFlags: state.formattingFlags ?? [],
     },
+    terminologyDiffs: state.terminologyDiffs ?? [],
     scenarioSummary: { text: state.closingSummary ?? "" },
     threadId,
     _meta: { durationMs },

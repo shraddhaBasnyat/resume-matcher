@@ -110,6 +110,7 @@ const validInvisibleExpertLLMOutput = {
   watchOutFor: [],
   closingSummary: "Your background is exactly what this role needs — the gap is in how your resume reads to machines, not to humans.",
   verdictAha: "Your reframing cards show exactly how to retell the experience as the machine expects to read it.",
+  terminologyDiffs: [],
 };
 
 const validNarrativeGapLLMOutput = {
@@ -118,6 +119,7 @@ const validNarrativeGapLLMOutput = {
   missingSkills: [],
   closingSummary: "The experience is right — the framing is wrong. Your SPA work maps directly once retold in the role's terms.",
   verdictAha: "Start with the reframing cards — once the framing is fixed, the score follows.",
+  terminologyDiffs: [],
 };
 
 const validHonestVerdictLLMOutput = {
@@ -133,6 +135,7 @@ const validHonestVerdictLLMOutput = {
   contextPrompt: null,
   closingSummary: "The gap is real and the score stands. Three of the five required skills are absent — this is a 12–18 month gap to close.",
   verdictAha: "The honest assessment cards explain specifically why — start there before deciding whether to apply.",
+  terminologyDiffs: [],
 };
 
 const honestVerdictWithContextPrompt = {

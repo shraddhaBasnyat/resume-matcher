@@ -153,6 +153,10 @@ export const GraphState = Annotation.Root({
     reducer: (_prev, next) => next,
   }),
   // Verdict node outputs — closingSummary remapped to scenarioSummary.text in PublicMatchResponse.
+  terminologyDiffs: Annotation<{ location: string; swapLabel: string; before: string; after: string }[] | undefined>({
+    default: () => undefined,
+    reducer: (_prev, next) => next,
+  }),
   closingSummary: Annotation<string | undefined>({
     default: () => undefined,
     reducer: (_prev, next) => next,
