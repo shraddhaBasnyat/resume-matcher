@@ -174,6 +174,11 @@ export const GraphState = Annotation.Root({
     default: () => undefined,
     reducer: (_prev, next) => next,
   }),
+  // contextPrompt produced by analyzeSkepticalReconciliation; read by hitlGate to call interrupt()
+  contextPrompt: Annotation<string | null>({
+    default: () => null,
+    reducer: (_prev, next) => next,
+  }),
 });
 
 export type GraphStateType = typeof GraphState.State;

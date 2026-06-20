@@ -1,4 +1,3 @@
-import { interrupt, Command } from "@langchain/langgraph";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { buildHonestVerdictRunnable } from "../../../llm-wrappers/analyze-skeptical-reconciliation.wrapper.js";
 import { ARCHETYPE_CONFIG } from "../archetype-config.js";
@@ -50,17 +49,10 @@ export function makeAnalyzeSkepticalReconciliationNode(model: BaseChatModel) {
       archetype_context: archetypeContext,
     });
 
-    if (!state.hitlFired && llmOutput.contextPrompt != null) {
-      const humanContext = interrupt(llmOutput.contextPrompt);
-      return new Command({
-        update: { humanContext: humanContext as string, hitlFired: true, terminologyDiffs: llmOutput.terminologyDiffs },
-        goto: "analyzeSkepticalReconciliation",
-      });
-    }
-
-    const { contextPrompt: _cp, closingSummary, verdictAha, terminologyDiffs, ...fitAdviceFields } = llmOutput;
+    const { contextPrompt, closingSummary, verdictAha, terminologyDiffs, ...fitAdviceFields } = llmOutput;
 
     return {
+      contextPrompt: contextPrompt ?? null,
       fitAdvice: {
         scenarioId: "honest_verdict" as const,
         hitlFired: state.hitlFired,

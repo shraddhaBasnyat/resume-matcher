@@ -1,5 +1,5 @@
 import { Pool } from "pg";
-import { StateGraph, MemorySaver } from "@langchain/langgraph";
+import { StateGraph, MemorySaver, interrupt } from "@langchain/langgraph";
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { GraphState } from "./scoring-graph-state.js";
@@ -21,6 +21,7 @@ const NODES = {
   ANALYZE_STRONG_MATCH: "analyzeStrongMatch",
   ANALYZE_NARRATIVE_GAP: "analyzeNarrativeGap",
   ANALYZE_SKEPTICAL_RECONCILIATION: "analyzeSkepticalReconciliation",
+  HITL_GATE: "hitlGate",
 } as const;
 
 function makePgPool(): Pool {
@@ -68,6 +69,11 @@ export function buildScoringGraph(model: BaseChatModel) {
   const analyzeNarrativeGap = makeAnalyzeNarrativeGapNode(model);
   const analyzeSkepticalReconciliation = makeAnalyzeSkepticalReconciliationNode(model);
 
+  async function hitlGate(state: typeof GraphState.State) {
+    const humanContext = interrupt(state.contextPrompt);
+    return { humanContext: humanContext as string, hitlFired: true };
+  }
+
   const workflow = new StateGraph(GraphState)
     .addNode(NODES.ANALYZE_JD, analyzeJD)
     .addNode(NODES.ANALYZE_RESUME, analyzeResume)
@@ -76,9 +82,8 @@ export function buildScoringGraph(model: BaseChatModel) {
     .addNode(NODES.ROUTE_VERDICTS, routeVerdicts)
     .addNode(NODES.ANALYZE_STRONG_MATCH, analyzeStrongMatch)
     .addNode(NODES.ANALYZE_NARRATIVE_GAP, analyzeNarrativeGap)
-    .addNode(NODES.ANALYZE_SKEPTICAL_RECONCILIATION, analyzeSkepticalReconciliation, {
-      ends: [NODES.ANALYZE_SKEPTICAL_RECONCILIATION, "__end__"],
-    })
+    .addNode(NODES.ANALYZE_SKEPTICAL_RECONCILIATION, analyzeSkepticalReconciliation)
+    .addNode(NODES.HITL_GATE, hitlGate)
     // Fan-out from START to both analyze nodes (run in parallel)
     .addEdge("__start__", NODES.ANALYZE_JD)
     .addEdge("__start__", NODES.ANALYZE_RESUME)
@@ -98,7 +103,14 @@ export function buildScoringGraph(model: BaseChatModel) {
     // Verdict nodes terminate at END independently
     .addEdge(NODES.ANALYZE_STRONG_MATCH, "__end__")
     .addEdge(NODES.ANALYZE_NARRATIVE_GAP, "__end__")
-    .addEdge(NODES.ANALYZE_SKEPTICAL_RECONCILIATION, "__end__");
+    // honest_verdict: route to hitlGate if contextPrompt is set (first pass only); else END
+    .addConditionalEdges(
+      NODES.ANALYZE_SKEPTICAL_RECONCILIATION,
+      (state) => state.contextPrompt != null && !state.hitlFired ? NODES.HITL_GATE : "__end__",
+      { [NODES.HITL_GATE]: NODES.HITL_GATE, __end__: "__end__" },
+    )
+    // hitlGate interrupts; on resume it routes back to the verdict node for a second LLM call
+    .addEdge(NODES.HITL_GATE, NODES.ANALYZE_SKEPTICAL_RECONCILIATION);
 
   const checkpointer = makeCheckpointer();
   return workflow.compile({ checkpointer });
