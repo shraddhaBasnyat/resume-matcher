@@ -41,7 +41,7 @@ full fit picture before output.
 
 | Node | Reads | Writes | Notes |
 |------|-------|--------|-------|
-| `analyzeFit` | `resumeText`, `jobText` | `fitScore`, `headline`, `battleCardBullets`, `fitScenarioSummary`, `sourceRole`, `targetRole`, `fitAnalysis`, `weakMatch`, `fitAha` | `weakMatch = fitScore < 50`, derived in node. `fitAnalysis.weakMatchReason` normalised: `"NONE"` → `null`. No mechanical advice — keyword gaps and terminology belong to `atsAnalysis`. `fitScenarioSummary`: human fit picture in isolation — factual, no ATS context, no scenario tone. `fitAha`: one sentence, the sharpest human fit observation — emitted in `node_done` payload. |
+| `analyzeFit` | `resumeText`, `jobText` | `fitScore`, `headline`, `battleCardBullets`, `fitScenarioSummary`, `sourceRole`, `targetRole`, `fitAnalysis`, `weakMatch`, `fitAha` | `weakMatch = fitScore < 60`, derived in node. `fitAnalysis.weakMatchReason` normalised: `"NONE"` → `null`. No mechanical advice — keyword gaps and terminology belong to `atsAnalysis`. `fitScenarioSummary`: human fit picture in isolation — factual, no ATS context, no scenario tone. `fitAha`: one sentence, the sharpest human fit observation — emitted in `node_done` payload. |
 | `atsAnalysis` | `resumeText`, `jobText` | `atsProfile`, `atsScenarioSummary`, `atsAha` | Three-layer output: `machineParsing` (formatting), `knockoutQuestions` (hard filters), `recruiterSearch` (keyword discoverability). `atsScore` composite weighted 60% recruiter search / 25% knockout / 15% formatting. `atsScenarioSummary`: machine picture in isolation — 2–3 sentences, plain-language synthesis of what the three layers found collectively, no fit context. `atsAha`: one sentence, the most important ATS observation — emitted in `node_done` payload. Pure observation only — no card content, no fix language. |
 | `generateTerminologyFixes` | `resumeText`, `atsProfile.recruiterSearch.terminologyMismatches` | `terminologyDiffs` | Fans out from `atsAnalysis`. Finds the exact resume sentence for each terminology mismatch and rewrites only that sentence. Runs automatically — no user prompt needed. Tracked in `progress` but normalised to `atsAnalysis` in the stepper UI. No aha — its output is already surfaced in the ATS panel cards. |
 | `routeVerdicts` | `fitScore`, `atsScore` | `scenarioId` | Pure fn, no LLM. Emits `fitScore`, `atsScore`, `scenarioId` in `node_done` payload — the deterministic "therefore" beat in the provenance trail. No aha field — the routing logic IS the observation. |
@@ -52,9 +52,9 @@ full fit picture before output.
 ### Scenario routing (deriveScenario — pure fn)
 
 ```typescript
-if (fitScore >= 75 && (atsScore === null || atsScore >= 75)) → "confirmed_fit"
-if (fitScore >= 75 && atsScore < 75)                         → "invisible_expert"
-if (fitScore >= 50)                                          → "narrative_gap"
+if (fitScore >= 80 && (atsScore === null || atsScore >= 75)) → "confirmed_fit"
+if (fitScore >= 80 && atsScore < 75)                         → "invisible_expert"
+if (fitScore >= 60)                                          → "narrative_gap"
 else                                                         → "honest_verdict"
 ```
 
@@ -369,7 +369,7 @@ Internal fields never emitted: `fitAnalysis`, `fitScenarioSummary`, `atsScenario
 
 ## HITL flow
 
-1. `analyzeSkepticalReconciliation` fires for `honest_verdict` (fitScore < 50)
+1. `analyzeSkepticalReconciliation` fires for `honest_verdict` (fitScore < 60)
 2. If first pass and LLM returns a `contextPrompt` question: calls `interrupt(contextPrompt)`,
    sets `hitlFired = true`, loops back to itself
 3. Backend emits `interrupted` SSE event with `fitScore`, `threadId`, `contextPrompt`
@@ -591,7 +591,7 @@ runtime behaviour. This discrepancy is intentional and documented here.
 - `safeParse + logValidationFailure` on every chain output
 - `weakMatch` derived deterministically — not an LLM output field
 - `fitAnalysis.weakMatchReason` normalised deterministically — not an LLM output field
-- HITL interrupt for `honest_verdict` (fitScore < 50) on first pass
+- HITL interrupt for `honest_verdict` (fitScore < 60) on first pass
 - `hitlFired` guard prevents second interrupt on resume pass
 - `AbortController` for user-initiated cancellation
 - `activeRuns` Map (`src/active-runs.ts`) — maps `threadId` to abort fn + `runStartTime`

@@ -297,7 +297,7 @@ describe("buildScoringGraph — full run with mocked chains", () => {
     expect(Array.isArray(advice.keywordsToAdd)).toBe(true);
   });
 
-  it("honest_verdict — fitScore < 50 with contextPrompt triggers interrupt", async () => {
+  it("honest_verdict — fitScore < 60 with contextPrompt triggers interrupt", async () => {
     const lowScoreInterruptModel = new SchemaAwareFakeChatModel(new Map<unknown, unknown>([
       [AnalyzeJDLLMSchema, validAnalyzeJDOutput],
       [AnalyzeResumeLLMSchema, validAnalyzeResumeOutput],
