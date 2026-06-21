@@ -38,6 +38,15 @@ export const NarrativeGapLLMSchema = z.object({
     "One sentence pointing to the single most important result card. " +
       "What should this candidate look at first? Specific to this candidate's situation.",
   ),
+  terminologyDiffs: z.array(z.object({
+    location: z.string().min(1).describe("Role and bullet identifier, e.g. 'Senior Engineer @ Acme — bullet 2'"),
+    swapLabel: z.string().min(1).describe("resumeUses → jdExpects, e.g. 'microservices → distributed systems'"),
+    before: z.string().min(1).describe("Exact original sentence from the resume"),
+    after: z.string().min(1).describe("Rewritten sentence with the terminology swap applied"),
+  })).describe(
+    "For each terminology mismatch assessed as legitimate: the exact sentence from the resume and its rewrite. " +
+      "Drop mismatches silently where the analogy does not hold. Empty array when none are legitimate.",
+  ),
 });
 
 export type NarrativeGapLLMOutput = z.infer<typeof NarrativeGapLLMSchema>;

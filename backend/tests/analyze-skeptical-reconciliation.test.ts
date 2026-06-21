@@ -29,6 +29,7 @@ const validLLMOutput = {
   contextPrompt: null,
   closingSummary: "The gap is real and the score stands — this is a 2–3 year development path, not a framing problem.",
   verdictAha: "The honest assessment cards explain specifically why — start there before deciding whether to apply.",
+  terminologyDiffs: [],
 };
 
 const validLLMOutputWithContextPrompt = {
@@ -75,12 +76,15 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     atsScore: null,
     atsScenarioSummary: "Resume is parseable. No knockout risks. Low keyword match on backend infrastructure terms.",
     atsAha: "Missing 'distributed systems' and 'infrastructure ownership' — terms the recruiter filters for.",
+    jdArchetype: { ideal: "specialist_depth" as const, couldWork: [] },
+    candidateArchetype: "specialist_depth" as const,
+    scopeAmbiguity: [],
+    terminologyMismatches: [],
     threadId: undefined,
     intent: undefined,
     intentContext: undefined,
     hitlFired: false,
     userTier: "base",
-    atsProfile: undefined,
     scenarioId: "honest_verdict",
     fitAdvice: undefined,
     closingSummary: undefined,
@@ -115,7 +119,7 @@ describe("analyzeSkepticalReconciliation — contextPrompt null path", () => {
     expect(Array.isArray(advice.honestAssessment)).toBe(true);
     expect(Array.isArray(advice.closingSteps)).toBe(true);
     expect(advice.acknowledgement).toBeNull();
-    // contextPrompt must not be written to fitAdvice
+    // contextPrompt is a top-level state field, not inside fitAdvice
     expect(advice.contextPrompt).toBeUndefined();
     // closingSummary and verdictAha are top-level state fields, not inside fitAdvice
     expect(advice.closingSummary).toBeUndefined();
@@ -147,39 +151,21 @@ describe("analyzeSkepticalReconciliation — hitlFired path", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test case — contextPrompt non-null: interrupt fires, Command returned with self-loop goto
+// Test case — contextPrompt non-null: node writes contextPrompt to state; hitlGate handles interrupt
 // ---------------------------------------------------------------------------
 
-describe("analyzeSkepticalReconciliation — interrupt path", () => {
-  it("interrupt fires when chain returns non-null contextPrompt, Command goto is analyzeSkepticalReconciliation", async () => {
+describe("analyzeSkepticalReconciliation — contextPrompt non-null path", () => {
+  it("writes contextPrompt and all output to state; does not call interrupt()", async () => {
     const node = makeAnalyzeSkepticalReconciliationNode(
       buildMockModel(validLLMOutputWithContextPrompt),
     );
     const result = await node(buildBaseState());
 
-    expect(langgraph.interrupt).toHaveBeenCalledWith(
-      validLLMOutputWithContextPrompt.contextPrompt,
-    );
-    expect(result).toMatchObject({
-      update: { humanContext: "user-provided context", hitlFired: true },
-      goto: "analyzeSkepticalReconciliation",
-    });
-    // fitAdvice must not be written when interrupt fires
-    expect((result as Record<string, unknown>).fitAdvice).toBeUndefined();
-    // closingSummary and verdictAha must NOT be in the Command update — node interrupts before writing them
-    const update = (result as Record<string, unknown>).update as Record<string, unknown>;
-    expect(update.closingSummary).toBeUndefined();
-    expect(update.verdictAha).toBeUndefined();
-  });
-
-  it("no interrupt when hitlFired is already true, even if chain returns contextPrompt", async () => {
-    const node = makeAnalyzeSkepticalReconciliationNode(
-      buildMockModel(validLLMOutputWithContextPrompt),
-    );
-    const result = await node(buildBaseState({ hitlFired: true }));
-    const advice = result.fitAdvice as Record<string, unknown>;
-
     expect(langgraph.interrupt).not.toHaveBeenCalled();
+    expect((result as Record<string, unknown>).contextPrompt).toBe(validLLMOutputWithContextPrompt.contextPrompt);
+    expect((result as Record<string, unknown>).closingSummary).toBe(validLLMOutputWithContextPrompt.closingSummary);
+    expect((result as Record<string, unknown>).verdictAha).toBe(validLLMOutputWithContextPrompt.verdictAha);
+    const advice = (result as Record<string, unknown>).fitAdvice as Record<string, unknown>;
     expect(advice.scenarioId).toBe("honest_verdict");
   });
 });
@@ -244,10 +230,11 @@ describe("analyzeSkepticalReconciliation — guards", () => {
     ).rejects.toThrow("fitScenarioSummary is missing");
   });
 
-  it("throws when atsScenarioSummary is missing", async () => {
+  it("throws when jdArchetype is missing", async () => {
     const node = makeAnalyzeSkepticalReconciliationNode(buildMockModel());
     await expect(
-      node(buildBaseState({ atsScenarioSummary: undefined })),
-    ).rejects.toThrow("atsScenarioSummary is missing");
+      node(buildBaseState({ jdArchetype: undefined })),
+    ).rejects.toThrow("jdArchetype is missing");
   });
+
 });

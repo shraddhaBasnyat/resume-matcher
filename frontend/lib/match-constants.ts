@@ -23,14 +23,8 @@ export interface NodeProgress {
 
 export type { MatchResponse };
 
-export const STEPS: { key: string; label: string }[] = [
-  { key: "atsAnalysis",  label: "ATS check" },
-  { key: "analyzeFit",   label: "Analysing fit" },
-  { key: "analyzeMatch", label: "Building your report" },
-];
-
 export const INITIAL_PROGRESS: Record<string, NodeProgress> = {
-  atsAnalysis:  { status: "waiting" },
-  analyzeFit:   { status: "waiting" },
-  analyzeMatch: { status: "waiting" },
+  atsGapAnalysis: { status: "waiting" },
+  analyzeFit:     { status: "waiting" },
+  analyzeMatch:   { status: "waiting" },
 };

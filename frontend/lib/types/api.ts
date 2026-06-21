@@ -91,9 +91,16 @@ export interface MatchResponse {
   fitAdvice: FitAdviceEntry[];
   atsProfile: {
     atsScore: number | null;
-    machineParsing: string[];
-    machineRanking: string[];
+    termGaps: { term: string; status: "missing" | "present_no_context" | "present_demonstrated" }[];
+    terminologyMismatches: { resumeUses: string; jdExpects: string }[];
+    formattingFlags: string[];
   };
+  terminologyDiffs: {
+    location: string;
+    swapLabel: string;
+    before: string;
+    after: string;
+  }[];
   scenarioSummary: { text: string };
   threadId: string;
   _meta: { durationMs: number };

@@ -1,6 +1,7 @@
-import { interrupt, Command } from "@langchain/langgraph";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { buildHonestVerdictRunnable } from "../../../llm-wrappers/analyze-skeptical-reconciliation.wrapper.js";
+import { ARCHETYPE_CONFIG } from "../archetype-config.js";
+import { formatTerminologyMismatches } from "./format-helpers.js";
 import type { GraphStateType } from "../scoring-graph-state.js";
 
 export function makeAnalyzeSkepticalReconciliationNode(model: BaseChatModel) {
@@ -19,9 +20,18 @@ export function makeAnalyzeSkepticalReconciliationNode(model: BaseChatModel) {
     if (!state.fitScenarioSummary) {
       throw new Error("analyzeSkepticalReconciliation: fitScenarioSummary is missing from graph state");
     }
-    if (!state.atsScenarioSummary) {
-      throw new Error("analyzeSkepticalReconciliation: atsScenarioSummary is missing from graph state");
+    if (!state.jdArchetype) {
+      throw new Error("analyzeSkepticalReconciliation: jdArchetype is missing from graph state");
     }
+
+    const archetypeConfig = ARCHETYPE_CONFIG[state.jdArchetype.ideal];
+    const archetypeContext = state.userTier === "paid"
+      ? `Archetype scan pattern: ${archetypeConfig.scanPattern}\nInterview probe pattern: ${archetypeConfig.interviewProbePattern}`
+      : "";
+
+    const scopeAmbiguity = state.scopeAmbiguity
+      ? JSON.stringify(state.scopeAmbiguity, null, 2)
+      : "(none)";
 
     const humanContextBlock = state.humanContext
       ? `Additional Context from Candidate:\n${state.humanContext}\n\n`
@@ -31,22 +41,18 @@ export function makeAnalyzeSkepticalReconciliationNode(model: BaseChatModel) {
       fit_analysis: JSON.stringify(state.fitAnalysis, null, 2),
       weak_match_reason: state.weakMatchReason ?? "Not provided",
       fit_scenario_summary: state.fitScenarioSummary,
-      ats_scenario_summary: state.atsScenarioSummary,
+      ats_scenario_summary: state.atsScenarioSummary ?? "",
       human_context: humanContextBlock,
+      scope_ambiguity: scopeAmbiguity,
+      terminology_mismatches: formatTerminologyMismatches(state.terminologyMismatches),
+      resume_text: state.resumeText,
+      archetype_context: archetypeContext,
     });
 
-    if (!state.hitlFired && llmOutput.contextPrompt != null) {
-      const humanContext = interrupt(llmOutput.contextPrompt);
-      // closingSummary and verdictAha are not written on first pass — node interrupts before this point
-      return new Command({
-        update: { humanContext: humanContext as string, hitlFired: true },
-        goto: "analyzeSkepticalReconciliation",
-      });
-    }
-
-    const { contextPrompt: _cp, closingSummary, verdictAha, ...fitAdviceFields } = llmOutput;
+    const { contextPrompt, closingSummary, verdictAha, terminologyDiffs, ...fitAdviceFields } = llmOutput;
 
     return {
+      contextPrompt: contextPrompt ?? null,
       fitAdvice: {
         scenarioId: "honest_verdict" as const,
         hitlFired: state.hitlFired,
@@ -54,6 +60,7 @@ export function makeAnalyzeSkepticalReconciliationNode(model: BaseChatModel) {
       },
       closingSummary,
       verdictAha,
+      terminologyDiffs,
     };
   };
 }

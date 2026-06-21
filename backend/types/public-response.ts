@@ -29,9 +29,22 @@ export const PublicMatchResponseSchema = z.object({
   ])),
   atsProfile: z.object({
     atsScore: z.number().nullable(),
-    machineParsing: z.array(z.string()),
-    machineRanking: z.array(z.string()),
+    termGaps: z.array(z.object({
+      term: z.string(),
+      status: z.enum(["missing", "present_no_context", "present_demonstrated"]),
+    })),
+    terminologyMismatches: z.array(z.object({
+      resumeUses: z.string(),
+      jdExpects: z.string(),
+    })),
+    formattingFlags: z.array(z.string()),
   }),
+  terminologyDiffs: z.array(z.object({
+    location: z.string(),
+    swapLabel: z.string(),
+    before: z.string(),
+    after: z.string(),
+  })),
   scenarioSummary: z.object({ text: z.string() }),
   threadId: z.string(),
   _meta: z.object({ durationMs: z.number() }),

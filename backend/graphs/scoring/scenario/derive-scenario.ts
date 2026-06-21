@@ -1,5 +1,5 @@
-export const STRONG_FIT_THRESHOLD = 75;
-export const WEAK_FIT_THRESHOLD = 50;
+export const STRONG_FIT_THRESHOLD = 80;
+export const WEAK_FIT_THRESHOLD = 60;
 export const ATS_THRESHOLD = 75;
 
 export type ScenarioId = "confirmed_fit" | "invisible_expert" | "narrative_gap" | "honest_verdict";

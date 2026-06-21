@@ -124,10 +124,12 @@ function buildPublicResponse(
     },
     fitAdvice: mapFitAdvice(state.fitAdvice),
     atsProfile: {
-      atsScore: state.atsProfile?.atsScore ?? null,
-      machineParsing: state.atsProfile?.machineParsing ?? [],
-      machineRanking: state.atsProfile?.machineRanking ?? [],
+      atsScore: state.atsScore ?? null,
+      termGaps: state.termGaps ?? [],
+      terminologyMismatches: state.terminologyMismatches ?? [],
+      formattingFlags: state.formattingFlags ?? [],
     },
+    terminologyDiffs: state.terminologyDiffs ?? [],
     scenarioSummary: { text: state.closingSummary ?? "" },
     threadId,
     _meta: { durationMs },
@@ -152,9 +154,6 @@ async function emitResult(
     if (state.fitScore === undefined || !state.scenarioId) {
       emit("error", { error: "Incomplete graph result", message: "Graph completed but fitScore or scenarioId was not populated." });
       return;
-    }
-    if (!state.atsProfile) {
-      throw new Error("runner: atsProfile missing after graph completion — atsAnalysis node did not write to state");
     }
     if (!state.closingSummary) {
       emit("error", { error: "Incomplete graph result", message: "closingSummary missing — verdict node did not write to state" });

@@ -48,6 +48,15 @@ export const HonestVerdictLLMSchema = z.object({
       "On second pass: reflects whether context shifted the assessment. " +
       "Points the candidate to the most important thing to look at.",
   ),
+  terminologyDiffs: z.array(z.object({
+    location: z.string().min(1).describe("Role and bullet identifier, e.g. 'Senior Engineer @ Acme — bullet 2'"),
+    swapLabel: z.string().min(1).describe("resumeUses → jdExpects, e.g. 'microservices → distributed systems'"),
+    before: z.string().min(1).describe("Exact original sentence from the resume"),
+    after: z.string().min(1).describe("Rewritten sentence with the terminology swap applied"),
+  })).describe(
+    "For each terminology mismatch assessed as legitimate: the exact sentence from the resume and its rewrite. " +
+      "Drop mismatches silently where the analogy does not hold. Empty array when none are legitimate.",
+  ),
 });
 
 export type HonestVerdictLLMOutput = z.infer<typeof HonestVerdictLLMSchema>;

@@ -270,7 +270,6 @@ export function useMatchRunner(): UseMatchRunnerReturn {
     setAppState("running");
     setMatchError(null);
     setRunStartTime(Date.now());
-    setProgress(INITIAL_PROGRESS);
 
     try {
       const res = await backendFetch("/api/match/resume", {
@@ -303,7 +302,6 @@ export function useMatchRunner(): UseMatchRunnerReturn {
     setAppState("running");
     setMatchError(null);
     setRunStartTime(Date.now());
-    setProgress(INITIAL_PROGRESS);
 
     try {
       const res = await backendFetch("/api/match/accept", {

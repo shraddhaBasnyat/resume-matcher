@@ -19,7 +19,15 @@ export function buildAnalyzeFitRunnable(model: BaseChatModel) {
   const chain = prompt.pipe(model.withStructuredOutput(AnalyzeFitLLMSchema));
 
   return RunnableLambda.from(async (
-    input: { resume_text: string; job_text: string },
+    input: {
+      resume_text: string;
+      job_text: string;
+      candidate_archetype: string;
+      jd_archetype_ideal: string;
+      jd_archetype_could_work: string[];
+      real_ask: string;
+      demonstrated_vs_claimed: string;
+    },
     config?: RunnableConfig,
   ): Promise<AnalyzeFitLLMOutput> => {
     const result = await chain.invoke(input, config);

@@ -1,5 +1,5 @@
 import { ChatAnthropic } from "@langchain/anthropic";
-import { buildAnalyzeFitRunnable } from "../../llm-wrappers/analyze-fit.wrapper.js";
+import { buildScoringGraph } from "../../graphs/scoring/scoring-graph.js";
 
 export default class AnalyzeFitProvider {
   id(): string {
@@ -13,16 +13,32 @@ export default class AnalyzeFitProvider {
         temperature: 0.3,
       });
 
-      const result = await buildAnalyzeFitRunnable(model).invoke(
+      const graph = buildScoringGraph(model);
+
+      const state = await graph.invoke(
         {
-          resume_text: context.vars.resume_text,
-          job_text: context.vars.job_text,
+          resumeText: context.vars.resume_text,
+          jobText: context.vars.job_text,
         },
-        { metadata: { run_type: "eval" } },
+        {
+          configurable: { thread_id: crypto.randomUUID() },
+          interruptBefore: ["routeVerdicts"],
+          metadata: { run_type: "eval" },
+        },
       );
 
       return {
-        output: JSON.stringify(result),
+        output: JSON.stringify({
+          fitScore: state.fitScore,
+          battleCardBullets: state.battleCardBullets,
+          headline: state.headline,
+          fitScenarioSummary: state.fitScenarioSummary,
+          fitAha: state.fitAha,
+          termGaps: state.termGaps,
+          atsScore: state.atsScore,
+          candidateArchetype: state.candidateArchetype,
+          jdArchetype: state.jdArchetype,
+        }),
         prompt: `Resume Text:\n${context.vars.resume_text}\n\nJob Description Text:\n${context.vars.job_text}`,
       };
     } catch (err) {

@@ -89,10 +89,10 @@ Routing uses two signals only: `fitScore` and `atsScore`.
 
 | scenarioId | fitScore | atsScore | Verdict node |
 |---|---|---|---|
-| `confirmed_fit` | >= 75 | >= 75 or null | `analyzeStrongMatch` |
-| `invisible_expert` | >= 75 | < 75 | `analyzeStrongMatch` |
-| `narrative_gap` | 50–74 | any | `analyzeNarrativeGap` |
-| `honest_verdict` | < 50 | any | `analyzeSkepticalReconciliation` |
+| `confirmed_fit` | >= 80 | >= 75 or null | `analyzeStrongMatch` |
+| `invisible_expert` | >= 80 | < 75 | `analyzeStrongMatch` |
+| `narrative_gap` | 60–79 | any | `analyzeNarrativeGap` |
+| `honest_verdict` | < 60 | any | `analyzeSkepticalReconciliation` |
 
 ---
 
@@ -113,7 +113,7 @@ This is a prior, not a constraint. Battle card evidence and demonstrated experie
 ## Scenario profiles
 
 ### Scenario 1 — The Confirmed Fit
-**fitScore >= 75, atsScore >= 75**
+**fitScore >= 80, atsScore >= 75**
 
 **Who they are:** A candidate who genuinely matches the role and has a well-structured, keyword-rich resume. They want confirmation.
 
@@ -128,7 +128,7 @@ This is a prior, not a constraint. Battle card evidence and demonstrated experie
 ---
 
 ### Scenario 2 — The Invisible Expert
-**fitScore >= 75, atsScore < 75**
+**fitScore >= 80, atsScore < 75**
 
 **Who they are:** A highly qualified candidate whose resume is invisible to automated filters due to terminology choices or formatting. They keep not getting interviews despite knowing they are the right person for the role.
 
@@ -145,7 +145,7 @@ This is a prior, not a constraint. Battle card evidence and demonstrated experie
 ---
 
 ### Scenario 3 — The Narrative Gap
-**fitScore 50–74, atsScore any**
+**fitScore 60–79, atsScore any**
 
 **Who they are:** A professional whose career trajectory and transferable skills fit the role well, but whose resume reads as a literal history of past job titles rather than a narrative pointing toward a future role.
 
@@ -160,7 +160,7 @@ This is a prior, not a constraint. Battle card evidence and demonstrated experie
 ---
 
 ### Scenario 4 — The Honest Verdict
-**fitScore < 50, atsScore any**
+**fitScore < 60, atsScore any**
 
 **Who they are:** A candidate whose confidence may not be grounded in the evidence. The gap is real.
 
@@ -170,7 +170,7 @@ This is a prior, not a constraint. Battle card evidence and demonstrated experie
 
 **ATS panel role:** Secondary. The gap is in the fit score, not the ATS score. Surface the ATS panel normally but it does not soften the honest verdict.
 
-**HITL note:** HITL fires once maximum per run. If the rescore moves `fitScore` above 50, the user lands in Narrative Gap or Confirmed Fit instead. `hitlFired` prevents a second interrupt.
+**HITL note:** HITL fires once maximum per run. If the rescore moves `fitScore` above 60, the user lands in Narrative Gap or Confirmed Fit instead. `hitlFired` prevents a second interrupt.
 
 ---
 
@@ -265,7 +265,7 @@ Changes from prior version:
 
 ## HITL flow
 
-Unchanged. HITL fires inside `analyzeSkepticalReconciliation` only. Maximum one exchange per run. If `fitScore` moves above 50 after HITL, the user lands in a different scenario. `hitlFired` is a loop guard only — not a routing input.
+Unchanged. HITL fires inside `analyzeSkepticalReconciliation` only. Maximum one exchange per run. If `fitScore` moves above 60 after HITL, the user lands in a different scenario. `hitlFired` is a loop guard only — not a routing input.
 
 ---
 

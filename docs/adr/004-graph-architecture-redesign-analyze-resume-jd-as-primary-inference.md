@@ -4,7 +4,7 @@
 2026-06-02
 
 ## Status
-Accepted — implementation pending Promptfoo eval suite
+Implemented — Phase 1 (analyzeJD + analyzeResume upstream nodes) and Phase 2 (deterministic atsGapAnalysis, archetype-enriched verdict nodes) complete
 
 ## Context
 The current graph (`ARCHITECTURE.md`) runs `atsAnalysis` and `analyzeFit` in parallel against raw resume and JD text. Both nodes independently infer signal from the same documents — `atsAnalysis` infers knockout gates and recruiter search terms from the JD, `analyzeFit` infers career trajectory and vocabulary gaps from both texts. This means every node is doing its own JD and resume reading, producing redundant and often generic output because no node has a deep structured read of either document to work from.

@@ -21,6 +21,7 @@ const validLLMOutput = {
   missingSkills: [],
   closingSummary: "The experience is right — the framing is wrong. Your pipeline work maps directly once retold in ML infrastructure terms.",
   verdictAha: "Start with the reframing cards — once the framing is fixed, the score follows.",
+  terminologyDiffs: [],
 };
 
 const validFitAnalysis = {
@@ -50,12 +51,15 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     fitAnalysis: validFitAnalysis,
     weakMatch: false,
     weakMatchReason: null,
+    jdArchetype: { ideal: "specialist_depth" as const, couldWork: [] },
+    candidateArchetype: "specialist_depth" as const,
+    careerArcNote: undefined,
+    terminologyMismatches: [],
     threadId: undefined,
     intent: undefined,
     intentContext: undefined,
     hitlFired: false,
     userTier: "base",
-    atsProfile: undefined,
     scenarioId: "narrative_gap",
     fitAdvice: undefined,
     closingSummary: undefined,
@@ -133,11 +137,11 @@ describe("analyzeNarrativeGap — guards", () => {
     ).rejects.toThrow("fitScenarioSummary is missing");
   });
 
-  it("throws when atsScenarioSummary is missing", async () => {
+  it("throws when jdArchetype is missing", async () => {
     const node = makeAnalyzeNarrativeGapNode(buildMockModel());
     await expect(
-      node(buildBaseState({ atsScenarioSummary: undefined })),
-    ).rejects.toThrow("atsScenarioSummary is missing");
+      node(buildBaseState({ jdArchetype: undefined })),
+    ).rejects.toThrow("jdArchetype is missing");
   });
 
   it("throws ZodError and calls logValidationFailure when LLM returns invalid shape", async () => {

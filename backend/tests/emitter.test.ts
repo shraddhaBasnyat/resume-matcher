@@ -39,14 +39,14 @@ describe("NodeProgressEmitter — node_done aha field", () => {
     expect((done!.data as Record<string, unknown>).aha).toBe("Sharp fit observation here.");
   });
 
-  it("includes aha when atsAha is present in outputs (atsAnalysis)", () => {
+  it("includes aha when resumeAha is present in outputs (analyzeResume)", () => {
     const { emitter, emitted } = makeEmitter();
-    const runId = startNode(emitter, "atsAnalysis");
+    const runId = startNode(emitter, "analyzeResume");
 
-    emitter.handleChainEnd({ atsAha: "Key ATS finding here." }, runId);
+    emitter.handleChainEnd({ resumeAha: "Sharp resume-only observation here." }, runId);
 
     const done = emitted.find((e) => e.eventName === "node_done");
-    expect((done!.data as Record<string, unknown>).aha).toBe("Key ATS finding here.");
+    expect((done!.data as Record<string, unknown>).aha).toBe("Sharp resume-only observation here.");
   });
 
   it("includes aha when verdictAha is present in outputs (verdict node)", () => {

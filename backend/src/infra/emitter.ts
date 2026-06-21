@@ -3,7 +3,9 @@ import type { Serialized } from "@langchain/core/load/serializable";
 
 /** Node names that should trigger progress events in the SSE stream. */
 const GRAPH_NODES = new Set([
-  "atsAnalysis",
+  "analyzeJD",
+  "analyzeResume",
+  "atsGapAnalysis",
   "analyzeFit",
   "routeVerdicts",
   "analyzeStrongMatch",
@@ -49,7 +51,7 @@ export class NodeProgressEmitter extends BaseCallbackHandler {
 
     // Aha fields — at most one will be present depending on which node fired.
     // Use explicit spread so the key is omitted entirely when undefined (not emitted as aha: undefined).
-    const aha = _outputs.fitAha ?? _outputs.atsAha ?? _outputs.verdictAha;
+    const aha = _outputs.fitAha ?? _outputs.resumeAha ?? _outputs.atsAha ?? _outputs.verdictAha;
 
     // routeVerdicts beat — carries routing data instead of an aha string.
     const fitScore = _outputs.fitScore;

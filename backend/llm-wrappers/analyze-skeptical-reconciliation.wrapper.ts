@@ -25,6 +25,10 @@ export function buildHonestVerdictRunnable(model: BaseChatModel) {
       fit_scenario_summary: string;
       ats_scenario_summary: string;
       human_context: string;
+      scope_ambiguity: string;
+      terminology_mismatches: string; // formatted list from formatTerminologyMismatches()
+      resume_text: string;
+      archetype_context: string; // "" for base tier, scan/probe patterns for paid
     },
     config?: RunnableConfig,
   ): Promise<HonestVerdictLLMOutput> => {

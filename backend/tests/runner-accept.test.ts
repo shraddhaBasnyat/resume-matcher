@@ -37,8 +37,9 @@ const checkpointedState = {
   },
   atsProfile: {
     atsScore: 55,
-    machineParsing: ["// TODO: replace with programmatic resume parsing analysis"],
-    machineRanking: ["missing keyword: 'distributed systems'"],
+    termGaps: [{ term: "distributed systems", status: "missing" as const }],
+    terminologyMismatches: [],
+    formattingFlags: [],
   },
   closingSummary: "The gap is real and the score stands — this is a 2–3 year path to close.",
   threadId: "thread-123",
