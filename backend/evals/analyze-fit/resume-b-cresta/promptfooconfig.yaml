@@ -1,4 +1,8 @@
 # yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+# Baselines last calibrated: 2026-06-20
+# Architecture: ADR 004 Phase 1 + Phase 2 (analyzeJD + analyzeResume upstream nodes)
+# fitScore target: 40-62 (Resume B with JobInit — high variance, domain mismatch case)
+# Note: variance is a known issue — model judgment unstable on couldWork domain-mismatched candidates
 description: "F2 — Resume B (JobInit added) vs Cresta JD — narrative_gap territory"
 
 prompts:

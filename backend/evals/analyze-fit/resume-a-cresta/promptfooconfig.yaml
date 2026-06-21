@@ -1,4 +1,7 @@
 # yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+# Baselines last calibrated: 2026-06-20
+# Architecture: ADR 004 Phase 1 + Phase 2 (analyzeJD + analyzeResume upstream nodes)
+# fitScore target: < 55 (Resume A without JobInit — honest_verdict territory)
 description: "F1 — Resume A (no JobInit) vs Cresta JD — baseline eval"
 
 prompts:
