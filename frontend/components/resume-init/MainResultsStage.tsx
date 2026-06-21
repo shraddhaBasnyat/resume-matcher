@@ -63,7 +63,7 @@ export function MainResultsStage({ className, result, progress, appState }: Main
   const [activeTab, setActiveTab] = useState<TabId>("resume-init");
 
   const beatStatuses = {
-    beat1: deriveBeatStatus(progress["atsAnalysis"]?.aha !== undefined, progress["atsAnalysis"]?.status),
+    beat1: deriveBeatStatus(progress["atsGapAnalysis"]?.aha !== undefined, progress["atsGapAnalysis"]?.status),
     beat2: deriveBeatStatus(progress["analyzeFit"]?.aha !== undefined, progress["analyzeFit"]?.status),
     // routeVerdicts returns a Command — LangGraph doesn't expose Command.update through
     // _outputs, so fitScore/atsScore/scenarioId never arrive in its node_done payload.
@@ -103,10 +103,10 @@ export function MainResultsStage({ className, result, progress, appState }: Main
           {(appState === "running" || result !== null) && (
             <CoachesNotes
               isLoading={appState === "running"}
-              atsSignal={progress["atsAnalysis"]?.aha}
+              atsSignal={progress["atsGapAnalysis"]?.aha}
               fitSignal={progress["analyzeFit"]?.aha}
               fitScore={progress["analyzeFit"]?.fitScore}
-              atsScore={progress["atsAnalysis"]?.atsScore}
+              atsScore={progress["atsGapAnalysis"]?.atsScore}
               scenarioId={progress["routeVerdicts"]?.scenarioId}
               nextStep={progress["analyzeMatch"]?.aha}
               beatStatuses={beatStatuses}
