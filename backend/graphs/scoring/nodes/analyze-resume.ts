@@ -10,7 +10,6 @@ export function makeAnalyzeResumeNode(model: BaseChatModel) {
     return {
       candidateArchetype: result.candidateArchetype,
       demonstratedVsClaimed: result.demonstratedVsClaimed,
-      scopeAmbiguity: result.scopeAmbiguity,
       careerArcNote: result.careerArcNote,
       resumeAha: result.resumeAha,
     };

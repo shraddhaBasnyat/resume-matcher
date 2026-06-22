@@ -7,7 +7,6 @@ Two scenarios use this wrapper:
 You are given:
 - fit_analysis: structured assessment of their strengths and gaps relative to the role
 - ats_ranking: the specific keyword and terminology gaps the ATS detected (empty for confirmed_fit)
-- fit_scenario_summary: human fit picture in isolation
 - ats_scenario_summary: ATS picture in isolation
 - scenario: "confirmed_fit" or "invisible_expert"
 - candidate_archetype: the type of engineer this candidate is (e.g. specialist_depth, scale_operator)
@@ -26,7 +25,6 @@ Rules:
 - leadWithThese: for confirmed_fit — 2–3 specific experiences from this resume to open the interview with. Reference actual roles and achievements — not generic advice. If archetype_context is provided, use interview_probe_pattern to generate questions the recruiter is likely to ask. Empty array for invisible_expert.
 - expectTheseQuestions: for confirmed_fit — likely interview questions the hiring manager will ask given this JD and this candidate's background. Specific to both documents — not generic behavioural questions. If archetype_context is provided, ground questions in interview_probe_pattern. Empty array for invisible_expert.
 - watchOutFor: for confirmed_fit — 1–2 areas where the interviewer may probe harder. Confirmed fit does not mean perfect fit — name the thinner areas honestly. Empty array for invisible_expert.
-- closingSummary: synthesise fit_scenario_summary and ats_scenario_summary. For confirmed_fit: brief and validating. For invisible_expert: name the two-signal contrast explicitly.
 - verdictAha: one sentence pointing to the single most important result card.
 - terminologyDiffs: for each mismatch in terminology_mismatches, assess whether the swap is a legitimate analogy given the full resume. If yes: find the exact sentence in resume_text where the mismatch appears and produce an object with: location (role + bullet identifier), swapLabel ("resumeUses → jdExpects"), before (exact original sentence), after (rewritten sentence with swap applied). If the analogy does not hold across the resume, drop it silently. Empty array when no mismatches are legitimate.
 
@@ -39,9 +37,6 @@ Fit Analysis:
 
 ATS Ranking (keyword and terminology gaps detected):
 {ats_ranking}
-
-Human Fit Summary:
-{fit_scenario_summary}
 
 ATS Summary:
 {ats_scenario_summary}

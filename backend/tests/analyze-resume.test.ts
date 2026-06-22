@@ -26,13 +26,6 @@ const validLLMOutput = {
       evidencePresent: null,
     },
   ],
-  scopeAmbiguity: [
-    {
-      bullet: "Led platform reliability initiatives",
-      ambiguous: true,
-      reason: "Unclear whether this was team-level ownership or company-wide initiative",
-    },
-  ],
   careerArcNote: {
     transitions: [
       {
@@ -55,7 +48,6 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     recruiterFilter: undefined,
     candidateArchetype: undefined,
     demonstratedVsClaimed: undefined,
-    scopeAmbiguity: undefined,
     careerArcNote: undefined,
     resumeAha: undefined,
     atsScore: undefined,
@@ -103,7 +95,6 @@ describe("makeAnalyzeResumeNode — valid output", () => {
     expect(result.demonstratedVsClaimed).toHaveLength(2);
     expect(result.demonstratedVsClaimed[0].status).toBe("demonstrated");
     expect(result.demonstratedVsClaimed[1].status).toBe("claimed");
-    expect(Array.isArray(result.scopeAmbiguity)).toBe(true);
     expect(result.careerArcNote.transitions).toHaveLength(1);
     expect(result.resumeAha).toBe(validLLMOutput.resumeAha);
   });

@@ -18,9 +18,6 @@ export function makeAnalyzeStrongMatchNode(model: BaseChatModel) {
     if (!state.fitAnalysis) {
       throw new Error("analyzeStrongMatch: fitAnalysis is missing from graph state");
     }
-    if (!state.fitScenarioSummary) {
-      throw new Error("analyzeStrongMatch: fitScenarioSummary is missing from graph state");
-    }
     if (!state.jdArchetype) {
       throw new Error("analyzeStrongMatch: jdArchetype is missing from graph state");
     }
@@ -44,7 +41,6 @@ export function makeAnalyzeStrongMatchNode(model: BaseChatModel) {
       scenario: state.scenarioId,
       fit_analysis: JSON.stringify(state.fitAnalysis, null, 2),
       ats_ranking: isInvisibleExpert ? JSON.stringify(atsRankingStrings, null, 2) : "[]",
-      fit_scenario_summary: state.fitScenarioSummary,
       ats_scenario_summary: state.atsScenarioSummary ?? "",
       candidate_archetype: state.candidateArchetype ?? "",
       jd_archetype_ideal: state.jdArchetype.ideal,
@@ -55,7 +51,7 @@ export function makeAnalyzeStrongMatchNode(model: BaseChatModel) {
       archetype_context: archetypeContext,
     });
 
-    const { closingSummary, verdictAha, terminologyDiffs, ...fitAdviceFields } = llmOutput;
+    const { verdictAha, terminologyDiffs, ...fitAdviceFields } = llmOutput;
 
     return {
       fitAdvice: isInvisibleExpert
@@ -72,7 +68,6 @@ export function makeAnalyzeStrongMatchNode(model: BaseChatModel) {
             expectTheseQuestions: fitAdviceFields.expectTheseQuestions,
             watchOutFor: fitAdviceFields.watchOutFor,
           },
-      closingSummary,
       verdictAha,
       terminologyDiffs,
     };

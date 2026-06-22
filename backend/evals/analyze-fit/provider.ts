@@ -32,7 +32,6 @@ export default class AnalyzeFitProvider {
           fitScore: state.fitScore,
           battleCardBullets: state.battleCardBullets,
           headline: state.headline,
-          fitScenarioSummary: state.fitScenarioSummary,
           fitAha: state.fitAha,
           termGaps: state.termGaps,
           atsScore: state.atsScore,

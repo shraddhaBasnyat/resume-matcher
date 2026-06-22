@@ -23,7 +23,6 @@ const validInvisibleExpertLLMOutput = {
   leadWithThese: [],
   expectTheseQuestions: [],
   watchOutFor: [],
-  closingSummary: "Your background is exactly what this role needs — the gap is in how your resume reads to machines, not to humans.",
   verdictAha: "Your reframing cards show exactly how to retell the experience as the machine expects to read it.",
   terminologyDiffs: [],
 };
@@ -45,7 +44,6 @@ const validConfirmedFitLLMOutput = {
   watchOutFor: [
     "Team leadership — the JD mentions mentoring. Be ready with a specific example.",
   ],
-  closingSummary: "Strong match across the board — prepare to show depth on the ML infrastructure work and be ready on the mentoring question.",
   verdictAha: "Your FastAPI and ML infra work maps directly — lead with the scale numbers.",
   terminologyDiffs: [],
 };
@@ -67,7 +65,6 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
       { requirement: "Python backend experience", evidence: "5 years of Python", verdict: "strong_match" as const },
       { requirement: "API design", evidence: "FastAPI service design", verdict: "strong_match" as const },
     ],
-    fitScenarioSummary: "Strong backend background maps to this role.",
     fitAha: "Five years of Python at scale maps directly to what this role requires.",
     atsScore: null,
     atsScenarioSummary: "Resume is parseable with clean formatting. No knockout risks identified.",
@@ -82,7 +79,6 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     realAsk: "Build production backend systems with Python and FastAPI.",
     terminologyMismatches: [],
     careerArcNote: undefined,
-    scopeAmbiguity: [],
     threadId: undefined,
     intent: undefined,
     intentContext: undefined,
@@ -163,10 +159,9 @@ describe("analyzeStrongMatch — confirmed_fit", () => {
     expect(advice.terminologySwaps).toBeUndefined();
     expect(advice.keywordsToAdd).toBeUndefined();
 
-    // closingSummary and verdictAha are top-level state fields, not inside fitAdvice
+    // verdictAha is a top-level state field, not inside fitAdvice
     expect(advice.closingSummary).toBeUndefined();
     expect(advice.verdictAha).toBeUndefined();
-    expect((result as Record<string, unknown>).closingSummary).toBeDefined();
     expect((result as Record<string, unknown>).verdictAha).toBeDefined();
   });
 });
@@ -176,7 +171,7 @@ describe("analyzeStrongMatch — confirmed_fit", () => {
 // ---------------------------------------------------------------------------
 
 describe("analyzeStrongMatch — invisible_expert", () => {
-  it("returns LLM output fields in fitAdvice, closingSummary and verdictAha at top level", async () => {
+  it("returns LLM output fields in fitAdvice and verdictAha at top level", async () => {
     const model = buildMockModel();
     const node = makeAnalyzeStrongMatchNode(model);
 
@@ -192,11 +187,10 @@ describe("analyzeStrongMatch — invisible_expert", () => {
     expect(Array.isArray(advice.atsRealityCheck)).toBe(true);
     expect(Array.isArray(advice.terminologySwaps)).toBe(true);
     expect(Array.isArray(advice.keywordsToAdd)).toBe(true);
-    // closingSummary and verdictAha must NOT be inside fitAdvice
+    // verdictAha must NOT be inside fitAdvice
     expect(advice.closingSummary).toBeUndefined();
     expect(advice.verdictAha).toBeUndefined();
-    // They must be top-level state fields
-    expect((result as Record<string, unknown>).closingSummary).toBeDefined();
+    // verdictAha must be a top-level state field
     expect((result as Record<string, unknown>).verdictAha).toBeDefined();
   });
 
@@ -260,15 +254,6 @@ describe("analyzeStrongMatch — guards", () => {
         }),
       ),
     ).rejects.toThrow("fitAnalysis is missing");
-  });
-
-  it("throws when fitScenarioSummary is missing", async () => {
-    const model = buildMockModel();
-    const node = makeAnalyzeStrongMatchNode(model);
-
-    await expect(
-      node(buildBaseState({ scenarioId: "confirmed_fit", fitScenarioSummary: undefined })),
-    ).rejects.toThrow("fitScenarioSummary is missing");
   });
 
   it("throws when jdArchetype is missing", async () => {

@@ -27,6 +27,7 @@ export function buildAnalyzeFitRunnable(model: BaseChatModel) {
       jd_archetype_could_work: string[];
       real_ask: string;
       demonstrated_vs_claimed: string;
+      rubric_kb: string;
     },
     config?: RunnableConfig,
   ): Promise<AnalyzeFitLLMOutput> => {

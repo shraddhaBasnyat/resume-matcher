@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
 # Baselines last calibrated: 2026-06-20
 # Architecture: ADR 004 Phase 1 + Phase 2 (analyzeJD + analyzeResume upstream nodes)
-# fitScore target: < 55 (Resume A without JobInit — honest_verdict territory)
+# fitScore target: < 60 (Resume A without JobInit — honest_verdict territory)
 description: "F1 — Resume A (no JobInit) vs Cresta JD — baseline eval"
 
 prompts:
@@ -16,7 +16,7 @@ defaultTest:
 
 derivedMetrics:
   - name: OverallF1Quality
-    value: "(HardGapAcknowledged + TranslationLegitimacy + SummaryQuality + AhaQuality + SpecificityTest) / 5"
+    value: "(HardGapAcknowledged + TranslationLegitimacy + AhaQuality + SpecificityTest) / 4"
 
 tests:
   - description: "F1 — Resume A vs Cresta — honest verdict territory"
@@ -29,7 +29,7 @@ tests:
       - type: is-json
 
       - type: javascript
-        value: '((p) => p.fitScore !== undefined && p.headline !== undefined && p.fitScenarioSummary !== undefined && p.fitAha !== undefined && p.battleCardBullets !== undefined)(typeof output === "string" ? JSON.parse(output) : output)'
+        value: '((p) => p.fitScore !== undefined && p.headline !== undefined && p.fitAha !== undefined && p.battleCardBullets !== undefined)(typeof output === "string" ? JSON.parse(output) : output)'
 
       - type: javascript
         value: '(typeof output === "string" ? JSON.parse(output) : output).battleCardBullets.every(b => ["hard_gap","framing_gap","terminology_gap","strong_match","evidence_gap"].includes(b.verdict))'
@@ -103,47 +103,6 @@ tests:
           analogies hold and which don't.
 
       # --- Multi-dimensional quality ---
-      - type: g-eval
-        metric: SummaryQuality
-        threshold: 0.7
-        value:
-          - "Context: The candidate's entire career is at
-             Wayfair in storefront engineering roles — Staff
-             Engineer and Tech Lead in Storefront Core Funnel,
-             Search and Browse, Dynamic Infrastructure, and
-             Images. The resume contains zero AI projects,
-             zero LLM work, and zero agent development. The
-             only AI-adjacent mention is a single line about
-             collaborating with ML teams on search functionality."
-          - "fitScenarioSummary references the candidate's
-             specific Wayfair roles — Staff Engineer or Tech
-             Lead in Storefront Core Funnel, Search and Browse,
-             Dynamic Infrastructure, or Images — as evidence
-             that the career arc points toward e-commerce
-             infrastructure, not AI systems. A summary that
-             says 'backend engineer' without referencing the
-             specific Wayfair storefront context fails."
-          - "fitScenarioSummary explicitly states there is
-             no signal of a pivot toward AI systems in this
-             resume — no AI projects, no LLM work, no agent
-             development, no ML collaboration beyond a single
-             line about collaborating with ML teams on search.
-             The absence must be stated, not implied."
-          - "fitScenarioSummary does not suggest the gap can
-             be closed by reframing, rewording, or translating
-             vocabulary. The Wayfair work is e-commerce
-             storefront engineering — that is what it is.
-             A summary that says 'reframe your experience'
-             or 'translate your infrastructure skills' fails
-             this criterion."
-          - "fitScenarioSummary does not contain hedging
-             language that softens the domain gap — phrases
-             like 'with some reframing', 'your patterns are
-             relevant', 'transferable architecture experience',
-             or 'with additional AI exposure' are failures.
-             The domain gap is stated directly and without
-             qualification."
-
       - type: g-eval
         metric: AhaQuality
         threshold: 0.7

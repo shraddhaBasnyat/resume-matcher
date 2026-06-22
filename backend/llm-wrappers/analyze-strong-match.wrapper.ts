@@ -23,7 +23,6 @@ export function buildInvisibleExpertRunnable(model: BaseChatModel) {
       scenario: string;
       fit_analysis: string;
       ats_ranking: string;
-      fit_scenario_summary: string;
       ats_scenario_summary: string;
       candidate_archetype: string;
       jd_archetype_ideal: string;

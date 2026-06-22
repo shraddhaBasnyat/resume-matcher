@@ -21,7 +21,6 @@ export function buildNarrativeGapRunnable(model: BaseChatModel) {
   return RunnableLambda.from(async (
     input: {
       fit_analysis: string;
-      fit_scenario_summary: string;
       ats_scenario_summary: string;
       candidate_archetype: string;
       career_arc_note: string;

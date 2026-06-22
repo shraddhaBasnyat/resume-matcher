@@ -49,7 +49,6 @@ const validAnalyzeResumeOutput = {
       evidencePresent: null,
     },
   ],
-  scopeAmbiguity: [],
   careerArcNote: {
     transitions: [
       {
@@ -70,9 +69,6 @@ const validAnalyzeFitLLMOutput = {
     { requirement: "Architecture leadership", evidence: "Led frontend architecture at a 50-person startup", verdict: "strong_match" as const },
     { requirement: "Component system design", evidence: "Built component libraries consumed by 4 product teams", verdict: "strong_match" as const },
   ],
-  fitScenarioSummary:
-    "This candidate has a direct frontend background with the TypeScript and React depth the role requires. " +
-    "Their trajectory from IC to lead maps to the seniority level advertised.",
   fitAha: "Five years of TypeScript across production SPAs maps directly to what this role requires.",
   sourceRole: "frontend_swe",
   targetRole: "frontend_swe",
@@ -87,7 +83,6 @@ const validAnalyzeFitLLMOutput = {
 const weakAnalyzeFitLLMOutput = {
   ...validAnalyzeFitLLMOutput,
   fitScore: 38,
-  fitScenarioSummary: "This candidate's background does not map to the role requirements.",
   fitAha: "The core required skills are absent — this is a genuine gap, not a framing problem.",
   fitAnalysis: {
     ...validAnalyzeFitLLMOutput.fitAnalysis,
@@ -108,18 +103,14 @@ const validInvisibleExpertLLMOutput = {
   leadWithThese: [],
   expectTheseQuestions: [],
   watchOutFor: [],
-  closingSummary: "Your background is exactly what this role needs — the gap is in how your resume reads to machines, not to humans.",
   verdictAha: "Your reframing cards show exactly how to retell the experience as the machine expects to read it.",
   terminologyDiffs: [],
 };
 
 const validNarrativeGapLLMOutput = {
-  transferableStrengths: ["TypeScript", "React", "component systems"],
   reframingSuggestions: [{ before: "summary section", after: "production SPA work lead", reason: "Leads with the strongest signal for this role." }],
   missingSkills: [],
-  closingSummary: "The experience is right — the framing is wrong. Your SPA work maps directly once retold in the role's terms.",
   verdictAha: "Start with the reframing cards — once the framing is fixed, the score follows.",
-  terminologyDiffs: [],
 };
 
 const validHonestVerdictLLMOutput = {
@@ -133,7 +124,6 @@ const validHonestVerdictLLMOutput = {
   ],
   acknowledgement: null,
   contextPrompt: null,
-  closingSummary: "The gap is real and the score stands. Three of the five required skills are absent — this is a 12–18 month gap to close.",
   verdictAha: "The honest assessment cards explain specifically why — start there before deciding whether to apply.",
   terminologyDiffs: [],
 };
@@ -218,9 +208,7 @@ describe("buildScoringGraph — full run with mocked chains", () => {
     expect(typeof state.fitScore).toBe("number");
     expect(state.headline).toBeDefined();
     expect(Array.isArray(state.battleCardBullets)).toBe(true);
-    expect(state.fitScenarioSummary).toBeDefined();
     expect(state.fitAha).toBeDefined();
-    expect(state.closingSummary).toBeDefined();
     expect(state.verdictAha).toBeDefined();
     expect(state.fitAnalysis).toBeDefined();
 
@@ -261,7 +249,6 @@ describe("buildScoringGraph — full run with mocked chains", () => {
     expect(Array.isArray(advice.leadWithThese)).toBe(true);
     expect(Array.isArray(advice.expectTheseQuestions)).toBe(true);
     expect(Array.isArray(advice.watchOutFor)).toBe(true);
-    expect(state.closingSummary).toBeDefined();
     expect(state.verdictAha).toBeDefined();
     // ATS advice fields must NOT appear in fitAdvice for confirmed_fit
     expect(advice.standoutStrengths).toBeUndefined();
@@ -388,6 +375,7 @@ describe("AnalyzeFitRunnable — validation failure", () => {
         jd_archetype_could_work: [],
         real_ask: "Build AI agents",
         demonstrated_vs_claimed: '- "Built agents" [claimed] no evidence',
+        rubric_kb: "",
       }),
     ).rejects.toThrow(expect.objectContaining({ name: "ZodError" }));
 

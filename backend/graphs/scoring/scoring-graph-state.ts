@@ -44,10 +44,6 @@ export const GraphState = Annotation.Root({
     default: () => undefined,
     reducer: (_prev, next) => next,
   }),
-  scopeAmbiguity: Annotation<AnalyzeResumeLLMOutput["scopeAmbiguity"] | undefined>({
-    default: () => undefined,
-    reducer: (_prev, next) => next,
-  }),
   careerArcNote: Annotation<AnalyzeResumeLLMOutput["careerArcNote"] | undefined>({
     default: () => undefined,
     reducer: (_prev, next) => next,
@@ -85,10 +81,6 @@ export const GraphState = Annotation.Root({
     reducer: (_prev, next) => next,
   }),
   battleCardBullets: Annotation<BattleCardBullet[] | undefined>({
-    default: () => undefined,
-    reducer: (_prev, next) => next,
-  }),
-  fitScenarioSummary: Annotation<string | undefined>({
     default: () => undefined,
     reducer: (_prev, next) => next,
   }),
@@ -152,12 +144,8 @@ export const GraphState = Annotation.Root({
     default: () => "base",
     reducer: (_prev, next) => next,
   }),
-  // Verdict node outputs — closingSummary remapped to scenarioSummary.text in PublicMatchResponse.
+  // Verdict node outputs
   terminologyDiffs: Annotation<{ location: string; swapLabel: string; before: string; after: string }[] | undefined>({
-    default: () => undefined,
-    reducer: (_prev, next) => next,
-  }),
-  closingSummary: Annotation<string | undefined>({
     default: () => undefined,
     reducer: (_prev, next) => next,
   }),

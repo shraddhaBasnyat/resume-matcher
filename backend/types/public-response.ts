@@ -13,7 +13,6 @@ export const PublicMatchResponseSchema = z.object({
     })),
   }),
   fitAdvice: z.array(z.union([
-    z.object({ key: z.literal("transferable_strengths"), items: z.array(EvidenceItemSchema)  }),
     z.object({ key: z.literal("reframing_suggestions"),  items: z.array(ReframingItemSchema) }),
     z.object({ key: z.literal("missing_skills"),         items: z.array(TaggedItemSchema)    }),
     z.object({ key: z.literal("lead_with_these"),        items: z.array(EvidenceItemSchema)  }),
@@ -45,7 +44,6 @@ export const PublicMatchResponseSchema = z.object({
     before: z.string(),
     after: z.string(),
   })),
-  scenarioSummary: z.object({ text: z.string() }),
   threadId: z.string(),
   _meta: z.object({ durationMs: z.number() }),
 });

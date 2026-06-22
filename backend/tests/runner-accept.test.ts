@@ -41,7 +41,6 @@ const checkpointedState = {
     terminologyMismatches: [],
     formattingFlags: [],
   },
-  closingSummary: "The gap is real and the score stands — this is a 2–3 year path to close.",
   threadId: "thread-123",
 };
 
@@ -87,9 +86,6 @@ describe("runMatchGraph — kind: accept", () => {
     expect(result.fitScore).toBe(42);
     expect(result.scenarioId).toBe("honest_verdict");
     expect(result.threadId).toBe("thread-123");
-    expect((result.scenarioSummary as Record<string, unknown>).text).toBe(
-      checkpointedState.closingSummary,
-    );
     expect(closed).toHaveBeenCalledOnce();
   });
 

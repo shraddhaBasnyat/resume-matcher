@@ -68,12 +68,6 @@ export const InvisibleExpertLLMSchema = z.object({
         "Format each as: \"[risk area name] — [why it's thinner for this role]\". Most serious risks first. " +
         "Empty array for invisible_expert.",
     ),
-  closingSummary: z.string().min(1).describe(
-    "Scenario-aware synthesis of the fit and ATS pictures. " +
-      "For confirmed_fit: brief and validating — one or two sentences confirming the match is solid. " +
-      "For invisible_expert: names the two-signal contrast explicitly (strong human fit, machine visibility gap). " +
-      "Use fit_scenario_summary and ats_scenario_summary as source material.",
-  ),
   verdictAha: z.string().min(1).describe(
     "One sentence pointing to the single most important result card for this candidate to look at first. " +
       "For confirmed_fit: surface the strongest signal. For invisible_expert: point to ATS remediation.",

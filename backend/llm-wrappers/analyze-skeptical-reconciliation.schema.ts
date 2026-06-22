@@ -37,12 +37,6 @@ export const HonestVerdictLLMSchema = z.object({
         "Set to null if the gap is so fundamental that no context would change the verdict, " +
         "or if human context has already been provided.",
     ),
-  closingSummary: z.string().min(1).describe(
-    "Scenario-aware synthesis of the fit and ATS pictures — the most emotionally important piece of writing in the output. " +
-      "Direct and respectful, mentor not rejection machine. " +
-      "If HITL fired and context shifted the assessment, acknowledge it here. " +
-      "Use fit_scenario_summary and ats_scenario_summary as source material.",
-  ),
   verdictAha: z.string().min(1).describe(
     "One sentence. On first pass: points to the HITL context question. " +
       "On second pass: reflects whether context shifted the assessment. " +

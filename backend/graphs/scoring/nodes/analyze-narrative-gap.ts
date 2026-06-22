@@ -17,9 +17,6 @@ export function makeAnalyzeNarrativeGapNode(model: BaseChatModel) {
     if (!state.fitAnalysis) {
       throw new Error("analyzeNarrativeGap: fitAnalysis is missing from graph state");
     }
-    if (!state.fitScenarioSummary) {
-      throw new Error("analyzeNarrativeGap: fitScenarioSummary is missing from graph state");
-    }
     if (!state.jdArchetype) {
       throw new Error("analyzeNarrativeGap: jdArchetype is missing from graph state");
     }
@@ -35,7 +32,6 @@ export function makeAnalyzeNarrativeGapNode(model: BaseChatModel) {
 
     const llmOutput = await chain.invoke({
       fit_analysis: JSON.stringify(state.fitAnalysis, null, 2),
-      fit_scenario_summary: state.fitScenarioSummary,
       ats_scenario_summary: state.atsScenarioSummary ?? "",
       candidate_archetype: state.candidateArchetype ?? "",
       career_arc_note: careerArcNote,
@@ -44,16 +40,14 @@ export function makeAnalyzeNarrativeGapNode(model: BaseChatModel) {
       archetype_context: archetypeContext,
     });
 
-    const { closingSummary, verdictAha, terminologyDiffs, ...fitAdviceFields } = llmOutput;
+    const { verdictAha, ...fitAdviceFields } = llmOutput;
 
     return {
       fitAdvice: {
         scenarioId: "narrative_gap" as const,
         ...fitAdviceFields,
       },
-      closingSummary,
       verdictAha,
-      terminologyDiffs,
     };
   };
 }

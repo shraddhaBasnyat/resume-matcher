@@ -23,7 +23,8 @@ Rules for demonstratedVsClaimed:
 - demonstrated: concrete artifacts present — deployed system with live URL, production metric, named outcome, specific failure mode debugged
 - claimed: skill or technology listed without supporting context — "experience with X", technologies listed without a project
 - ambiguous: some context present but insufficient to confirm demonstrated depth
-- evidencePresent: quote the specific piece of evidence verbatim from the resume; null for claimed/ambiguous
+- evidencePresent: quote the specific piece of evidence verbatim from the resume — never paraphrase, infer, or summarize. null for claimed or ambiguous
+- Do not penalize absence of metrics, team sizes, or outcome data — resume format constraints make comprehensive inclusion impossible. Only mark as claimed when no supporting context whatsoever exists.
 
 Rules for careerArcNote:
 - Empty transitions array if career shows a consistent single archetype

@@ -31,7 +31,6 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     recruiterFilter: undefined,
     candidateArchetype: undefined,
     demonstratedVsClaimed: undefined,
-    scopeAmbiguity: undefined,
     careerArcNote: undefined,
     resumeAha: undefined,
     atsScore: undefined,

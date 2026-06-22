@@ -53,7 +53,6 @@ export type ReframingItem = { before: string; after: string; reason: string };
 export type TaggedItem    = { severity: "material" | "notable"; text: string };
 
 export type FitAdviceEntry =
-  | { key: "transferable_strengths"; items: EvidenceItem[]  }
   | { key: "reframing_suggestions";  items: ReframingItem[] }
   | { key: "missing_skills";         items: TaggedItem[]    }
   | { key: "lead_with_these";        items: EvidenceItem[]  }
@@ -101,7 +100,6 @@ export interface MatchResponse {
     before: string;
     after: string;
   }[];
-  scenarioSummary: { text: string };
   threadId: string;
   _meta: { durationMs: number };
 }

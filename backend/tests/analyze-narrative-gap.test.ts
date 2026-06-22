@@ -17,11 +17,8 @@ const validLLMOutput = {
     { before: "Data Engineer", after: "ML Infrastructure Engineer", reason: "Aligns resume title with ML platform role requirements." },
     { before: "Kafka consumer for inventory events", after: "feature store consumer pattern", reason: "Names the pattern the role expects explicitly." },
   ],
-  transferableStrengths: ["Python at scale", "Distributed streaming (Kafka)", "SQL query optimisation"],
   missingSkills: [],
-  closingSummary: "The experience is right — the framing is wrong. Your pipeline work maps directly once retold in ML infrastructure terms.",
   verdictAha: "Start with the reframing cards — once the framing is fixed, the score follows.",
-  terminologyDiffs: [],
 };
 
 const validFitAnalysis = {
@@ -41,7 +38,6 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
       { requirement: "Python experience", evidence: "5 years of Python", verdict: "strong_match" as const },
       { requirement: "Streaming systems", evidence: "Kafka consumer ownership", verdict: "strong_match" as const },
     ],
-    fitScenarioSummary: "Strong pipeline background maps to ML platform work.",
     fitAha: "Your Kafka consumer work maps directly to a feature store consumer — the experience is there, the framing is not.",
     atsScore: null,
     atsScenarioSummary: "Resume is parseable. Missing two ML-specific terms the recruiter filters for.",
@@ -84,13 +80,10 @@ describe("analyzeNarrativeGap — output shape", () => {
 
     expect(advice.scenarioId).toBe("narrative_gap");
     expect(Array.isArray(advice.reframingSuggestions)).toBe(true);
-    expect(Array.isArray(advice.transferableStrengths)).toBe(true);
     expect(Array.isArray(advice.missingSkills)).toBe(true);
-    // closingSummary and verdictAha must NOT be inside fitAdvice
+    // verdictAha must NOT be inside fitAdvice — it is a top-level state field
     expect(advice.closingSummary).toBeUndefined();
     expect(advice.verdictAha).toBeUndefined();
-    // They must be top-level state fields
-    expect((result as Record<string, unknown>).closingSummary).toBeDefined();
     expect((result as Record<string, unknown>).verdictAha).toBeDefined();
   });
 
@@ -130,13 +123,6 @@ describe("analyzeNarrativeGap — guards", () => {
     ).rejects.toThrow('expected scenarioId "narrative_gap"');
   });
 
-  it("throws when fitScenarioSummary is missing", async () => {
-    const node = makeAnalyzeNarrativeGapNode(buildMockModel());
-    await expect(
-      node(buildBaseState({ fitScenarioSummary: undefined })),
-    ).rejects.toThrow("fitScenarioSummary is missing");
-  });
-
   it("throws when jdArchetype is missing", async () => {
     const node = makeAnalyzeNarrativeGapNode(buildMockModel());
     await expect(
@@ -145,7 +131,7 @@ describe("analyzeNarrativeGap — guards", () => {
   });
 
   it("throws ZodError and calls logValidationFailure when LLM returns invalid shape", async () => {
-    const invalidOutput = { reframingSuggestions: "not an array", transferableStrengths: 42 };
+    const invalidOutput = { reframingSuggestions: "not an array", missingSkills: 42 };
 
     const model = new FakeListChatModel({ responses: [JSON.stringify(invalidOutput)] });
 
