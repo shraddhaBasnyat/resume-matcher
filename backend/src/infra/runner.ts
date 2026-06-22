@@ -122,11 +122,7 @@ function buildPublicResponse(
       bullets: state.battleCardBullets ?? [],
     },
     fitAdvice: mapFitAdvice(state.fitAdvice),
-    atsProfile: {
-      atsScore: state.atsScore ?? null,
-      termGaps: state.termGaps ?? [],
-      formattingFlags: state.formattingFlags ?? [],
-    },
+    atsScore: state.atsScore ?? null,
     threadId,
     _meta: { durationMs },
   };

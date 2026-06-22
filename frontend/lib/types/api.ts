@@ -88,11 +88,7 @@ export interface MatchResponse {
     bullets: BattleCardBullet[];
   };
   fitAdvice: FitAdviceEntry[];
-  atsProfile: {
-    atsScore: number | null;
-    termGaps: { term: string; status: "missing" | "present_no_context" | "present_demonstrated" }[];
-    formattingFlags: string[];
-  };
+  atsScore: number | null;
   threadId: string;
   _meta: { durationMs: number };
 }

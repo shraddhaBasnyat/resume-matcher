@@ -35,11 +35,7 @@ const checkpointedState = {
     closingSteps: ["Build and ship a production backend service end-to-end."],
     acknowledgement: null,
   },
-  atsProfile: {
-    atsScore: 55,
-    termGaps: [{ term: "distributed systems", status: "missing" as const }],
-    formattingFlags: [],
-  },
+  atsScore: 55,
   threadId: "thread-123",
 };
 

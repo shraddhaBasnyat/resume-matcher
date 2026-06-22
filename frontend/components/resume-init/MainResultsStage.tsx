@@ -114,7 +114,7 @@ export function MainResultsStage({ className, result, progress, appState }: Main
             <>
               <BattleCard
                 fitScore={result.fitScore}
-                atsScore={result.atsProfile.atsScore ?? undefined}
+                atsScore={result.atsScore ?? undefined}
                 scenarioId={result.scenarioId}
                 scenario={result.scenarioId.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
                 headline={result.battleCard.headline}
@@ -123,6 +123,7 @@ export function MainResultsStage({ className, result, progress, appState }: Main
               {result.fitAdvice.map((entry, index) => {
                 const config = FIT_ADVICE_CONFIG[entry.key];
                 if (!config) return null;
+                if (entry.items.length === 0) return null;
 
                 let body: React.ReactNode;
                 switch (entry.key) {

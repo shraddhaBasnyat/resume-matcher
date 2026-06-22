@@ -26,14 +26,7 @@ export const PublicMatchResponseSchema = z.object({
     z.object({ key: z.literal("closing_steps"),          items: z.array(TaggedItemSchema)    }),
     z.object({ key: z.literal("acknowledgement"),        items: z.array(EvidenceItemSchema)  }),
   ])),
-  atsProfile: z.object({
-    atsScore: z.number().nullable(),
-    termGaps: z.array(z.object({
-      term: z.string(),
-      status: z.enum(["missing", "present_no_context", "present_demonstrated"]),
-    })),
-    formattingFlags: z.array(z.string()),
-  }),
+  atsScore: z.number().nullable(),
   threadId: z.string(),
   _meta: z.object({ durationMs: z.number() }),
 });
