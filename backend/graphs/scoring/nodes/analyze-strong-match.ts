@@ -1,8 +1,24 @@
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { buildInvisibleExpertRunnable } from "../../../llm-wrappers/analyze-strong-match.wrapper.js";
 import { ARCHETYPE_CONFIG } from "../archetype-config.js";
-import { formatTerminologyMismatches } from "./format-helpers.js";
+import type { AnalyzeResumeLLMOutput } from "../../../llm-wrappers/analyze-resume.wrapper.js";
 import type { GraphStateType } from "../scoring-graph-state.js";
+
+function formatTermGaps(items: { term: string; status: string }[]): string {
+  if (!items || items.length === 0) return "(none)";
+  return items.map((g) => `- "${g.term}": ${g.status}`).join("\n");
+}
+
+function formatDemonstratedVsClaimed(
+  items: AnalyzeResumeLLMOutput["demonstratedVsClaimed"],
+): string {
+  return items
+    .map(({ bullet, status, evidencePresent }) => {
+      const detail = evidencePresent ? `evidence: "${evidencePresent}"` : "no evidence";
+      return `- "${bullet}" [${status}] ${detail}`;
+    })
+    .join("\n");
+}
 
 export function makeAnalyzeStrongMatchNode(model: BaseChatModel) {
   const invisibleExpertChain = buildInvisibleExpertRunnable(model);
@@ -41,17 +57,17 @@ export function makeAnalyzeStrongMatchNode(model: BaseChatModel) {
       scenario: state.scenarioId,
       fit_analysis: JSON.stringify(state.fitAnalysis, null, 2),
       ats_ranking: isInvisibleExpert ? JSON.stringify(atsRankingStrings, null, 2) : "[]",
-      ats_scenario_summary: state.atsScenarioSummary ?? "",
+      term_gaps: formatTermGaps(state.termGaps ?? []),
+      battle_card_bullets: JSON.stringify(state.battleCardBullets ?? []),
+      demonstrated_vs_claimed: formatDemonstratedVsClaimed(state.demonstratedVsClaimed ?? []),
       candidate_archetype: state.candidateArchetype ?? "",
       jd_archetype_ideal: state.jdArchetype.ideal,
       jd_archetype_could_work: (state.jdArchetype.couldWork ?? []).join(", "),
       real_ask: state.realAsk ?? "",
-      terminology_mismatches: formatTerminologyMismatches(state.terminologyMismatches),
-      resume_text: state.resumeText,
       archetype_context: archetypeContext,
     });
 
-    const { verdictAha, terminologyDiffs, ...fitAdviceFields } = llmOutput;
+    const { verdictAha, ...fitAdviceFields } = llmOutput;
 
     return {
       fitAdvice: isInvisibleExpert
@@ -69,7 +85,6 @@ export function makeAnalyzeStrongMatchNode(model: BaseChatModel) {
             watchOutFor: fitAdviceFields.watchOutFor,
           },
       verdictAha,
-      terminologyDiffs,
     };
   };
 }

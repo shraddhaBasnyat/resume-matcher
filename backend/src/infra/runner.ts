@@ -125,7 +125,6 @@ function buildPublicResponse(
     atsProfile: {
       atsScore: state.atsScore ?? null,
       termGaps: state.termGaps ?? [],
-      terminologyMismatches: state.terminologyMismatches ?? [],
       formattingFlags: state.formattingFlags ?? [],
     },
     terminologyDiffs: state.terminologyDiffs ?? [],

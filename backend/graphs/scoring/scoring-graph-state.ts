@@ -61,10 +61,6 @@ export const GraphState = Annotation.Root({
     default: () => undefined,
     reducer: (_prev, next) => next,
   }),
-  terminologyMismatches: Annotation<{ resumeUses: string; jdExpects: string }[] | undefined>({
-    default: () => undefined,
-    reducer: (_prev, next) => next,
-  }),
   formattingFlags: Annotation<string[] | undefined>({
     default: () => undefined,
     reducer: (_prev, next) => next,

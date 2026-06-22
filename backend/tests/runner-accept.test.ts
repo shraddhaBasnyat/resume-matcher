@@ -38,7 +38,6 @@ const checkpointedState = {
   atsProfile: {
     atsScore: 55,
     termGaps: [{ term: "distributed systems", status: "missing" as const }],
-    terminologyMismatches: [],
     formattingFlags: [],
   },
   threadId: "thread-123",

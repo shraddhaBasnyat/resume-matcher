@@ -91,7 +91,6 @@ export interface MatchResponse {
   atsProfile: {
     atsScore: number | null;
     termGaps: { term: string; status: "missing" | "present_no_context" | "present_demonstrated" }[];
-    terminologyMismatches: { resumeUses: string; jdExpects: string }[];
     formattingFlags: string[];
   };
   terminologyDiffs: {

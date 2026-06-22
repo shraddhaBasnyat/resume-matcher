@@ -101,7 +101,6 @@ const validInvisibleExpertLLMOutput = {
   expectTheseQuestions: [],
   watchOutFor: [],
   verdictAha: "Your reframing cards show exactly how to retell the experience as the machine expects to read it.",
-  terminologyDiffs: [],
 };
 
 const validNarrativeGapLLMOutput = {

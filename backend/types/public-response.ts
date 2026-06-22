@@ -32,10 +32,6 @@ export const PublicMatchResponseSchema = z.object({
       term: z.string(),
       status: z.enum(["missing", "present_no_context", "present_demonstrated"]),
     })),
-    terminologyMismatches: z.array(z.object({
-      resumeUses: z.string(),
-      jdExpects: z.string(),
-    })),
     formattingFlags: z.array(z.string()),
   }),
   terminologyDiffs: z.array(z.object({

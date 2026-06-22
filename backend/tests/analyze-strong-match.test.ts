@@ -24,7 +24,6 @@ const validInvisibleExpertLLMOutput = {
   expectTheseQuestions: [],
   watchOutFor: [],
   verdictAha: "Your reframing cards show exactly how to retell the experience as the machine expects to read it.",
-  terminologyDiffs: [],
 };
 
 const validConfirmedFitLLMOutput = {
@@ -45,7 +44,6 @@ const validConfirmedFitLLMOutput = {
     "Team leadership — the JD mentions mentoring. Be ready with a specific example.",
   ],
   verdictAha: "Your FastAPI and ML infra work maps directly — lead with the scale numbers.",
-  terminologyDiffs: [],
 };
 
 const validFitAnalysis = {
@@ -74,7 +72,8 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     jdArchetype: { ideal: "specialist_depth" as const, couldWork: [] },
     candidateArchetype: "specialist_depth" as const,
     realAsk: "Build production backend systems with Python and FastAPI.",
-    terminologyMismatches: [],
+    termGaps: [],
+    demonstratedVsClaimed: [],
     careerArcNote: undefined,
     threadId: undefined,
     intent: undefined,
