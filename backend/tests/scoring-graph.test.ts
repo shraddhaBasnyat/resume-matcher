@@ -70,10 +70,7 @@ const validAnalyzeFitLLMOutput = {
     { requirement: "Component system design", evidence: "Built component libraries consumed by 4 product teams", verdict: "strong_match" as const },
   ],
   fitAha: "Five years of TypeScript across production SPAs maps directly to what this role requires.",
-  sourceRole: "frontend_swe",
-  targetRole: "frontend_swe",
   fitAnalysis: {
-    careerTrajectory: "IC frontend engineer progressing to tech lead over 5 years at a single startup",
     keyStrengths: ["TypeScript", "React", "frontend architecture", "component systems"],
     experienceGaps: [],
     weakMatchReason: "NONE",
@@ -125,7 +122,6 @@ const validHonestVerdictLLMOutput = {
   acknowledgement: null,
   contextPrompt: null,
   verdictAha: "The honest assessment cards explain specifically why — start there before deciding whether to apply.",
-  terminologyDiffs: [],
 };
 
 const honestVerdictWithContextPrompt = {

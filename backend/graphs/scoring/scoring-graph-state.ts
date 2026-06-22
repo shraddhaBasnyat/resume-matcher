@@ -6,7 +6,6 @@ import type { AnalyzeJDLLMOutput } from "../../llm-wrappers/analyze-jd.wrapper.j
 import type { AnalyzeResumeLLMOutput } from "../../llm-wrappers/analyze-resume.wrapper.js";
 
 type FitAnalysis = {
-  careerTrajectory: string;
   keyStrengths: string[];
   experienceGaps: string[];
 };
@@ -85,14 +84,6 @@ export const GraphState = Annotation.Root({
     reducer: (_prev, next) => next,
   }),
   fitAha: Annotation<string | undefined>({
-    default: () => undefined,
-    reducer: (_prev, next) => next,
-  }),
-  sourceRole: Annotation<string | undefined>({
-    default: () => undefined,
-    reducer: (_prev, next) => next,
-  }),
-  targetRole: Annotation<string | undefined>({
     default: () => undefined,
     reducer: (_prev, next) => next,
   }),

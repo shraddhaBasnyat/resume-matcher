@@ -28,7 +28,6 @@ const validLLMOutput = {
   acknowledgement: null,
   contextPrompt: null,
   verdictAha: "The honest assessment cards explain specifically why — start there before deciding whether to apply.",
-  terminologyDiffs: [],
 };
 
 const validLLMOutputWithContextPrompt = {
@@ -44,7 +43,6 @@ const validLLMOutputWithAck = {
 };
 
 const validFitAnalysis = {
-  careerTrajectory: "Frontend development over 3 years at a web agency",
   keyStrengths: ["JavaScript", "React", "CSS"],
   experienceGaps: [
     "No backend architecture ownership",
@@ -65,18 +63,14 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
       { requirement: "CSS proficiency", evidence: "Strong CSS fundamentals", verdict: "strong_match" as const },
     ],
     fitAha: "Three years of frontend work — the core backend skills this role requires are absent.",
-    sourceRole: "frontend_swe",
-    targetRole: "backend_swe",
     fitAnalysis: validFitAnalysis,
     weakMatch: true,
-    weakMatchReason:
-      "Three of five required skills are absent and the candidate's experience level is too junior for a senior backend role.",
     atsScore: null,
-    atsScenarioSummary: "Resume is parseable. No knockout risks. Low keyword match on backend infrastructure terms.",
     atsAha: "Missing 'distributed systems' and 'infrastructure ownership' — terms the recruiter filters for.",
     jdArchetype: { ideal: "specialist_depth" as const, couldWork: [] },
     candidateArchetype: "specialist_depth" as const,
-    terminologyMismatches: [],
+    realAsk: "test real ask",
+    demonstratedVsClaimed: [],
     threadId: undefined,
     intent: undefined,
     intentContext: undefined,

@@ -28,13 +28,7 @@ export const AnalyzeFitLLMSchema = z.object({
   })).describe("3–4 structured bullets. Each bullet has a requirement (what the role needs), evidence (candidate's proof against it), and verdict (one of four classifications). The bullets collectively must explain why the score is not higher."),
   fitAha: z.string().min(1)
     .describe('One sentence — the sharpest human fit observation. Must be specific to this candidate and this role. Example: "Your Wayfair replatforming work maps directly to fulfillment automation — but your resume frames it as storefront engineering."'),
-  sourceRole: z.string().min(1)
-    .describe("The candidate's current or most recent role category. Use one of: backend_swe | frontend_swe | fullstack_swe | ai_agent_dev | ml_engineer | data_scientist | devops_engineer | product_manager | unknown."),
-  targetRole: z.string().min(1)
-    .describe("The role category being applied for. Same vocabulary as sourceRole."),
   fitAnalysis: z.object({
-    careerTrajectory: z.string().min(1)
-      .describe("The arc of the candidate's career. Where have they been and what direction are they moving? Infer from the full experience section."),
     keyStrengths: z.array(z.string().min(1))
       .describe("Specific strengths this candidate has that are relevant to THIS role. Name actual skills and experiences from the resume — not generic categories."),
     experienceGaps: z.array(z.string().min(1))

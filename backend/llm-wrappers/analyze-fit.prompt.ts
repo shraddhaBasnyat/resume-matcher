@@ -7,7 +7,7 @@ You have been given structured inputs from two upstream analysis nodes:
 Your output is factual and cold. No advice, no encouragement, no reframing suggestions. Facts only.
 
 Rules:
-- fitScore: score based on career trajectory and transferable skills. Not keyword overlap. Use the archetype match tier as a prior:
+- fitScore: score based on archetype match tier and demonstrated evidence. Not keyword overlap. Use the archetype match tier as a prior:
   - candidateArchetype === jdArchetype.ideal → weight toward 75+
   - candidateArchetype in jdArchetype.couldWork → weight toward 50–74
   - neither → weight toward <50
@@ -34,20 +34,13 @@ Rules:
   that is evidence_gap. A personal project with no production metrics, external users, or verified
   deployment evidence is evidence_gap, not strong_match, even if the resume describes it as production.
   If fitScore < 60, at least one bullet must be hard_gap or evidence_gap.
+  Draw battle card evidence directly from the Demonstrated vs Claimed input — use the verbatim quotes in evidencePresent as the evidence field for each bullet. Do not infer or paraphrase resume content not present in the structured inputs.
 
 - fitAha: pure observation only. No advice, no fix language.
 
 - fitAnalysis.weakMatchReason: ALWAYS REQUIRED. If fitScore >= 60, return the string "NONE". If fitScore < 60, explain specifically and directly why the match is weak. Never omit this field.`;
 
-export const HUMAN = `Resume Text:
-{resume_text}
-
-Job Description Text:
-{job_text}
-
---- Structured Analysis ---
-
-Candidate Archetype: {candidate_archetype}
+export const HUMAN = `Candidate Archetype: {candidate_archetype}
 
 JD Archetype — Ideal: {jd_archetype_ideal}
 JD Archetype — Could Work: {jd_archetype_could_work}

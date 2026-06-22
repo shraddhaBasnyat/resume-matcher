@@ -19,8 +19,6 @@ export function makeAnalyzeFitNode(model: BaseChatModel) {
 
   return async function analyzeFit(state: GraphStateType) {
     const result = await chain.invoke({
-      resume_text: state.resumeText,
-      job_text: state.jobText,
       candidate_archetype: state.candidateArchetype!,
       jd_archetype_ideal: state.jdArchetype!.ideal,
       jd_archetype_could_work: state.jdArchetype!.couldWork,
@@ -42,8 +40,6 @@ export function makeAnalyzeFitNode(model: BaseChatModel) {
       headline: result.headline,
       battleCardBullets: result.battleCardBullets,
       fitAha: result.fitAha,
-      sourceRole: result.sourceRole,
-      targetRole: result.targetRole,
       fitAnalysis,
       weakMatch,
       weakMatchReason,

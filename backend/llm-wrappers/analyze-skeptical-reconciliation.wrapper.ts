@@ -21,12 +21,12 @@ export function buildHonestVerdictRunnable(model: BaseChatModel) {
   return RunnableLambda.from(async (
     input: {
       fit_analysis: string;
-      weak_match_reason: string;
-      ats_scenario_summary: string;
+      battle_card_bullets: string;
+      jd_archetype_ideal: string;
+      real_ask: string;
+      demonstrated_vs_claimed: string;
+      career_arc_note: string;
       human_context: string;
-      terminology_mismatches: string; // formatted list from formatTerminologyMismatches()
-      resume_text: string;
-      archetype_context: string; // "" for base tier, scan/probe patterns for paid
     },
     config?: RunnableConfig,
   ): Promise<HonestVerdictLLMOutput> => {

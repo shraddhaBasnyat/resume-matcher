@@ -42,8 +42,6 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     battleCardBullets: undefined,
     fitScenarioSummary: undefined,
     fitAha: undefined,
-    sourceRole: undefined,
-    targetRole: undefined,
     fitAnalysis: undefined,
     weakMatch: undefined,
     weakMatchReason: undefined,

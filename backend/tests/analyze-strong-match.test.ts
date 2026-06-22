@@ -49,7 +49,6 @@ const validConfirmedFitLLMOutput = {
 };
 
 const validFitAnalysis = {
-  careerTrajectory: "Backend engineer progressing to ML-focused roles over 5 years",
   keyStrengths: ["Python", "FastAPI", "ML infrastructure"],
   experienceGaps: [],
 };
@@ -69,8 +68,6 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     atsScore: null,
     atsScenarioSummary: "Resume is parseable with clean formatting. No knockout risks identified.",
     atsAha: "Keyword coverage is solid — the machine picture is not a barrier here.",
-    sourceRole: "backend_swe",
-    targetRole: "backend_swe",
     fitAnalysis: validFitAnalysis,
     weakMatch: false,
     weakMatchReason: null,

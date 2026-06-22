@@ -1,8 +1,18 @@
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { buildNarrativeGapRunnable } from "../../../llm-wrappers/analyze-narrative-gap.wrapper.js";
-import { ARCHETYPE_CONFIG } from "../archetype-config.js";
-import { formatTerminologyMismatches } from "./format-helpers.js";
+import type { AnalyzeResumeLLMOutput } from "../../../llm-wrappers/analyze-resume.wrapper.js";
 import type { GraphStateType } from "../scoring-graph-state.js";
+
+function formatDemonstratedVsClaimed(
+  items: AnalyzeResumeLLMOutput["demonstratedVsClaimed"],
+): string {
+  return items
+    .map(({ bullet, status, evidencePresent }) => {
+      const detail = evidencePresent ? `evidence: "${evidencePresent}"` : "no evidence";
+      return `- "${bullet}" [${status}] ${detail}`;
+    })
+    .join("\n");
+}
 
 export function makeAnalyzeNarrativeGapNode(model: BaseChatModel) {
   const chain = buildNarrativeGapRunnable(model);
@@ -21,23 +31,19 @@ export function makeAnalyzeNarrativeGapNode(model: BaseChatModel) {
       throw new Error("analyzeNarrativeGap: jdArchetype is missing from graph state");
     }
 
-    const archetypeConfig = ARCHETYPE_CONFIG[state.jdArchetype.ideal];
-    const archetypeContext = state.userTier === "paid"
-      ? `Archetype scan pattern: ${archetypeConfig.scanPattern}\nInterview probe pattern: ${archetypeConfig.interviewProbePattern}`
-      : "";
-
     const careerArcNote = state.careerArcNote
       ? JSON.stringify(state.careerArcNote, null, 2)
       : "(none)";
 
     const llmOutput = await chain.invoke({
       fit_analysis: JSON.stringify(state.fitAnalysis, null, 2),
-      ats_scenario_summary: state.atsScenarioSummary ?? "",
+      battle_card_bullets: JSON.stringify(state.battleCardBullets ?? []),
       candidate_archetype: state.candidateArchetype ?? "",
+      jd_archetype_ideal: state.jdArchetype.ideal,
+      jd_archetype_could_work: state.jdArchetype.couldWork,
+      real_ask: state.realAsk!,
       career_arc_note: careerArcNote,
-      terminology_mismatches: formatTerminologyMismatches(state.terminologyMismatches),
-      resume_text: state.resumeText,
-      archetype_context: archetypeContext,
+      demonstrated_vs_claimed: formatDemonstratedVsClaimed(state.demonstratedVsClaimed ?? []),
     });
 
     const { verdictAha, ...fitAdviceFields } = llmOutput;

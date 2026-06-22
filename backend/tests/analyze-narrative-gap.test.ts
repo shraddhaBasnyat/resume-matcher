@@ -22,7 +22,6 @@ const validLLMOutput = {
 };
 
 const validFitAnalysis = {
-  careerTrajectory: "Data engineering IC progressing over 5 years at a logistics company",
   keyStrengths: ["Python at scale", "Kafka", "SQL", "distributed data systems"],
   experienceGaps: ["No direct ML model deployment experience listed"],
 };
@@ -40,17 +39,15 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
     ],
     fitAha: "Your Kafka consumer work maps directly to a feature store consumer — the experience is there, the framing is not.",
     atsScore: null,
-    atsScenarioSummary: "Resume is parseable. Missing two ML-specific terms the recruiter filters for.",
     atsAha: "Missing 'model serving' and 'ML infrastructure' — terms that would surface this resume in a recruiter search.",
-    sourceRole: "data_engineer",
-    targetRole: "ml_platform_swe",
     fitAnalysis: validFitAnalysis,
     weakMatch: false,
     weakMatchReason: null,
     jdArchetype: { ideal: "specialist_depth" as const, couldWork: [] },
     candidateArchetype: "specialist_depth" as const,
     careerArcNote: undefined,
-    terminologyMismatches: [],
+    realAsk: "Build and operate a production ML platform — feature store, model serving, pipeline orchestration.",
+    demonstratedVsClaimed: [],
     threadId: undefined,
     intent: undefined,
     intentContext: undefined,

@@ -7,8 +7,8 @@ export const NarrativeGapLLMSchema = z.object({
     .describe(
       "Specific ways to retell existing experience so it reads as directly relevant to this role. " +
         "Each item is a structured object: " +
-        "before = current resume phrasing (exact quote or close paraphrase); " +
-        "after = reframed version targeting this role's language; " +
+        "before = verbatim quote from the resume (from demonstrated_vs_claimed evidencePresent); " +
+        "after = reframed version targeting this role's language and real ask; " +
         "reason = why this specific reframe works for this role. " +
         "Must be specific to this candidate and this job — if it could have been written without reading both, rewrite it. " +
         "Do not suggest acquiring new skills.",
@@ -16,8 +16,7 @@ export const NarrativeGapLLMSchema = z.object({
   missingSkills: z
     .array(z.string())
     .describe(
-      "Genuine gaps only — skills the role requires that this candidate does not have, " +
-        "drawn from fitAnalysis.experienceGaps. " +
+      "Genuine gaps only — skills the role requires that this candidate does not have. " +
         "Order most critical gaps first. " +
         "Empty array is correct output when there are no real gaps. " +
         "Do not disguise reframing suggestions as missing skills.",

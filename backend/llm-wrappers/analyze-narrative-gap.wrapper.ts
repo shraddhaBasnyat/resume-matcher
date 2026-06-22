@@ -21,12 +21,13 @@ export function buildNarrativeGapRunnable(model: BaseChatModel) {
   return RunnableLambda.from(async (
     input: {
       fit_analysis: string;
-      ats_scenario_summary: string;
+      battle_card_bullets: string;
       candidate_archetype: string;
+      jd_archetype_ideal: string;
+      jd_archetype_could_work: string[];
+      real_ask: string;
       career_arc_note: string;
-      terminology_mismatches: string; // formatted list from formatTerminologyMismatches()
-      resume_text: string;
-      archetype_context: string; // "" for base tier, scan/probe patterns for paid
+      demonstrated_vs_claimed: string;
     },
     config?: RunnableConfig,
   ): Promise<NarrativeGapLLMOutput> => {
