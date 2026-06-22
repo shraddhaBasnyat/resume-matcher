@@ -132,10 +132,6 @@ export const GraphState = Annotation.Root({
     reducer: (_prev, next) => next,
   }),
   // Verdict node outputs
-  terminologyDiffs: Annotation<{ location: string; swapLabel: string; before: string; after: string }[] | undefined>({
-    default: () => undefined,
-    reducer: (_prev, next) => next,
-  }),
   verdictAha: Annotation<string | undefined>({
     default: () => undefined,
     reducer: (_prev, next) => next,

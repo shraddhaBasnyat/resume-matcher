@@ -93,12 +93,6 @@ export interface MatchResponse {
     termGaps: { term: string; status: "missing" | "present_no_context" | "present_demonstrated" }[];
     formattingFlags: string[];
   };
-  terminologyDiffs: {
-    location: string;
-    swapLabel: string;
-    before: string;
-    after: string;
-  }[];
   threadId: string;
   _meta: { durationMs: number };
 }

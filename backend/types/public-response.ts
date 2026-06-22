@@ -34,12 +34,6 @@ export const PublicMatchResponseSchema = z.object({
     })),
     formattingFlags: z.array(z.string()),
   }),
-  terminologyDiffs: z.array(z.object({
-    location: z.string(),
-    swapLabel: z.string(),
-    before: z.string(),
-    after: z.string(),
-  })),
   threadId: z.string(),
   _meta: z.object({ durationMs: z.number() }),
 });

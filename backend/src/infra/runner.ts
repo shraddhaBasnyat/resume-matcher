@@ -127,7 +127,6 @@ function buildPublicResponse(
       termGaps: state.termGaps ?? [],
       formattingFlags: state.formattingFlags ?? [],
     },
-    terminologyDiffs: state.terminologyDiffs ?? [],
     threadId,
     _meta: { durationMs },
   };
