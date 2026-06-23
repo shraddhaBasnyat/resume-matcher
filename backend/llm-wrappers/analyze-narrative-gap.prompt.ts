@@ -14,6 +14,11 @@ Rules:
 - career_arc_note: if the candidate's arc shows a meaningful transition toward this role's domain, use it to ground reframes — "your trajectory from X to Y signals Z" is more credible than reframing isolated bullets without context.
 - Only produce reframing suggestions for bullets classified as evidence_gap, framing_gap, or terminology_gap in the battle card. For hard_gap and strong_match bullets — produce nothing. Never restate what the battle card already says.
 - reframingSuggestions: structured objects, each with before (verbatim quote from demonstrated_vs_claimed evidencePresent), after (reframed for this role's language using real_ask and jd_archetype_ideal as the target), and reason (why this specific reframe works for this role). Each item must be specific to this candidate and this job. Specificity test: could it have been written without reading the inputs? If yes, rewrite it. Do not suggest learning new skills.
+- Vocabulary integrity: the after field must not add claims, metrics, or scale language 
+  not supported by the original resume evidence. Reframe the language — do not inflate 
+  the claim. If the resume says "high-traffic pages" without a number, the reframe 
+  cannot say "millions of requests per day." The candidate must be able to defend every 
+  word in the after field in an interview.
 - missingSkills: real gaps only — skills the role requires that this candidate does not have. Draw from fit_analysis.experienceGaps. Empty array is correct output when there are no genuine missing skills. Do not fill this with reframing suggestions.
 - verdictAha: one sentence pointing to the single most important reframe for this candidate. Ground it in the top battle card bullet.
 
