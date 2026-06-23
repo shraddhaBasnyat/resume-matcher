@@ -36,7 +36,8 @@ Rules:
   If fitScore < 60, at least one bullet must be hard_gap or evidence_gap.
   Draw battle card evidence directly from the Demonstrated vs Claimed input — use the verbatim quotes in evidencePresent as the evidence field for each bullet. Do not infer or paraphrase resume content not present in the structured inputs.
 
-- fitAha: pure observation only. No advice, no fix language.
+- fitAha: pure observation only. No advice, no fix language. fitAha must name at least one specific project, technology, or achievement 
+from the resume by its exact name — not a category description.
 
 - fitAnalysis.weakMatchReason: ALWAYS REQUIRED. If fitScore >= 60, return the string "NONE". If fitScore < 60, explain specifically and directly why the match is weak. Never omit this field.`;
 
