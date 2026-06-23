@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { EvidenceItemSchema, ReframingItemSchema, TaggedItemSchema } from "../src/types/fit-advice.js";
+import { EvidenceItemSchema, ReframingItemSchema, TaggedItemSchema } from "./fit-advice.js";
 
 export const PublicMatchResponseSchema = z.object({
   scenarioId: z.enum(["confirmed_fit", "invisible_expert", "narrative_gap", "honest_verdict"]),

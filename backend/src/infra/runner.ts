@@ -5,7 +5,7 @@ import { graph } from "../../graphs/scoring/scoring-graph-instance.js";
 import { getCheckpointer } from "../../graphs/scoring/scoring-graph.js";
 import type { ConfidentMatchContext, ExploringGapContext } from "../../types/api.js";
 import { PublicMatchResponseSchema } from "../../types/public-response.js";
-import type { EvidenceItem, ReframingItem, TaggedItem } from "../types/fit-advice.js";
+import type { EvidenceItem, ReframingItem, TaggedItem } from "../../types/fit-advice.js";
 
 type SharedOptions = {
   humanContext?: string;

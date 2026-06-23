@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ReframingItemSchema } from "../src/types/fit-advice.js";
+import { ReframingItemSchema } from "../types/fit-advice.js";
 
 export const NarrativeGapLLMSchema = z.object({
   reframingSuggestions: z

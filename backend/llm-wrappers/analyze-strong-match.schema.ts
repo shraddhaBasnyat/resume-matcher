@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ReframingItemSchema } from "../src/types/fit-advice.js";
+import { ReframingItemSchema } from "../types/fit-advice.js";
 
 // -----------------------------------------------------------------------
 // Both confirmed_fit and invisible_expert use this wrapper.
