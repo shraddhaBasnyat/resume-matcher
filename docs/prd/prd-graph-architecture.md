@@ -38,7 +38,6 @@ It does not cover scenario routing logic, user profiles, or the public API shape
 - Verdict nodes — synthesis, tone calibration, specificity under emotional context
 
 ### Deterministic (computation over structured inputs)
-- `parseResume` — file parsing, text extraction, Layer 1 formatting flag detection
 - `atsGapAnalysis` — string matching, gap computation, score weighting
 - `routeVerdicts` — threshold comparison, scenario label assignment
 - Archetype config lookup — dictionary read inside verdict node function
@@ -48,60 +47,29 @@ It does not cover scenario routing logic, user profiles, or the public API shape
 ## Graph topology
 
 ```
-[input: resumeFile + jobText]
+[input: resumeText + jobText]
           ↓
-┌─────────────────────────────────────────────────────┐
-│  resumeSubgraph                                      │
-│                                                      │
-│  parseResume (deterministic)                         │
-│    → resumeText                                      │
-│    → formattingFlags (Layer 1)                       │
-│          ↓                                           │
-│  analyzeResume (LLM)                                 │
-│    → candidateArchetype                              │
-│    → demonstratedVsClaimed[]                         │
-│    → scopeAmbiguity[]                                │
-│    → careerArcNote { transitions[] }                 │
-│    → resumeAha: string                               │
-│          ↓                                           │
-│  Cache key: hash(resumeFile)                         │
-│  Cache hit → skip subgraph, read from cache          │
-└─────────────────────────────────────────────────────┘
-          ↓                          ↑ parallel
-analyzeJD (LLM)                      │
-  → jdArchetype { ideal, couldWork[] }
-  → realAsk
-  → recruiterFilter
-          ↓ (both complete)
-          ↓
-atsGapAnalysis (deterministic) ←──── analyzeFit (LLM)
-  reads:                              reads:
-    recruiterFilter                     analyzeJD output
-    demonstratedVsClaimed               analyzeResume output
-    formattingFlags                   →  fitScore
-  → termGaps[]                        → battleCardBullets[]
-  → terminologyMismatches[]           → fitScenarioSummary
-  → atsScore                          → fitAha
-                                      → headline
-          ↓                                ↓
+analyzeJD (LLM) ──────────────┐
+analyzeResume (LLM) ──────────┤  ← parallel from START
+                              ↓ (both complete)
+atsGapAnalysis (deterministic) + analyzeFit (LLM)   ← parallel
+                              ↓ (both complete)
                routeVerdicts (deterministic)
                fitScore + atsScore → scenarioId
                          ↓
                one verdict node fires (LLM)
                inline: ARCHETYPE_CONFIG[jdArchetype.ideal]
-               reads: full state
                → fitAdvice[]
-               → terminologyDiffs[] (legitimate only)
-               → closingSummary
                → verdictAha
+                         ↓
+         [honest_verdict only] hitlGate → analyzeSkepticalReconciliation (2nd pass)
                          ↓
                         END
 ```
 
 **Critical path:**
 ```
-parseResume
-  → analyzeResume + analyzeJD (parallel)
+analyzeJD + analyzeResume (parallel)
   → atsGapAnalysis + analyzeFit (parallel)
   → routeVerdicts
   → verdict node
@@ -110,55 +78,13 @@ parseResume
 
 ---
 
-## Resume subgraph
-
-`parseResume` and `analyzeResume` are grouped as a subgraph for two reasons:
-
-1. **Unified output shape** — the subgraph produces one clean `ResumeAnalysis` object that everything downstream consumes. The parent graph never sees intermediate state from inside the subgraph.
-
-2. **Caching boundary** — the subgraph output is stable across job applications for the same resume. Cache key is `hash(resumeFile)`. On cache hit, the subgraph is skipped entirely and `ResumeAnalysis` is read from cache. The parent graph is unchanged — it receives the same output shape whether from cache or live run.
-
-**Cached output shape:**
-```ts
-type ResumeAnalysis = {
-  resumeText: string
-  formattingFlags: FormattingFlags
-  candidateArchetype: RoleArchetype
-  demonstratedVsClaimed: DemonstratedVsClaimedItem[]
-  scopeAmbiguity: ScopeAmbiguityItem[]
-  careerArcNote: { transitions: ArchetypeTransition[] }
-}
-```
-
----
-
 ## Node specifications
-
-### `parseResume`
-
-**Type:** Deterministic
-**Input:** Raw resume file (PDF or DOCX)
-**Runs:** Inside resumeSubgraph, always first
-
-Reads the raw file before text extraction. This is the only moment structural facts about the file are available — after extraction they are destroyed.
-
-**Layer 1 formatting flags (Phase 2 — not yet implemented):**
-- Two-column layout detection
-- Tables or graphics present
-- Contact information in header/footer
-- Inconsistent date formats
-- Non-standard bullet characters
-- Missing standard sections
-
-**Phase 1:** Text extraction only. `formattingFlags` stubbed as empty. Layer 1 formatting detection is the Phase 2 build — requires PDF/DOCX structural parsing before text extraction.
-
----
 
 ### `analyzeResume`
 
 **Type:** LLM
 **Input:** `resumeText` only — no JD context
-**Runs:** Inside resumeSubgraph, after `parseResume`
+**Runs:** In parallel with `analyzeJD` from START
 
 The mentor read. What does a trusted advisor see when reading this resume cold, without knowing the target role?
 
@@ -171,12 +97,6 @@ The mentor read. What does a trusted advisor see when reading this resume cold, 
     bullet: string
     status: "demonstrated" | "claimed" | "ambiguous"
     evidencePresent: string | null
-  }[]
-
-  scopeAmbiguity: {
-    bullet: string
-    ambiguous: boolean
-    reason: string | null
   }[]
 
   careerArcNote: {
@@ -203,7 +123,7 @@ The mentor read. What does a trusted advisor see when reading this resume cold, 
 
 **Type:** LLM
 **Input:** Job text only — no resume context
-**Runs:** In parallel with resumeSubgraph
+**Runs:** In parallel with `analyzeResume` from START
 
 The recruiter read. What is this role actually asking for beneath the requirements list?
 
@@ -256,11 +176,7 @@ Weighted by gap severity. Terms missing entirely suppress score more than terms 
     term: string
     status: "missing" | "present_no_context" | "present_demonstrated"
   }[]
-  terminologyMismatches: {
-    resumeUses: string
-    jdExpects: string
-  }[]
-  formattingFlags: string[]
+  formattingFlags: string[]   // stubbed as [] in Phase 1
 }
 ```
 
@@ -293,18 +209,16 @@ This is a prior, not a constraint. Battle card evidence overrides it.
     evidence: string
     verdict: "strong_match" | "framing_gap" | "terminology_gap" | "hard_gap" | "evidence_gap"
   }[]
-  fitScenarioSummary: string
   fitAha: string
-  sourceRole: string
-  targetRole: string
+  fitAnalysis: { keyStrengths: string[]; experienceGaps: string[] }
+  weakMatchReason: string | null   // normalised: "NONE" → null
 }
 ```
 
 **Prompt constraints:**
 - No career narrative. No trajectory language. No arc. Facts and gaps only.
 - `evidence_gap` when a bullet is claimed without demonstrated evidence — not `hard_gap`, not `terminology_gap`
-- `fitScenarioSummary` is factual, no scenario tone — consumed by verdict nodes which add the emotional register
-- If fitScore < 50, at least one bullet must be `hard_gap` or `evidence_gap`
+- If fitScore < 60, at least one bullet must be `hard_gap` or `evidence_gap`
 
 ---
 
@@ -315,10 +229,10 @@ This is a prior, not a constraint. Battle card evidence overrides it.
 
 | scenarioId | fitScore | atsScore |
 |---|---|---|
-| `confirmed_fit` | >= 75 | >= 75 or null |
-| `invisible_expert` | >= 75 | < 75 |
-| `narrative_gap` | 50–74 | any |
-| `honest_verdict` | < 50 | any |
+| `confirmed_fit` | >= 80 | >= 75 or null |
+| `invisible_expert` | >= 80 | < 75 |
+| `narrative_gap` | 60–79 | any |
+| `honest_verdict` | < 60 | any |
 
 ---
 
@@ -337,15 +251,13 @@ const archetypeConfig = ARCHETYPE_CONFIG[state.jdArchetype.ideal]
 
 Not a graph node. Not a trace entry. A dictionary read at the top of the verdict node function.
 
-**Terminology diffs produced here:**
-For each `terminologyMismatch` from `atsGapAnalysis`, assess legitimacy against the full fit picture. Produce before/after diff only where legitimate. Drop silently where the analogy doesn't hold. The mismatch fact remains in `atsProfile` — only the diff is suppressed.
+**Terminology swaps (`invisible_expert` only):**
+The `terminology_swaps` `fitAdvice` key contains before/after reframing items derived from `termGaps` — terms present in the resume but without demonstrated context. Legitimacy is assessed against the full fit picture before inclusion.
 
 **Output:**
 ```ts
 {
   fitAdvice: { key: string, items: Item[] }[]
-  terminologyDiffs: { location: string, swapLabel: string, before: string, after: string }[]
-  closingSummary: string
   verdictAha: string
 }
 ```
@@ -377,34 +289,31 @@ This is version-controlled in code. Migration to a database is a future phase co
 
 | Field | Written by | Read by |
 |---|---|---|
-| `resumeText` | `parseResume` | `analyzeResume`, `atsGapAnalysis` |
-| `formattingFlags` | `parseResume` | `atsGapAnalysis` |
+| `resumeText` | request body | `analyzeResume`, `atsGapAnalysis` |
+| `jobText` | request body | `analyzeJD` |
 | `candidateArchetype` | `analyzeResume` | `analyzeFit`, verdict nodes |
-| `demonstratedVsClaimed` | `analyzeResume` | `atsGapAnalysis`, `analyzeFit` |
-| `scopeAmbiguity` | `analyzeResume` | `analyzeFit`, verdict nodes |
+| `demonstratedVsClaimed` | `analyzeResume` | `atsGapAnalysis`, `analyzeFit`, verdict nodes |
 | `careerArcNote` | `analyzeResume` | verdict nodes |
-| `resumeAha` | `analyzeResume` | runner |
-| `jdArchetype` | `analyzeJD` | `analyzeFit`, `routeVerdicts`, verdict nodes |
+| `resumeAha` | `analyzeResume` | — (reserved for future runner surfacing) |
+| `jdArchetype` | `analyzeJD` | `analyzeFit`, verdict nodes |
 | `realAsk` | `analyzeJD` | `analyzeFit`, verdict nodes |
 | `recruiterFilter` | `analyzeJD` | `atsGapAnalysis` |
-| `atsScore` | `atsGapAnalysis` | `routeVerdicts` |
-| `termGaps` | `atsGapAnalysis` | verdict nodes, runner |
-| `terminologyMismatches` | `atsGapAnalysis` | verdict nodes |
-| `fitScore` | `analyzeFit` | `routeVerdicts`, verdict nodes |
+| `atsScore` | `atsGapAnalysis` | `routeVerdicts`, runner |
+| `termGaps` | `atsGapAnalysis` | verdict nodes |
+| `formattingFlags` | `atsGapAnalysis` (stubbed `[]`) | — |
+| `atsAha` | `atsGapAnalysis` | runner (emitted in `node_done`) |
+| `fitScore` | `analyzeFit` | `routeVerdicts`, verdict nodes, runner |
 | `headline` | `analyzeFit` | runner |
-| `battleCardBullets` | `analyzeFit` | runner |
-| `fitScenarioSummary` | `analyzeFit` | verdict nodes |
-| `fitAha` | `analyzeFit` | runner |
-| `sourceRole` | `analyzeFit` | runner |
-| `targetRole` | `analyzeFit` | runner |
+| `battleCardBullets` | `analyzeFit` | runner, verdict nodes |
+| `fitAha` | `analyzeFit` | runner (emitted in `node_done`) |
+| `fitAnalysis` | `analyzeFit` | verdict nodes |
+| `weakMatchReason` | `analyzeFit` (normalised `"NONE"` → `null`) | `analyzeSkepticalReconciliation` |
 | `scenarioId` | `routeVerdicts` | verdict nodes, runner |
 | `fitAdvice` | verdict nodes | runner |
-| `terminologyDiffs` | verdict nodes | runner |
-| `verdictAha` | verdict nodes | runner |
-| `closingSummary` | verdict nodes | runner |
-| `hitlFired` | `analyzeSkepticalReconciliation` | `analyzeSkepticalReconciliation` |
-| `humanContext` | HITL resume endpoint | `analyzeSkepticalReconciliation` |
-| `contextPrompt` | `analyzeSkepticalReconciliation` | runner |
+| `verdictAha` | verdict nodes | runner (emitted in `node_done`) |
+| `contextPrompt` | `analyzeSkepticalReconciliation` | `hitlGate` |
+| `hitlFired` | `hitlGate` | `analyzeSkepticalReconciliation` (guards second interrupt) |
+| `humanContext` | `hitlGate` (on resume); append reducer | `analyzeSkepticalReconciliation` |
 
 ---
 
