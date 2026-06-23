@@ -19,16 +19,15 @@ export function makeAnalyzeFitNode(model: BaseChatModel) {
 
   return async function analyzeFit(state: GraphStateType) {
     const result = await chain.invoke({
-      resume_text: state.resumeText,
-      job_text: state.jobText,
       candidate_archetype: state.candidateArchetype!,
       jd_archetype_ideal: state.jdArchetype!.ideal,
       jd_archetype_could_work: state.jdArchetype!.couldWork,
       real_ask: state.realAsk!,
       demonstrated_vs_claimed: formatDemonstratedVsClaimed(state.demonstratedVsClaimed!),
+      rubric_kb: "",
     });
 
-    const weakMatch = result.fitScore < 50;
+    const weakMatch = result.fitScore < 60;
     const weakMatchReason =
       result.fitAnalysis.weakMatchReason === "NONE"
         ? null
@@ -40,10 +39,7 @@ export function makeAnalyzeFitNode(model: BaseChatModel) {
       fitScore: result.fitScore,
       headline: result.headline,
       battleCardBullets: result.battleCardBullets,
-      fitScenarioSummary: result.fitScenarioSummary,
       fitAha: result.fitAha,
-      sourceRole: result.sourceRole,
-      targetRole: result.targetRole,
       fitAnalysis,
       weakMatch,
       weakMatchReason,

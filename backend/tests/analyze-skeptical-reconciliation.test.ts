@@ -27,9 +27,7 @@ const validLLMOutput = {
   ],
   acknowledgement: null,
   contextPrompt: null,
-  closingSummary: "The gap is real and the score stands — this is a 2–3 year development path, not a framing problem.",
   verdictAha: "The honest assessment cards explain specifically why — start there before deciding whether to apply.",
-  terminologyDiffs: [],
 };
 
 const validLLMOutputWithContextPrompt = {
@@ -45,7 +43,6 @@ const validLLMOutputWithAck = {
 };
 
 const validFitAnalysis = {
-  careerTrajectory: "Frontend development over 3 years at a web agency",
   keyStrengths: ["JavaScript", "React", "CSS"],
   experienceGaps: [
     "No backend architecture ownership",
@@ -65,21 +62,15 @@ function buildBaseState(overrides: Partial<Record<string, unknown>> = {}): Graph
       { requirement: "React experience", evidence: "3 years of React", verdict: "strong_match" as const },
       { requirement: "CSS proficiency", evidence: "Strong CSS fundamentals", verdict: "strong_match" as const },
     ],
-    fitScenarioSummary: "Frontend background does not map to this senior backend role.",
     fitAha: "Three years of frontend work — the core backend skills this role requires are absent.",
-    sourceRole: "frontend_swe",
-    targetRole: "backend_swe",
     fitAnalysis: validFitAnalysis,
     weakMatch: true,
-    weakMatchReason:
-      "Three of five required skills are absent and the candidate's experience level is too junior for a senior backend role.",
     atsScore: null,
-    atsScenarioSummary: "Resume is parseable. No knockout risks. Low keyword match on backend infrastructure terms.",
     atsAha: "Missing 'distributed systems' and 'infrastructure ownership' — terms the recruiter filters for.",
     jdArchetype: { ideal: "specialist_depth" as const, couldWork: [] },
     candidateArchetype: "specialist_depth" as const,
-    scopeAmbiguity: [],
-    terminologyMismatches: [],
+    realAsk: "test real ask",
+    demonstratedVsClaimed: [],
     threadId: undefined,
     intent: undefined,
     intentContext: undefined,
@@ -121,10 +112,9 @@ describe("analyzeSkepticalReconciliation — contextPrompt null path", () => {
     expect(advice.acknowledgement).toBeNull();
     // contextPrompt is a top-level state field, not inside fitAdvice
     expect(advice.contextPrompt).toBeUndefined();
-    // closingSummary and verdictAha are top-level state fields, not inside fitAdvice
+    // verdictAha is a top-level state field, not inside fitAdvice
     expect(advice.closingSummary).toBeUndefined();
     expect(advice.verdictAha).toBeUndefined();
-    expect((result as Record<string, unknown>).closingSummary).toBeDefined();
     expect((result as Record<string, unknown>).verdictAha).toBeDefined();
   });
 });
@@ -163,7 +153,6 @@ describe("analyzeSkepticalReconciliation — contextPrompt non-null path", () =>
 
     expect(langgraph.interrupt).not.toHaveBeenCalled();
     expect((result as Record<string, unknown>).contextPrompt).toBe(validLLMOutputWithContextPrompt.contextPrompt);
-    expect((result as Record<string, unknown>).closingSummary).toBe(validLLMOutputWithContextPrompt.closingSummary);
     expect((result as Record<string, unknown>).verdictAha).toBe(validLLMOutputWithContextPrompt.verdictAha);
     const advice = (result as Record<string, unknown>).fitAdvice as Record<string, unknown>;
     expect(advice.scenarioId).toBe("honest_verdict");
@@ -221,13 +210,6 @@ describe("analyzeSkepticalReconciliation — guards", () => {
     await expect(
       node(buildBaseState({ scenarioId: "narrative_gap" })),
     ).rejects.toThrow('expected scenarioId "honest_verdict"');
-  });
-
-  it("throws when fitScenarioSummary is missing", async () => {
-    const node = makeAnalyzeSkepticalReconciliationNode(buildMockModel());
-    await expect(
-      node(buildBaseState({ fitScenarioSummary: undefined })),
-    ).rejects.toThrow("fitScenarioSummary is missing");
   });
 
   it("throws when jdArchetype is missing", async () => {

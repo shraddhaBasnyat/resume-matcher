@@ -23,14 +23,13 @@ export function buildInvisibleExpertRunnable(model: BaseChatModel) {
       scenario: string;
       fit_analysis: string;
       ats_ranking: string;
-      fit_scenario_summary: string;
-      ats_scenario_summary: string;
+      term_gaps: string;
+      battle_card_bullets: string;
+      demonstrated_vs_claimed: string;
       candidate_archetype: string;
       jd_archetype_ideal: string;
       jd_archetype_could_work: string;
       real_ask: string;
-      terminology_mismatches: string; // formatted list from formatTerminologyMismatches()
-      resume_text: string;
       archetype_context: string; // "" for base tier, scan/probe patterns for paid
     },
     config?: RunnableConfig,

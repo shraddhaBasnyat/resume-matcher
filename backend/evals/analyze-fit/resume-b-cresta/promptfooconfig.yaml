@@ -30,7 +30,7 @@ tests:
       - type: is-json
 
       - type: javascript
-        value: '(typeof output === "string" ? JSON.parse(output) : output).fitScore !== undefined && (typeof output === "string" ? JSON.parse(output) : output).headline !== undefined && (typeof output === "string" ? JSON.parse(output) : output).fitScenarioSummary !== undefined && (typeof output === "string" ? JSON.parse(output) : output).fitAha !== undefined && (typeof output === "string" ? JSON.parse(output) : output).battleCardBullets !== undefined'
+        value: '(typeof output === "string" ? JSON.parse(output) : output).fitScore !== undefined && (typeof output === "string" ? JSON.parse(output) : output).headline !== undefined && (typeof output === "string" ? JSON.parse(output) : output).fitAha !== undefined && (typeof output === "string" ? JSON.parse(output) : output).battleCardBullets !== undefined'
 
       - type: javascript
         value: '(typeof output === "string" ? JSON.parse(output) : output).battleCardBullets.every(b => ["hard_gap","framing_gap","terminology_gap","strong_match","evidence_gap"].includes(b.verdict))'
@@ -95,9 +95,8 @@ tests:
           PASS if: the output identifies that "Personal Project" framing or
           missing scale metrics is what prevents JobInit from fully closing
           the AI agent experience requirement.
-          PASS if: the fitAha or fitScenarioSummary names the framing gap
-          explicitly — the work is real but the presentation doesn't signal
-          production engineering at Cresta's scale.
+          PASS if: the fitAha names the framing gap explicitly — the work is real
+          but the presentation doesn't signal production engineering at Cresta's scale.
 
           FAIL if: the output accepts "Personal Project" at face value without
           noting the description demonstrates more than the label implies.
@@ -118,18 +117,6 @@ tests:
              experience, gRPC, Kubernetes, or enterprise production"
           - "Output correctly distinguishes what Resume B adds over Resume A —
              the JobInit project — rather than treating both resumes identically"
-
-      - type: g-eval
-        metric: NarrativeGapQuality
-        threshold: 0.7
-        value:
-          - "fitScenarioSummary identifies that the career arc is now pointing
-             in the right direction — AI agent work exists — but framing
-             and scale signals don't yet match what Cresta needs"
-          - "fitScenarioSummary does not treat this as confirmed fit —
-             infrastructure gaps and scale signals are real limitations"
-          - "fitScenarioSummary correctly frames this as narrative gap
-             territory — the story is there but needs to be told better"
 
       # --- Banned phrases ---
       - type: not-contains

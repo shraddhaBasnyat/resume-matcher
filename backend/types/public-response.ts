@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { EvidenceItemSchema, ReframingItemSchema, TaggedItemSchema } from "../src/types/fit-advice.js";
+import { EvidenceItemSchema, ReframingItemSchema, TaggedItemSchema } from "./fit-advice.js";
 
 export const PublicMatchResponseSchema = z.object({
   scenarioId: z.enum(["confirmed_fit", "invisible_expert", "narrative_gap", "honest_verdict"]),
@@ -13,7 +13,6 @@ export const PublicMatchResponseSchema = z.object({
     })),
   }),
   fitAdvice: z.array(z.union([
-    z.object({ key: z.literal("transferable_strengths"), items: z.array(EvidenceItemSchema)  }),
     z.object({ key: z.literal("reframing_suggestions"),  items: z.array(ReframingItemSchema) }),
     z.object({ key: z.literal("missing_skills"),         items: z.array(TaggedItemSchema)    }),
     z.object({ key: z.literal("lead_with_these"),        items: z.array(EvidenceItemSchema)  }),
@@ -27,25 +26,7 @@ export const PublicMatchResponseSchema = z.object({
     z.object({ key: z.literal("closing_steps"),          items: z.array(TaggedItemSchema)    }),
     z.object({ key: z.literal("acknowledgement"),        items: z.array(EvidenceItemSchema)  }),
   ])),
-  atsProfile: z.object({
-    atsScore: z.number().nullable(),
-    termGaps: z.array(z.object({
-      term: z.string(),
-      status: z.enum(["missing", "present_no_context", "present_demonstrated"]),
-    })),
-    terminologyMismatches: z.array(z.object({
-      resumeUses: z.string(),
-      jdExpects: z.string(),
-    })),
-    formattingFlags: z.array(z.string()),
-  }),
-  terminologyDiffs: z.array(z.object({
-    location: z.string(),
-    swapLabel: z.string(),
-    before: z.string(),
-    after: z.string(),
-  })),
-  scenarioSummary: z.object({ text: z.string() }),
+  atsScore: z.number().nullable(),
   threadId: z.string(),
   _meta: z.object({ durationMs: z.number() }),
 });

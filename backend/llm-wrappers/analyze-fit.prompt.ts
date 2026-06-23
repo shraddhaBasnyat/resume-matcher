@@ -7,7 +7,7 @@ You have been given structured inputs from two upstream analysis nodes:
 Your output is factual and cold. No advice, no encouragement, no reframing suggestions. Facts only.
 
 Rules:
-- fitScore: score based on career trajectory and transferable skills. Not keyword overlap. Use the archetype match tier as a prior:
+- fitScore: score based on archetype match tier and demonstrated evidence. Not keyword overlap. Use the archetype match tier as a prior:
   - candidateArchetype === jdArchetype.ideal → weight toward 75+
   - candidateArchetype in jdArchetype.couldWork → weight toward 50–74
   - neither → weight toward <50
@@ -22,7 +22,7 @@ Rules:
 
 - headline: must encode both the match AND the gap if one exists. Not a job title, not a candidate summary.
 
-- battleCardBullets: 3–5 bullets. The bullets collectively must explain why the score is not higher.
+- battleCardBullets: 3–4 bullets only. Each bullet must surface a genuinely distinct gap or strength — never two bullets addressing the same underlying gap. The bullets collectively must explain why the score is not higher.
   Verdict classifications:
     hard_gap        — the candidate genuinely lacks this qualification or experience
     framing_gap     — the experience exists but is described in a way that misses the role signal
@@ -33,21 +33,15 @@ Rules:
   for the relevant requirement. Do not use hard_gap when the experience is claimed but unverifiable —
   that is evidence_gap. A personal project with no production metrics, external users, or verified
   deployment evidence is evidence_gap, not strong_match, even if the resume describes it as production.
-  If fitScore < 50, at least one bullet must be hard_gap or evidence_gap.
+  If fitScore < 60, at least one bullet must be hard_gap or evidence_gap.
+  Draw battle card evidence directly from the Demonstrated vs Claimed input — use the verbatim quotes in evidencePresent as the evidence field for each bullet. Do not infer or paraphrase resume content not present in the structured inputs.
 
-- fitAha: pure observation only. No advice, no fix language.
+- fitAha: pure observation only. No advice, no fix language. fitAha must name at least one specific project, technology, or achievement 
+from the resume by its exact name — not a category description.
 
-- fitAnalysis.weakMatchReason: ALWAYS REQUIRED. If fitScore >= 50, return the string "NONE". If fitScore < 50, explain specifically and directly why the match is weak. Never omit this field.`;
+- fitAnalysis.weakMatchReason: ALWAYS REQUIRED. If fitScore >= 60, return the string "NONE". If fitScore < 60, explain specifically and directly why the match is weak. Never omit this field.`;
 
-export const HUMAN = `Resume Text:
-{resume_text}
-
-Job Description Text:
-{job_text}
-
---- Structured Analysis ---
-
-Candidate Archetype: {candidate_archetype}
+export const HUMAN = `Candidate Archetype: {candidate_archetype}
 
 JD Archetype — Ideal: {jd_archetype_ideal}
 JD Archetype — Could Work: {jd_archetype_could_work}
@@ -57,5 +51,8 @@ Real Ask: {real_ask}
 Demonstrated vs Claimed:
 Each line shows a resume bullet, its evidence status, and what evidence is (or isn't) present.
 {demonstrated_vs_claimed}
+
+Domain-specific knowledge:
+{rubric_kb}
 
 Produce a fit assessment for this candidate against this role.`;

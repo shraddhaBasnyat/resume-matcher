@@ -14,14 +14,6 @@ export const DemonstratedVsClaimedItemSchema = z.object({
   ),
 });
 
-export const ScopeAmbiguityItemSchema = z.object({
-  bullet: z.string().min(1).describe("The resume bullet being assessed."),
-  ambiguous: z.boolean().describe("True if the scope of the work is unclear from the bullet alone."),
-  reason: z.string().min(1).nullable().describe(
-    "Why the scope is ambiguous — what information would clarify it. Null if ambiguous is false.",
-  ),
-});
-
 export const ArchetypeTransitionSchema = z.object({
   from: RoleArchetype,
   to: RoleArchetype,
@@ -39,10 +31,6 @@ export const AnalyzeResumeLLMSchema = z.object({
   demonstratedVsClaimed: z.array(DemonstratedVsClaimedItemSchema).describe(
     "Assessment of every substantive bullet in the resume. " +
     "Skip section headers and role titles — assess bullets with actual content.",
-  ),
-  scopeAmbiguity: z.array(ScopeAmbiguityItemSchema).describe(
-    "Bullets where the scope of work is unclear. " +
-    "Empty array if all bullets have clear scope.",
   ),
   careerArcNote: z.object({
     transitions: z.array(ArchetypeTransitionSchema).describe(

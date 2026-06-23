@@ -9,13 +9,12 @@ import { FitAdviceCard } from "@/components/resume-init/FitAdviceCard";
 import { EvidenceListBody } from "@/components/resume-init/EvidenceListBody";
 import { BeforeAfterBody } from "@/components/resume-init/BeforeAfterBody";
 import { TaggedListBody } from "@/components/resume-init/TaggedListBody";
-import { ScenarioSummary } from "@/components/resume-init/ScenarioSummary";
 import { CompanyInitResult } from "@/components/company-init/CompanyInitResult";
 import { ArcInitResult } from "@/components/arc-init/ArcInitResult";
 import { type AppState, type NodeProgress } from "@/lib/match-constants";
 import type { MatchResponse, FitAdviceEntry } from "@/lib/types/api";
 import {
-  ArrowRight, List, Clock, CheckSquare, Eye, HelpCircle,
+  List, Clock, CheckSquare, Eye, HelpCircle,
   Star, AlertCircle, FileText, FileSearch,
 } from "lucide-react";
 
@@ -28,7 +27,6 @@ const TABS = [
 ];
 
 const FIT_ADVICE_CONFIG: Record<FitAdviceEntry["key"], { title: string; subtitle: string; icon: React.ReactNode }> = {
-  transferable_strengths: { title: "What experience transfers directly?",       subtitle: "transferable strengths", icon: <ArrowRight size={16} /> },
   reframing_suggestions:  { title: "How should you retell your story?",         subtitle: "reframing suggestions",  icon: <List size={16} />       },
   missing_skills:         { title: "What gaps are genuinely there?",            subtitle: "gaps identified",        icon: <Clock size={16} />      },
   lead_with_these:        { title: "What should you lead with?",                subtitle: "interview strengths",    icon: <Star size={16} />       },
@@ -116,7 +114,7 @@ export function MainResultsStage({ className, result, progress, appState }: Main
             <>
               <BattleCard
                 fitScore={result.fitScore}
-                atsScore={result.atsProfile.atsScore ?? undefined}
+                atsScore={result.atsScore ?? undefined}
                 scenarioId={result.scenarioId}
                 scenario={result.scenarioId.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
                 headline={result.battleCard.headline}
@@ -125,6 +123,7 @@ export function MainResultsStage({ className, result, progress, appState }: Main
               {result.fitAdvice.map((entry, index) => {
                 const config = FIT_ADVICE_CONFIG[entry.key];
                 if (!config) return null;
+                if (entry.items.length === 0) return null;
 
                 let body: React.ReactNode;
                 switch (entry.key) {
@@ -153,11 +152,6 @@ export function MainResultsStage({ className, result, progress, appState }: Main
                   </FitAdviceCard>
                 );
               })}
-              <ScenarioSummary
-                scenario={result.scenarioId.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
-                scenarioId={result.scenarioId}
-                text={result.scenarioSummary.text}
-              />
             </>
           )}
         </div>

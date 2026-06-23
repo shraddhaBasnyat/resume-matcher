@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ReframingItemSchema } from "../src/types/fit-advice.js";
+import { ReframingItemSchema } from "../types/fit-advice.js";
 
 // -----------------------------------------------------------------------
 // Both confirmed_fit and invisible_expert use this wrapper.
@@ -68,24 +68,9 @@ export const InvisibleExpertLLMSchema = z.object({
         "Format each as: \"[risk area name] — [why it's thinner for this role]\". Most serious risks first. " +
         "Empty array for invisible_expert.",
     ),
-  closingSummary: z.string().min(1).describe(
-    "Scenario-aware synthesis of the fit and ATS pictures. " +
-      "For confirmed_fit: brief and validating — one or two sentences confirming the match is solid. " +
-      "For invisible_expert: names the two-signal contrast explicitly (strong human fit, machine visibility gap). " +
-      "Use fit_scenario_summary and ats_scenario_summary as source material.",
-  ),
   verdictAha: z.string().min(1).describe(
     "One sentence pointing to the single most important result card for this candidate to look at first. " +
       "For confirmed_fit: surface the strongest signal. For invisible_expert: point to ATS remediation.",
-  ),
-  terminologyDiffs: z.array(z.object({
-    location: z.string().min(1).describe("Role and bullet identifier, e.g. 'Senior Engineer @ Acme — bullet 2'"),
-    swapLabel: z.string().min(1).describe("resumeUses → jdExpects, e.g. 'microservices → distributed systems'"),
-    before: z.string().min(1).describe("Exact original sentence from the resume"),
-    after: z.string().min(1).describe("Rewritten sentence with the terminology swap applied"),
-  })).describe(
-    "For each terminology mismatch assessed as legitimate: the exact sentence from the resume and its rewrite. " +
-      "Drop mismatches silently where the analogy does not hold. Empty array when none are legitimate.",
   ),
 });
 

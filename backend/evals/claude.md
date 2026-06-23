@@ -1,7 +1,7 @@
 # Evals — Claude Code Context
 
 ## Purpose
-This directory contains the promptfoo eval suite for JobInit. Evals are written TDD-style — they define what correct output looks like before the implementation produces it. Failures are expected until the new graph architecture ships.
+This directory contains the promptfoo eval suite for JobInit. Evals are written TDD-style — they define what correct output looks like before the implementation produces it.
 
 ## Folder structure
 One subdirectory per fixture under the chain being tested. Fixtures are shared at the chain level.
@@ -23,13 +23,16 @@ One subdirectory per fixture under the chain being tested. Fixtures are shared a
           provider.ts
 
 ## Provider pattern
-Every fixture uses a custom TypeScript provider that wraps the real chain — not a direct prompt call. This ensures the eval tests the exact production code path including withStructuredOutput.
+Every fixture uses a custom TypeScript provider that wraps the real scoring graph — not a direct prompt or chain call. This ensures the eval tests the exact production code path.
 
 The provider must:
 - Be a class with id() and callApi() methods
-- Import the chain using a static ESM import
+- Import buildScoringGraph and invoke with interruptBefore: ["routeVerdicts"]
+- Pass metadata: { run_type: "eval" } via RunnableConfig
 - Return both output (JSON stringified result) and prompt (source text for g-eval grading)
 - Handle errors by returning { error: error.message }
+
+The graph runs analyzeJD + analyzeResume → atsGapAnalysis + analyzeFit and stops before verdict nodes. All four upstream nodes execute against real production code.
 
 ## Assertion layers
 Every fixture uses four layers in order:
@@ -42,7 +45,7 @@ Every fixture uses four layers in order:
 ## Javascript assertion syntax
 Promptfoo evaluates javascript values as single expressions — no const, no return, no multiline blocks. Always inline the parse logic:
 
-    (typeof output === "string" ? JSON.parse(output) : output).fitScore < 55
+    (typeof output === "string" ? JSON.parse(output) : output).fitScore < 60
 
 Multiline blocks with const declarations cause "unexpected token return" or "undefined" errors.
 
@@ -65,14 +68,14 @@ From the fixture directory:
 Requires Node 22+. Install promptfoo via npm, not Homebrew.
 
 ## CI philosophy
-Evals run in CI as informational only — continue-on-error: true. Do not hard-gate PRs on eval pass rate until the new graph architecture ships. The current baseline has known failures expected to resolve with the new architecture.
+Evals run in CI as informational only — continue-on-error: true. ADR 004 has shipped and baselines are established. Consider gating PRs on eval pass rate when baseline variance is understood well enough to set a reliable threshold. Current baselines: Resume A ~98%, Resume B ~95% (high variance on ScoreCalibration — known issue with domain-mismatched couldWork candidates).
 
 ## Fixture matrix
 
 | Resume | JD | Expected scenario | Status |
 |---|---|---|---|
-| Resume A (no JobInit) | Cresta | honest_verdict | Baseline established |
-| Resume B (JobInit added) | Cresta | narrative_gap | Baseline established |
+| Resume A (no JobInit) | Cresta | honest_verdict | Baseline established — ~98% |
+| Resume B (JobInit added) | Cresta | narrative_gap | Baseline established — ~95% |
 | Resume A | Retool | TBD | Pending |
 | Resume B | Retool | confirmed_fit | Pending |
 | Resume A | Backend JD | confirmed_fit / narrative_gap | Pending |
@@ -106,3 +109,10 @@ leniency.
 The assertions that need context are also signals about what the generator
 needs — if the grader can't evaluate without external knowledge, the prompt
 probably needs that knowledge injected too.
+
+## Score thresholds (ADR 004 + routing update)
+- confirmed_fit / invisible_expert: fitScore >= 80
+- narrative_gap: fitScore 60–79
+- honest_verdict: fitScore < 60
+
+Eval assertions should use < 60 not < 50 for honest_verdict calibration checks.

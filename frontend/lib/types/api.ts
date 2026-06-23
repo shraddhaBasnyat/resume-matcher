@@ -53,7 +53,6 @@ export type ReframingItem = { before: string; after: string; reason: string };
 export type TaggedItem    = { severity: "material" | "notable"; text: string };
 
 export type FitAdviceEntry =
-  | { key: "transferable_strengths"; items: EvidenceItem[]  }
   | { key: "reframing_suggestions";  items: ReframingItem[] }
   | { key: "missing_skills";         items: TaggedItem[]    }
   | { key: "lead_with_these";        items: EvidenceItem[]  }
@@ -89,19 +88,7 @@ export interface MatchResponse {
     bullets: BattleCardBullet[];
   };
   fitAdvice: FitAdviceEntry[];
-  atsProfile: {
-    atsScore: number | null;
-    termGaps: { term: string; status: "missing" | "present_no_context" | "present_demonstrated" }[];
-    terminologyMismatches: { resumeUses: string; jdExpects: string }[];
-    formattingFlags: string[];
-  };
-  terminologyDiffs: {
-    location: string;
-    swapLabel: string;
-    before: string;
-    after: string;
-  }[];
-  scenarioSummary: { text: string };
+  atsScore: number | null;
   threadId: string;
   _meta: { durationMs: number };
 }

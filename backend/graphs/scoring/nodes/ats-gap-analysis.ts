@@ -66,7 +66,6 @@ export async function atsGapAnalysis(state: GraphStateType) {
     atsScore,
     termGaps,
     atsAha,
-    terminologyMismatches: [] as { resumeUses: string; jdExpects: string }[],
     formattingFlags: [] as string[],
   };
 }

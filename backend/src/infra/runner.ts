@@ -5,7 +5,7 @@ import { graph } from "../../graphs/scoring/scoring-graph-instance.js";
 import { getCheckpointer } from "../../graphs/scoring/scoring-graph.js";
 import type { ConfidentMatchContext, ExploringGapContext } from "../../types/api.js";
 import { PublicMatchResponseSchema } from "../../types/public-response.js";
-import type { EvidenceItem, ReframingItem, TaggedItem } from "../types/fit-advice.js";
+import type { EvidenceItem, ReframingItem, TaggedItem } from "../../types/fit-advice.js";
 
 type SharedOptions = {
   humanContext?: string;
@@ -93,7 +93,6 @@ function mapFitAdvice(
       ];
     case "narrative_gap":
       return [
-        { key: "transferable_strengths", items: ((fitAdvice.transferableStrengths as string[])    ?? []).map(toEvidenceItem) },
         { key: "reframing_suggestions",  items:  (fitAdvice.reframingSuggestions  as ReframingItem[]) ?? []                 },
         { key: "missing_skills",         items: ((fitAdvice.missingSkills         as string[])    ?? []).map((t, i, arr) => toTaggedItem(t, i, arr.length)) },
       ];
@@ -123,14 +122,7 @@ function buildPublicResponse(
       bullets: state.battleCardBullets ?? [],
     },
     fitAdvice: mapFitAdvice(state.fitAdvice),
-    atsProfile: {
-      atsScore: state.atsScore ?? null,
-      termGaps: state.termGaps ?? [],
-      terminologyMismatches: state.terminologyMismatches ?? [],
-      formattingFlags: state.formattingFlags ?? [],
-    },
-    terminologyDiffs: state.terminologyDiffs ?? [],
-    scenarioSummary: { text: state.closingSummary ?? "" },
+    atsScore: state.atsScore ?? null,
     threadId,
     _meta: { durationMs },
   };
@@ -153,10 +145,6 @@ async function emitResult(
   } else {
     if (state.fitScore === undefined || !state.scenarioId) {
       emit("error", { error: "Incomplete graph result", message: "Graph completed but fitScore or scenarioId was not populated." });
-      return;
-    }
-    if (!state.closingSummary) {
-      emit("error", { error: "Incomplete graph result", message: "closingSummary missing — verdict node did not write to state" });
       return;
     }
     const durationMs = Date.now() - runStartTime;

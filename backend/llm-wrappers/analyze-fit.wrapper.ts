@@ -20,13 +20,12 @@ export function buildAnalyzeFitRunnable(model: BaseChatModel) {
 
   return RunnableLambda.from(async (
     input: {
-      resume_text: string;
-      job_text: string;
       candidate_archetype: string;
       jd_archetype_ideal: string;
       jd_archetype_could_work: string[];
       real_ask: string;
       demonstrated_vs_claimed: string;
+      rubric_kb: string;
     },
     config?: RunnableConfig,
   ): Promise<AnalyzeFitLLMOutput> => {
